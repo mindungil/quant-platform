@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 
 class ExchangeOrderRequest(BaseModel):
-    user_id: str
+    user_id: str = "system"
     exchange: str
     asset: str
     side: str

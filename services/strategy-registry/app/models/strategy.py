@@ -27,6 +27,7 @@ class Strategy(BaseModel):
     version: str
     status: str = "PENDING"
     backtest_results: dict[str, Any] = Field(default_factory=dict)
+    shadow_metrics: dict[str, Any] = Field(default_factory=dict)
 
 
 class StrategyStatusUpdate(BaseModel):

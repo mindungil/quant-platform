@@ -9,6 +9,7 @@ class MemoryRecord(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     user_id: str = "anonymous"
+    memory_type: str = "episode"
     asset: str
     asset_type: str
     signal_score: float
@@ -16,6 +17,10 @@ class MemoryRecord(BaseModel):
     strategy_id: str | None = None
     reasoning: str
     metadata: dict[str, Any] = Field(default_factory=dict)
+    embedding: list[float] = Field(default_factory=list)
+    links: list[str] = Field(default_factory=list)
+    link_weights: dict[str, float] = Field(default_factory=dict)
+    last_reinforced_at: datetime | None = None
 
 
 class MemorySearchRequest(BaseModel):

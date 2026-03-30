@@ -37,6 +37,8 @@ class ExternalContextSnapshot(BaseModel):
 
 class SignalEvaluationResponse(BaseModel):
     asset: str
+    asset_type: str = "crypto"
+    strategy_id: str | None = None
     signal_score: float
     threshold: float
     threshold_crossed: bool

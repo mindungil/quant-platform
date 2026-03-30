@@ -3,6 +3,13 @@ from datetime import datetime
 from pydantic import BaseModel, Field, field_validator
 
 
+class CandleCollectorStatus(BaseModel):
+    provider: str
+    asset: str
+    enabled: bool
+    mode: str
+
+
 class CandlePayload(BaseModel):
     timestamp: datetime
     open: float = Field(gt=0)

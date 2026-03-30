@@ -1,0 +1,12 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-ink text-mist;
+  background-image: radial-gradient(circle at top left, #203a43, #0b1220 45%, #041017 100%);
+}
+
+.panel {
+  @apply rounded-3xl border border-white/10 bg-white/5 backdrop-blur p-6;
+}

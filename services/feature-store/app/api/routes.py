@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi import APIRouter, HTTPException
 
 from app.core.indicators import calculate_features
@@ -32,5 +34,10 @@ def get_latest_features(asset: str) -> FeatureResponse:
 
 
 @router.get("/features/{asset}/history", response_model=list[FeatureResponse])
-def get_feature_history(asset: str) -> list[FeatureResponse]:
-    return feature_repository.get_history(asset)
+def get_feature_history(asset: str, from_ts: datetime | None = None, to_ts: datetime | None = None) -> list[FeatureResponse]:
+    history = feature_repository.get_history(asset)
+    if from_ts is not None:
+        history = [item for item in history if item.timestamp >= from_ts]
+    if to_ts is not None:
+        history = [item for item in history if item.timestamp <= to_ts]
+    return history

@@ -1,7 +1,8 @@
 services:
   market-data:
     build:
-      context: ./services/market-data
+      context: .
+      dockerfile: services/market-data/Dockerfile
     env_file:
       - .env.example
     ports:
@@ -11,7 +12,8 @@ services:
 
   feature-store:
     build:
-      context: ./services/feature-store
+      context: .
+      dockerfile: services/feature-store/Dockerfile
     env_file:
       - .env.example
     ports:
@@ -21,7 +23,8 @@ services:
 
   signal-service:
     build:
-      context: ./services/signal-service
+      context: .
+      dockerfile: services/signal-service/Dockerfile
     env_file:
       - .env.example
     ports:
@@ -33,7 +36,8 @@ services:
 
   memory-service:
     build:
-      context: ./services/memory-service
+      context: .
+      dockerfile: services/memory-service/Dockerfile
     env_file:
       - .env.example
     ports:
@@ -41,7 +45,8 @@ services:
 
   strategy-registry:
     build:
-      context: ./services/strategy-registry
+      context: .
+      dockerfile: services/strategy-registry/Dockerfile
     env_file:
       - .env.example
     ports:
@@ -49,7 +54,8 @@ services:
 
   crypto-agent:
     build:
-      context: ./services/crypto-agent
+      context: .
+      dockerfile: services/crypto-agent/Dockerfile
     env_file:
       - .env.example
     ports:
@@ -152,11 +158,12 @@ services:
       - statistics-service
   frontend:
     build:
-      context: ./services/frontend
+      context: .
+      dockerfile: services/frontend/Dockerfile
     env_file:
       - .env.example
     ports:
-      - "8018:8000"
+      - "8018:3000"
     depends_on:
       - api-gateway
 

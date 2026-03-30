@@ -1,32 +1,42 @@
-import json
-
-from nats.aio.client import Client as NATS
-
 from app.core.config import settings
 from app.models.candle import CandleUpdatedEvent
+from shared.events import EventEnvelope, JetStreamBus
+from shared.persistence import RedisStore
 
 
 class EventPublisher:
     def __init__(self) -> None:
-        self._client: NATS | None = None
+        self._bus = JetStreamBus(
+            nats_url=settings.nats_url,
+            redis_store=RedisStore(settings.redis_url),
+            enabled=settings.enable_nats,
+        )
 
     async def connect(self) -> None:
-        if not settings.enable_nats:
-            return
-        self._client = NATS()
-        await self._client.connect(settings.nats_url)
+        await self._bus.connect()
+        await self._bus.ensure_stream(settings.jetstream_stream_name, ["market.candle.updated.*", "data.anomaly.detected.*"])
 
     async def close(self) -> None:
-        if self._client is not None and self._client.is_connected:
-            await self._client.drain()
+        await self._bus.close()
 
     async def publish_market_candle_async(self, asset: str, event: CandleUpdatedEvent) -> None:
-        if self._client is None or not self._client.is_connected:
-            return
-        await self._client.publish(
+        await self._bus.publish(
             f"market.candle.updated.{asset}",
-            json.dumps(event.model_dump(mode="json")).encode("utf-8"),
+            EventEnvelope(
+                event_type="market.candle.updated",
+                source="market-data",
+                data=event.model_dump(mode="json"),
+            ),
         )
+        if event.anomaly_detected:
+            await self._bus.publish(
+                f"data.anomaly.detected.{asset}",
+                EventEnvelope(
+                    event_type="data.anomaly.detected",
+                    source="market-data",
+                    data=event.model_dump(mode="json"),
+                ),
+            )
 
     def publish_market_candle(self, asset: str, event: CandleUpdatedEvent) -> None:
         # API routes can call this without caring whether NATS is enabled.

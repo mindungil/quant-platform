@@ -1,17 +1,108 @@
 from app.models.memory import MemoryRecord
+import os
+from shared.persistence import SqlStore, deserialize_json, serialize_json
 
 
 class MemoryRepository:
     def __init__(self) -> None:
         self._items: dict[str, MemoryRecord] = {}
+        self._store = SqlStore(os.getenv("POSTGRES_URL", "postgresql+psycopg://postgres:postgres@localhost:5432/platform"))
+        self._ensure_schema()
+
+    def _ensure_schema(self) -> None:
+        self._store.execute(
+            """
+            CREATE TABLE IF NOT EXISTS memory_records (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                timestamp TIMESTAMPTZ NOT NULL,
+                memory_type TEXT NOT NULL,
+                asset TEXT NOT NULL,
+                asset_type TEXT NOT NULL,
+                signal_score DOUBLE PRECISION NOT NULL,
+                action TEXT NOT NULL,
+                strategy_id TEXT,
+                reasoning TEXT NOT NULL,
+                metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+                embedding JSONB NOT NULL DEFAULT '[]'::jsonb,
+                links JSONB NOT NULL DEFAULT '[]'::jsonb,
+                link_weights JSONB NOT NULL DEFAULT '{}'::jsonb,
+                last_reinforced_at TIMESTAMPTZ
+            )
+            """
+        )
 
     def save(self, record: MemoryRecord) -> None:
         self._items[record.id] = record
+        self._store.execute(
+            """
+            INSERT INTO memory_records (
+                id, user_id, timestamp, memory_type, asset, asset_type, signal_score, action, strategy_id,
+                reasoning, metadata, embedding, links, link_weights, last_reinforced_at
+            ) VALUES (
+                :id, :user_id, :timestamp, :memory_type, :asset, :asset_type, :signal_score, :action, :strategy_id,
+                :reasoning, CAST(:metadata AS JSONB), CAST(:embedding AS JSONB), CAST(:links AS JSONB), CAST(:link_weights AS JSONB), :last_reinforced_at
+            )
+            ON CONFLICT (id) DO UPDATE SET
+                user_id = EXCLUDED.user_id,
+                timestamp = EXCLUDED.timestamp,
+                memory_type = EXCLUDED.memory_type,
+                asset = EXCLUDED.asset,
+                asset_type = EXCLUDED.asset_type,
+                signal_score = EXCLUDED.signal_score,
+                action = EXCLUDED.action,
+                strategy_id = EXCLUDED.strategy_id,
+                reasoning = EXCLUDED.reasoning,
+                metadata = EXCLUDED.metadata,
+                embedding = EXCLUDED.embedding,
+                links = EXCLUDED.links,
+                link_weights = EXCLUDED.link_weights,
+                last_reinforced_at = EXCLUDED.last_reinforced_at
+            """,
+            {
+                **record.model_dump(mode="json"),
+                "metadata": serialize_json(record.metadata),
+                "embedding": serialize_json(record.embedding),
+                "links": serialize_json(record.links),
+                "link_weights": serialize_json(record.link_weights),
+            },
+        )
 
     def get(self, memory_id: str) -> MemoryRecord | None:
-        return self._items.get(memory_id)
+        item = self._items.get(memory_id)
+        if item is not None:
+            return item
+        row = self._store.fetch_one("SELECT * FROM memory_records WHERE id = :memory_id", {"memory_id": memory_id})
+        if row is None:
+            return None
+        return MemoryRecord(
+            **row,
+            metadata=deserialize_json(row["metadata"]) or {},
+            embedding=deserialize_json(row["embedding"]) or [],
+            links=deserialize_json(row["links"]) or [],
+            link_weights=deserialize_json(row["link_weights"]) or {},
+        )
 
     def list_all(self, user_id: str | None = None) -> list[MemoryRecord]:
+        rows = self._store.fetch_all(
+            """
+            SELECT * FROM memory_records
+            WHERE (:user_id IS NULL OR user_id = :user_id)
+            ORDER BY timestamp DESC
+            """,
+            {"user_id": user_id},
+        )
+        if rows:
+            return [
+                MemoryRecord(
+                    **row,
+                    metadata=deserialize_json(row["metadata"]) or {},
+                    embedding=deserialize_json(row["embedding"]) or [],
+                    links=deserialize_json(row["links"]) or [],
+                    link_weights=deserialize_json(row["link_weights"]) or {},
+                )
+                for row in rows
+            ]
         items = list(self._items.values())
         if user_id is None:
             return items

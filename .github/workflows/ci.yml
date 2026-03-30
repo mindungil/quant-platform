@@ -20,13 +20,17 @@ jobs:
         with:
           python-version: '3.11'
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Install service dependencies
         run: make install
 
       - name: Compile sources
         run: make compile
 
-      - name: Run unit tests
+      - name: Run tests and frontend checks
         run: make test
 
       - name: Validate compose config

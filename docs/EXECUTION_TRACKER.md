@@ -19,14 +19,13 @@ What exists now:
 - all major Phase 1 to Phase 5 service directories are present
 - most services expose basic FastAPI routes and tests
 - local `docker-compose.yml` boots core infra containers
-- agent, execution, gateway, and frontend layers are bootstrap implementations
+- agent, execution, gateway, and frontend layers now have a mixed productionization baseline with durable scaffolding in place
 
 What is still materially missing relative to Notion:
 
-- JetStream durable event flow
-- PostgreSQL, pgvector, Redis, and Timescale-backed repositories
+- full JetStream durable event flow across the entire graph
+- durable storage migration for all remaining stateful services
 - full JWT + `X-User-ID` propagation + RLS isolation
-- Next.js frontend and realtime WebSocket bridge
 - observability stack and production-grade runtime controls
 
 ## Gap Classification
@@ -40,8 +39,8 @@ What is still materially missing relative to Notion:
 
 ### Tier 2: Product blockers
 
-- frontend is still a FastAPI HTML page, not a Next.js application
-- gateway does not yet bridge events to WebSocket clients
+- settings, signals, and feed pages need richer UX depth on top of the new Next.js surface
+- websocket replay is still client-memory-only, not event-backed
 - strategy validation and shadow lifecycle are simplified
 
 ### Tier 3: Hardening blockers
@@ -69,9 +68,9 @@ Definition:
 
 Tasks:
 
-- [ ] update `/home/ubuntu/.codex/memories/quant-platform.md` at each architectural change
+- [x] update `/home/ubuntu/.codex/memories/quant-platform.md` at each architectural change
 - [ ] record milestone completion in this file
-- [ ] keep `README.md` aligned with actual repository state
+- [x] keep `README.md` aligned with actual repository state
 
 ### Milestone 1: Phase 1 productionization
 
@@ -81,26 +80,27 @@ Definition:
 
 Tasks:
 
-- [ ] replace in-memory candle and feature repositories with Timescale-backed adapters
-- [ ] add Redis latest-feature cache
+- [x] replace in-memory candle and feature repositories with Timescale-backed adapters
+- [x] add Redis latest-feature cache
 - [ ] preserve feature-store as the only indicator calculator
-- [ ] add event idempotency keys and anomaly topic flow
+- [x] add event idempotency keys and anomaly topic flow
 - [ ] add service-level integration tests for market to feature to signal flow
 
 ### Milestone 2: Phase 2 agent foundations
 
 Tasks:
 
-- [ ] move memory-service to PostgreSQL + pgvector schema
-- [ ] move strategy-registry to PostgreSQL schema with lifecycle transitions
+- [x] move memory-service to PostgreSQL + pgvector schema
+- [x] move strategy-registry to PostgreSQL schema with lifecycle transitions
 - [ ] expand crypto-agent state from template loop to full gather/retrieve/select/check/execute/record flow
-- [ ] store full Decision Record schema from Notion
-- [ ] consume threshold events rather than relying only on direct HTTP entrypoints
+- [x] store full Decision Record schema from Notion
+- [x] consume threshold events rather than relying only on direct HTTP entrypoints
 Current status:
 
 - `memory-service` now has user-scoped API behavior via `X-User-ID`
-- `strategy-registry` now has user-scoped strategy selection with bootstrap fallback
+- `strategy-registry` now has user-scoped strategy selection with PostgreSQL persistence plus bootstrap fallback
 - `llm-gateway` and `external-data-service` exist and are wired into signal and agent flows
+- `crypto-agent` now subscribes to `signal.threshold.crossed.crypto` through JetStream-oriented durable consumers
 
 ### Milestone 3: Phase 3 execution safety
 
@@ -128,13 +128,13 @@ Tasks:
 - [x] add `auth-service`
 - [x] add `api-gateway` JWT verification and internal user propagation
 - [x] implement WebSocket bridge for trading events
-- [ ] replace FastAPI frontend with Next.js app router application
-- [ ] render dashboard views for portfolio, signals, agent feed, and strategy management
+- [x] replace FastAPI frontend with Next.js app router application
+- [x] render dashboard views for portfolio, signals, agent feed, strategy management, and settings
 Current status:
 
 - gateway now proxies authenticated memory and strategy routes
 - gateway now exposes public `/dashboard`, `/signals`, `/feed`, `/settings`, `/orders`, and `/ws`
-- frontend now consumes the gateway dashboard and websocket bridge
+- frontend now consumes the gateway dashboard and websocket bridge through a Next.js App Router surface
 
 ### Milestone 6: Missing Notion services
 
@@ -157,18 +157,18 @@ Tasks:
 
 Current execution slice:
 
-1. add missing documented services so the repo matches the Notion service map
-2. wire those services into existing signal and agent flows
-3. verify compile-time integrity and keep memory plus tracker current
+1. harden migration and repository tests for the newly introduced durable adapters
+2. expand durable rollout into order, portfolio, and statistics persistence
+3. replace synthetic websocket snapshots with replayable event-backed delivery
 
 The highest-value next implementation slice is:
 
-1. Introduce a durable shared service contract for persistence and user scoping.
-2. Complete gateway-side authenticated routing on top of the new `auth-service`.
-3. Migrate `memory-service` and `strategy-registry` to real PostgreSQL repositories.
-4. Expand the crypto-agent to write the full Decision Record and call the execution path through risk and order services.
+1. Add integration tests for market -> feature -> signal -> crypto-agent JetStream flow.
+2. Migrate execution-state services onto durable repositories.
+3. Replace gateway polling websocket snapshots with buffered event fanout from Redis or JetStream.
+4. Add observability stack and release smoke commands.
 
-This is the smallest sequence that starts closing the biggest gap between the current bootstrap and the Notion architecture.
+This is the next smallest sequence that closes the remaining gap between the current local-production baseline and the Notion target architecture.
 
 ## Definition Of Done
 

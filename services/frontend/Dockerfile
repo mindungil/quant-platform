@@ -1,6 +1,8 @@
-FROM python:3.11-slim
+FROM node:20-alpine
 WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY app ./app
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+COPY services/frontend/package.json ./package.json
+COPY services/frontend/package-lock.json* ./
+RUN npm install
+COPY services/frontend ./
+RUN npm run build
+CMD ["npm", "run", "start"]

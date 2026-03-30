@@ -1,7 +1,9 @@
 from fastapi import APIRouter, HTTPException
 
 from app.core.validator import validate_candle_transition
+from app.db.repository import market_data_repository
 from app.models.candle import CandleIngestResponse, CandlePayload, CandleUpdatedEvent
+from app.services.collectors import list_collectors
 from app.services.event_publisher import publisher
 
 router = APIRouter()
@@ -21,6 +23,7 @@ def ingest_candle(asset: str, payload: CandlePayload) -> CandleIngestResponse:
         raise HTTPException(status_code=422, detail=validation.reason)
 
     _last_candles[asset] = payload
+    market_data_repository.save(asset, payload, anomaly_detected=validation.anomaly_detected)
     publisher.publish_market_candle(
         asset=asset,
         event=CandleUpdatedEvent(
@@ -37,3 +40,8 @@ def ingest_candle(asset: str, payload: CandlePayload) -> CandleIngestResponse:
         anomaly_detected=validation.anomaly_detected,
         event_subject=f"market.candle.updated.{asset}",
     )
+
+
+@router.get("/collectors")
+def collectors():
+    return list_collectors()
