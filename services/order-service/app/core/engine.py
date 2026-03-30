@@ -1,18 +1,23 @@
 from app.core.config import settings
-from app.models.order import CredentialSnapshot, OrderRequest, OrderResponse
+from app.db.repository import order_repository
+from app.models.order import CredentialSnapshot, FillSnapshot, OrderRequest, OrderResponse, PortfolioSnapshot, StatisticsSnapshot
 from app.services.exchange_client import ExchangeClient
 from app.services.risk_client import RiskClient
 from app.services.credential_client import CredentialClient
+from app.services.portfolio_client import PortfolioClient
+from app.services.statistics_client import StatisticsClient
 
 risk_client = RiskClient(settings.risk_service_base_url)
 exchange_client = ExchangeClient(settings.exchange_adapter_base_url)
 credential_client = CredentialClient(settings.credential_store_base_url)
+portfolio_client = PortfolioClient(settings.portfolio_service_base_url)
+statistics_client = StatisticsClient(settings.statistics_service_base_url)
 
 
 def process_order(payload: OrderRequest) -> OrderResponse:
     approval = risk_client.approve(payload)
     if not approval["approved"]:
-        return OrderResponse(
+        response = OrderResponse(
             asset=payload.asset,
             side=payload.side,
             quantity=payload.quantity,
@@ -20,12 +25,22 @@ def process_order(payload: OrderRequest) -> OrderResponse:
             risk_reason=approval["reason"],
             exchange="",
             shadow_mode=payload.shadow_mode,
-            credential=CredentialSnapshot(user_id=payload.user_id, exchange=payload.exchange, loaded=False),
+            credential=CredentialSnapshot(
+                user_id=payload.user_id,
+                exchange=payload.exchange,
+                loaded=False,
+            ),
         )
+        order_repository.save(payload.user_id, response)
+        return response
 
     credential = credential_client.get(payload.user_id, payload.exchange)
     exchange_result = exchange_client.place(payload)
-    return OrderResponse(
+    order_id = exchange_result.get("order_id")
+    portfolio = portfolio_client.apply_fill(payload, order_id=order_id, status=exchange_result["status"])
+    statistics = statistics_client.record_trade(payload, order_status=exchange_result["status"])
+    response = OrderResponse(
+        order_id=order_id,
         asset=payload.asset,
         side=payload.side,
         quantity=payload.quantity,
@@ -33,5 +48,21 @@ def process_order(payload: OrderRequest) -> OrderResponse:
         risk_reason=approval["reason"],
         exchange=payload.exchange,
         shadow_mode=payload.shadow_mode,
-        credential=CredentialSnapshot(user_id=payload.user_id, exchange=payload.exchange, loaded=credential is not None),
+        credential=CredentialSnapshot(
+            user_id=payload.user_id,
+            exchange=payload.exchange,
+            loaded=credential is not None,
+            sandbox=True if credential is None else credential.get("sandbox", True),
+            label=None if credential is None else credential.get("label"),
+        ),
+        fill=FillSnapshot(
+            order_id=order_id,
+            status=exchange_result["status"],
+            filled_quantity=payload.quantity,
+            filled_price=payload.price,
+        ),
+        portfolio=PortfolioSnapshot.model_validate(portfolio),
+        statistics=StatisticsSnapshot.model_validate(statistics),
     )
+    order_repository.save(payload.user_id, response)
+    return response

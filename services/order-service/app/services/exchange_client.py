@@ -11,10 +11,12 @@ class ExchangeClient:
         response = httpx.post(
             f"{self._base_url}/exchange/orders",
             json={
+                "user_id": payload.user_id,
                 "exchange": payload.exchange,
                 "asset": payload.asset,
                 "side": payload.side,
                 "quantity": payload.quantity,
+                "requested_notional": payload.requested_notional,
                 "shadow_mode": payload.shadow_mode,
             },
             timeout=5.0,

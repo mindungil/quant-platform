@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 
 class StrategyCreate(BaseModel):
+    user_id: str = "anonymous"
     name: str
     asset_type: str
     indicators: list[str]
@@ -17,6 +18,7 @@ class StrategyCreate(BaseModel):
 class Strategy(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    user_id: str = "anonymous"
     name: str
     asset_type: str
     indicators: list[str]

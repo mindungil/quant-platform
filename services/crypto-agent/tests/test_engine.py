@@ -59,14 +59,21 @@ class StubMemoryClient:
         return record
 
 
+class StubLlmGatewayClient:
+    def generate_reasoning(self, **kwargs) -> str:
+        return "LLM reasoning"
+
+
 def test_run_decision_loop_records_decision(monkeypatch) -> None:
     stub_memory = StubMemoryClient()
     monkeypatch.setattr(engine, "signal_client", StubSignalClient())
     monkeypatch.setattr(engine, "strategy_client", StubStrategyClient())
     monkeypatch.setattr(engine, "memory_client", stub_memory)
+    monkeypatch.setattr(engine, "llm_gateway_client", StubLlmGatewayClient())
 
     decision = engine.run_decision_loop("BTCUSDT")
 
     assert decision.asset == "BTCUSDT"
     assert decision.action == "BUY"
+    assert decision.reasoning == "LLM reasoning"
     assert stub_memory.recorded

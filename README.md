@@ -1,12 +1,13 @@
 # Quant Agent Platform
 
-Phase 1 bootstrap for the startup-club autonomous trading platform.
+Productionizing local runtime for the startup-club autonomous trading platform.
 
 ## What Is Included
 
 - `market-data`: candle ingestion and validation boundary
 - `feature-store`: indicator calculation and feature read API
 - `signal-service`: score evaluation based on feature-store output
+- `external-data-service`: bootstrap news, macro, and on-chain context feed
 - `memory-service`: episode and decision record store
 - `strategy-registry`: strategy lifecycle and active strategy selection
 - `crypto-agent`: first autonomous decision worker for crypto
@@ -19,19 +20,20 @@ Phase 1 bootstrap for the startup-club autonomous trading platform.
 - `statistics-service`: aggregate metrics and drift signals
 - `orchestrator-agent`: cross-service health and coordination summary
 - `etf-agent`, `stock-agent`: non-crypto agent stubs with trading-hour guards
-- `api-gateway`: aggregate product-facing API
-- `frontend`: dashboard scaffold served locally
+- `auth-service`: bootstrap JWT issue/verify boundary for user propagation
+- `llm-gateway`: reasoning-text gateway for agent explanations
+- `api-gateway`: aggregate product-facing API with authenticated proxy routes and a WebSocket snapshot bridge
+- `frontend`: dashboard surface for gateway-backed summary and live stream inspection
 - `AGENT.md`: local implementation contract derived from the Notion documents
 - `docs/`: roadmap, architecture contract, and phase breakdown
 - `Makefile`: local install, test, and compile helpers
 
 ## What Is Not Included Yet
 
-- Persistent storage wiring
-- NATS event consumers and durable subscriptions
-- External data pipeline
-- Trading execution, risk, backtest, and portfolio phases
-  - Production persistence, auth, and real exchange integration remain simplified
+- Full persistent storage migration for every stateful service
+- JetStream durable consumer upgrade across the whole event graph
+- Real frontend migration to Next.js App Router product UI
+- Full live exchange provider integrations beyond the local live-ready adapter contracts
 
 ## Services
 
@@ -40,9 +42,15 @@ services/
   market-data
   feature-store
   signal-service
+  external-data-service
   memory-service
   strategy-registry
   crypto-agent
+  auth-service
+  api-gateway
+  order-service
+  portfolio-service
+  statistics-service
 ```
 
 ## Local Run
@@ -51,7 +59,7 @@ services/
 2. Start the stack:
 
 ```bash
-docker compose up --build
+docker-compose up --build
 ```
 
 3. Example flow:
@@ -89,9 +97,30 @@ curl http://localhost:8005/strategies/active?asset_type=crypto
 curl -X POST http://localhost:8006/decisions/run/BTCUSDT
 ```
 
+4. Auth and gateway example flow:
+
+```bash
+curl -X POST http://localhost:8017/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"demo@example.com","password":"password123","display_name":"Demo","plan":"premium"}'
+```
+
+```bash
+curl -X POST http://localhost:8017/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"demo@example.com","password":"password123"}'
+```
+
+Use the returned `access_token` against:
+
+```bash
+curl http://localhost:8017/dashboard -H "Authorization: Bearer <token>"
+curl http://localhost:8017/signals -H "Authorization: Bearer <token>"
+```
+
 ## Notes
 
-- Current repositories are in-memory to keep Phase 1 focused on contracts and flow.
+- Several services are still in-memory internally, but the public contracts now model user-scoped auth, settings, orders, portfolio, statistics, and gateway aggregation.
 - `feature-store` owns all indicator computation by design.
-- `signal-service` reads calculated features and only performs score composition.
-- NATS plumbing is implemented as optional runtime integration so the same services can run by API or event flow.
+- `signal-service` reads calculated features and composes signal plus external context.
+- Gateway routes now expose product-facing REST and websocket surfaces around the service mesh.

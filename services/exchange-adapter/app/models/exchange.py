@@ -5,10 +5,12 @@ from pydantic import BaseModel, Field
 
 
 class ExchangeOrderRequest(BaseModel):
+    user_id: str
     exchange: str
     asset: str
     side: str
     quantity: float
+    requested_notional: float = 0.0
     shadow_mode: bool = False
 
 
@@ -20,4 +22,5 @@ class ExchangeOrderResponse(BaseModel):
     quantity: float
     status: str
     shadow_mode: bool
+    circuit_state: str = "CLOSED"
     filled_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

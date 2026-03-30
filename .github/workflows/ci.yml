@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - 'feature/**'
+      - 'release/**'
+      - 'hotfix/**'
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install service dependencies
+        run: make install
+
+      - name: Compile sources
+        run: make compile
+
+      - name: Run unit tests
+        run: make test
+
+      - name: Validate compose config
+        run: docker-compose -f docker-compose.yml config

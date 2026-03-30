@@ -1,7 +1,7 @@
 PYTHON ?= python3
 VENV ?= .venv
 
-.PHONY: venv install test compile
+.PHONY: venv install test compile smoke compose-config
 
 venv:
 	$(PYTHON) -m venv $(VENV)
@@ -11,6 +11,7 @@ install: venv
 	pip install -r services/market-data/requirements.txt && \
 	pip install -r services/feature-store/requirements.txt && \
 	pip install -r services/signal-service/requirements.txt && \
+	pip install -r services/external-data-service/requirements.txt && \
 	pip install -r services/memory-service/requirements.txt && \
 	pip install -r services/strategy-registry/requirements.txt && \
 	pip install -r services/crypto-agent/requirements.txt && \
@@ -24,6 +25,8 @@ install: venv
 	pip install -r services/stock-agent/requirements.txt && \
 	pip install -r services/portfolio-service/requirements.txt && \
 	pip install -r services/statistics-service/requirements.txt && \
+	pip install -r services/auth-service/requirements.txt && \
+	pip install -r services/llm-gateway/requirements.txt && \
 	pip install -r services/api-gateway/requirements.txt && \
 	pip install -r services/frontend/requirements.txt && \
 	pip install pytest
@@ -46,8 +49,16 @@ test:
 	PYTHONPATH=services/stock-agent pytest services/stock-agent/tests && \
 	PYTHONPATH=services/portfolio-service pytest services/portfolio-service/tests && \
 	PYTHONPATH=services/statistics-service pytest services/statistics-service/tests && \
+	PYTHONPATH=services/auth-service pytest services/auth-service/tests && \
+	PYTHONPATH=services/external-data-service pytest services/external-data-service/tests && \
+	PYTHONPATH=services/llm-gateway pytest services/llm-gateway/tests && \
 	PYTHONPATH=services/api-gateway pytest services/api-gateway/tests && \
 	PYTHONPATH=services/frontend pytest services/frontend/tests
 
 compile:
 	$(PYTHON) -m compileall .
+
+compose-config:
+	docker-compose -f docker-compose.yml config
+
+smoke: compose-config compile

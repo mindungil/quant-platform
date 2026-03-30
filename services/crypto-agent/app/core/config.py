@@ -9,6 +9,7 @@ class Settings:
     signal_service_base_url: str = os.getenv("SIGNAL_SERVICE_BASE_URL", "http://localhost:8003")
     memory_service_base_url: str = os.getenv("MEMORY_SERVICE_BASE_URL", "http://localhost:8004")
     strategy_registry_base_url: str = os.getenv("STRATEGY_REGISTRY_BASE_URL", "http://localhost:8005")
+    llm_gateway_base_url: str = os.getenv("LLM_GATEWAY_BASE_URL", "http://localhost:8021")
 
 
 settings = Settings()

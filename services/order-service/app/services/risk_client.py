@@ -11,10 +11,14 @@ class RiskClient:
         response = httpx.post(
             f"{self._base_url}/risk/approve",
             json={
+                "user_id": payload.user_id,
                 "asset": payload.asset,
                 "requested_notional": payload.requested_notional,
                 "max_notional": payload.max_notional,
                 "current_drawdown": payload.current_drawdown,
+                "current_exposure": payload.current_exposure,
+                "exposure_limit": payload.exposure_limit,
+                "automation_enabled": payload.automation_enabled,
             },
             timeout=5.0,
         )

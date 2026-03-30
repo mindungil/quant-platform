@@ -28,6 +28,7 @@ services:
       - "8003:8000"
     depends_on:
       - feature-store
+      - external-data-service
       - nats
 
   memory-service:
@@ -57,6 +58,7 @@ services:
       - signal-service
       - memory-service
       - strategy-registry
+      - llm-gateway
       - nats
   backtest-service:
     build:
@@ -144,6 +146,7 @@ services:
     ports:
       - "8017:8000"
     depends_on:
+      - auth-service
       - signal-service
       - portfolio-service
       - statistics-service
@@ -156,6 +159,30 @@ services:
       - "8018:8000"
     depends_on:
       - api-gateway
+
+  auth-service:
+    build:
+      context: ./services/auth-service
+    env_file:
+      - .env.example
+    ports:
+      - "8019:8000"
+
+  external-data-service:
+    build:
+      context: ./services/external-data-service
+    env_file:
+      - .env.example
+    ports:
+      - "8020:8000"
+
+  llm-gateway:
+    build:
+      context: ./services/llm-gateway
+    env_file:
+      - .env.example
+    ports:
+      - "8021:8000"
 
   nats:
     image: nats:2.11-alpine

@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 class MemoryRecord(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    user_id: str = "anonymous"
     asset: str
     asset_type: str
     signal_score: float
@@ -18,6 +19,7 @@ class MemoryRecord(BaseModel):
 
 
 class MemorySearchRequest(BaseModel):
+    user_id: str = "anonymous"
     asset: str
     asset_type: str = "crypto"
     signal_score: float

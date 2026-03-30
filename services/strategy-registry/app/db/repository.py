@@ -8,6 +8,7 @@ class StrategyRepository:
 
     def _seed_default(self) -> None:
         strategy = Strategy(
+            user_id="bootstrap",
             name="Crypto Momentum Bootstrap",
             asset_type="crypto",
             indicators=["rsi_14", "macd", "sma_20", "vwap"],
@@ -29,9 +30,15 @@ class StrategyRepository:
 
     def get_active(self, asset_type: str) -> Strategy | None:
         for strategy in self._items.values():
-            if strategy.asset_type == asset_type and strategy.status == "ACTIVE":
+            if strategy.user_id == "bootstrap" and strategy.asset_type == asset_type and strategy.status == "ACTIVE":
                 return strategy
         return None
+
+    def get_active_for_user(self, asset_type: str, user_id: str) -> Strategy | None:
+        for strategy in self._items.values():
+            if strategy.asset_type == asset_type and strategy.status == "ACTIVE" and strategy.user_id == user_id:
+                return strategy
+        return self.get_active(asset_type)
 
     def update_status(self, strategy_id: str, status: str) -> Strategy | None:
         strategy = self._items.get(strategy_id)

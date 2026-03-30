@@ -1,4 +1,4 @@
-from app.models.signal import FeatureSnapshot, SignalEvaluationResponse
+from app.models.signal import ExternalContextSnapshot, FeatureSnapshot, SignalEvaluationResponse
 
 
 def _normalize(value: float, lower: float, upper: float) -> float:
@@ -10,7 +10,11 @@ def _normalize(value: float, lower: float, upper: float) -> float:
 
 
 def build_signal_response(
-    asset: str, features: FeatureSnapshot, threshold: float
+    asset: str,
+    features: FeatureSnapshot,
+    threshold: float,
+    external_context: ExternalContextSnapshot | None = None,
+    external_signal_weight: float = 0.0,
 ) -> SignalEvaluationResponse:
     score_components: dict[str, float] = {}
 
@@ -25,6 +29,18 @@ def build_signal_response(
 
     if features.close is not None and features.vwap is not None:
         score_components["vwap"] = 1.0 if features.close > features.vwap else -1.0
+
+    if external_context is not None:
+        if external_context.news_sentiment is not None:
+            score_components["news_sentiment"] = external_context.news_sentiment * external_signal_weight
+        if external_context.onchain_score is not None:
+            score_components["onchain_score"] = external_context.onchain_score * external_signal_weight
+        if external_context.macro_risk_score is not None:
+            score_components["macro_risk_score"] = external_context.macro_risk_score * external_signal_weight
+        if external_context.fear_greed_index is not None:
+            score_components["fear_greed_index"] = (
+                ((external_context.fear_greed_index - 50) / 50) * external_signal_weight
+            )
 
     if not score_components:
         total_score = 0.0
@@ -42,4 +58,5 @@ def build_signal_response(
         direction=direction,
         components=score_components,
         feature_timestamp=features.timestamp,
+        external_timestamp=external_context.timestamp if external_context is not None else None,
     )

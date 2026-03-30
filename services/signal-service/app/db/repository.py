@@ -14,5 +14,8 @@ class SignalRepository:
         history = self._items.get(asset, [])
         return history[-1] if history else None
 
+    def list_latest(self) -> list[SignalEvaluationResponse]:
+        return [history[-1] for history in self._items.values() if history]
+
 
 signal_repository = SignalRepository()
