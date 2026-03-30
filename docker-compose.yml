@@ -1,0 +1,186 @@
+services:
+  market-data:
+    build:
+      context: ./services/market-data
+    env_file:
+      - .env.example
+    ports:
+      - "8001:8000"
+    depends_on:
+      - nats
+
+  feature-store:
+    build:
+      context: ./services/feature-store
+    env_file:
+      - .env.example
+    ports:
+      - "8002:8000"
+    depends_on:
+      - nats
+
+  signal-service:
+    build:
+      context: ./services/signal-service
+    env_file:
+      - .env.example
+    ports:
+      - "8003:8000"
+    depends_on:
+      - feature-store
+      - nats
+
+  memory-service:
+    build:
+      context: ./services/memory-service
+    env_file:
+      - .env.example
+    ports:
+      - "8004:8000"
+
+  strategy-registry:
+    build:
+      context: ./services/strategy-registry
+    env_file:
+      - .env.example
+    ports:
+      - "8005:8000"
+
+  crypto-agent:
+    build:
+      context: ./services/crypto-agent
+    env_file:
+      - .env.example
+    ports:
+      - "8006:8000"
+    depends_on:
+      - signal-service
+      - memory-service
+      - strategy-registry
+      - nats
+  backtest-service:
+    build:
+      context: ./services/backtest-service
+    env_file:
+      - .env.example
+    ports:
+      - "8007:8000"
+  exchange-adapter:
+    build:
+      context: ./services/exchange-adapter
+    env_file:
+      - .env.example
+    ports:
+      - "8008:8000"
+  risk-service:
+    build:
+      context: ./services/risk-service
+    env_file:
+      - .env.example
+    ports:
+      - "8009:8000"
+  credential-store:
+    build:
+      context: ./services/credential-store
+    env_file:
+      - .env.example
+    ports:
+      - "8010:8000"
+  order-service:
+    build:
+      context: ./services/order-service
+    env_file:
+      - .env.example
+    ports:
+      - "8011:8000"
+    depends_on:
+      - risk-service
+      - exchange-adapter
+      - credential-store
+  portfolio-service:
+    build:
+      context: ./services/portfolio-service
+    env_file:
+      - .env.example
+    ports:
+      - "8012:8000"
+  statistics-service:
+    build:
+      context: ./services/statistics-service
+    env_file:
+      - .env.example
+    ports:
+      - "8013:8000"
+  orchestrator-agent:
+    build:
+      context: ./services/orchestrator-agent
+    env_file:
+      - .env.example
+    ports:
+      - "8014:8000"
+    depends_on:
+      - portfolio-service
+      - statistics-service
+      - risk-service
+  etf-agent:
+    build:
+      context: ./services/etf-agent
+    env_file:
+      - .env.example
+    ports:
+      - "8015:8000"
+  stock-agent:
+    build:
+      context: ./services/stock-agent
+    env_file:
+      - .env.example
+    ports:
+      - "8016:8000"
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+    env_file:
+      - .env.example
+    ports:
+      - "8017:8000"
+    depends_on:
+      - signal-service
+      - portfolio-service
+      - statistics-service
+  frontend:
+    build:
+      context: ./services/frontend
+    env_file:
+      - .env.example
+    ports:
+      - "8018:8000"
+    depends_on:
+      - api-gateway
+
+  nats:
+    image: nats:2.11-alpine
+    ports:
+      - "4222:4222"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: platform
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    environment:
+      POSTGRES_DB: market
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
