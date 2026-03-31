@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any
 
 import redis
+import redis.asyncio as aioredis
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
@@ -52,8 +53,10 @@ class SqlStore:
 class RedisStore:
     def __init__(self, url: str) -> None:
         self._client = redis.Redis.from_url(url, decode_responses=True)
+        self._async_client = aioredis.from_url(url, decode_responses=True)
         self._fallback_hashes: dict[str, dict[str, str]] = {}
         self._fallback_sets: dict[str, set[str]] = {}
+        self._fallback_lists: dict[str, list[str]] = {}
 
     def hset_json(self, key: str, field: str, value: dict[str, Any]) -> None:
         payload = json.dumps(value, default=str)
@@ -89,14 +92,54 @@ class RedisStore:
         except Exception:
             return False
 
+    def lpush_json(self, key: str, value: dict[str, Any], max_items: int | None = None) -> None:
+        payload = json.dumps(value, default=str)
+        try:
+            self._client.lpush(key, payload)
+            if max_items is not None:
+                self._client.ltrim(key, 0, max_items - 1)
+        except Exception:
+            items = self._fallback_lists.setdefault(key, [])
+            items.insert(0, payload)
+            if max_items is not None:
+                del items[max_items:]
 
-def serialize_json(value: dict[str, Any]) -> str:
+    def lrange_json(self, key: str, start: int, stop: int) -> list[dict[str, Any]]:
+        try:
+            values = self._client.lrange(key, start, stop)
+        except Exception:
+            items = self._fallback_lists.get(key, [])
+            values = items[start : stop + 1 if stop >= 0 else None]
+        return [json.loads(value) for value in values]
+
+    def publish_json(self, channel: str, value: dict[str, Any]) -> None:
+        payload = json.dumps(value, default=str)
+        try:
+            self._client.publish(channel, payload)
+        except Exception:
+            return
+
+    async def close_async(self) -> None:
+        try:
+            await self._async_client.aclose()
+        except Exception:
+            return
+
+    async def subscribe(self, *channels: str):
+        pubsub = self._async_client.pubsub()
+        await pubsub.subscribe(*channels)
+        return pubsub
+
+
+def serialize_json(value: Any) -> str:
     return json.dumps(value, default=str)
 
 
-def deserialize_json(value: str | None) -> dict[str, Any] | None:
+def deserialize_json(value: Any) -> Any:
     if value is None:
         return None
+    if isinstance(value, (dict, list, int, float, bool)):
+        return value
     return json.loads(value)
 
 

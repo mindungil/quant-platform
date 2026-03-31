@@ -1,4 +1,7 @@
-from pydantic import BaseModel
+from datetime import UTC, datetime
+from uuid import uuid4
+
+from pydantic import BaseModel, Field
 
 
 class OrderRequest(BaseModel):
@@ -52,7 +55,8 @@ class StatisticsSnapshot(BaseModel):
 
 
 class OrderResponse(BaseModel):
-    order_id: str | None = None
+    user_id: str
+    order_id: str = Field(default_factory=lambda: str(uuid4()))
     asset: str
     side: str
     quantity: float
@@ -64,3 +68,4 @@ class OrderResponse(BaseModel):
     fill: FillSnapshot | None = None
     portfolio: PortfolioSnapshot | None = None
     statistics: StatisticsSnapshot | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

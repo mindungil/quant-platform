@@ -24,7 +24,7 @@ What exists now:
 What is still materially missing relative to Notion:
 
 - full JetStream durable event flow across the entire graph
-- durable storage migration for all remaining stateful services
+- durable storage migration for the remaining exchange-side and orchestration stateful services
 - full JWT + `X-User-ID` propagation + RLS isolation
 - observability stack and production-grade runtime controls
 
@@ -40,7 +40,7 @@ What is still materially missing relative to Notion:
 ### Tier 2: Product blockers
 
 - settings, signals, and feed pages need richer UX depth on top of the new Next.js surface
-- websocket replay is still client-memory-only, not event-backed
+- websocket replay exists but still needs broader event coverage and stronger delivery guarantees
 - strategy validation and shadow lifecycle are simplified
 
 ### Tier 3: Hardening blockers
@@ -118,8 +118,8 @@ Tasks:
 
 - [ ] expand orchestrator into supervisor and conflict-prevention service
 - [ ] complete ETF and stock agent market-hours behavior with exchange calendars
-- [ ] persist portfolio state and fill application
-- [ ] compute statistics and drift detection against backtest baselines
+- [x] persist portfolio state and fill application
+- [x] compute statistics and drift detection against backtest baselines
 
 ### Milestone 5: Phase 5 product surface
 
@@ -135,6 +135,7 @@ Current status:
 - gateway now proxies authenticated memory and strategy routes
 - gateway now exposes public `/dashboard`, `/signals`, `/feed`, `/settings`, `/orders`, and `/ws`
 - frontend now consumes the gateway dashboard and websocket bridge through a Next.js App Router surface
+- gateway websocket now replays Redis-backed recent events instead of rebuilding dashboard snapshots on a loop
 
 ### Milestone 6: Missing Notion services
 
@@ -157,15 +158,15 @@ Tasks:
 
 Current execution slice:
 
-1. harden migration and repository tests for the newly introduced durable adapters
-2. expand durable rollout into order, portfolio, and statistics persistence
-3. replace synthetic websocket snapshots with replayable event-backed delivery
+1. harden integration coverage for the newly introduced durable execution adapters
+2. extend realtime event coverage to every product-facing event source
+3. layer observability and operational runbooks on top of the new runtime
 
 The highest-value next implementation slice is:
 
 1. Add integration tests for market -> feature -> signal -> crypto-agent JetStream flow.
-2. Migrate execution-state services onto durable repositories.
-3. Replace gateway polling websocket snapshots with buffered event fanout from Redis or JetStream.
+2. Add durable exchange-side event capture and richer realtime fanout coverage.
+3. Replace best-effort replay with stronger delivery semantics and operator introspection.
 4. Add observability stack and release smoke commands.
 
 This is the next smallest sequence that closes the remaining gap between the current local-production baseline and the Notion target architecture.

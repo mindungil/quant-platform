@@ -96,7 +96,8 @@ services:
       - "8010:8000"
   order-service:
     build:
-      context: ./services/order-service
+      context: .
+      dockerfile: services/order-service/Dockerfile
     env_file:
       - .env.example
     ports:
@@ -107,14 +108,16 @@ services:
       - credential-store
   portfolio-service:
     build:
-      context: ./services/portfolio-service
+      context: .
+      dockerfile: services/portfolio-service/Dockerfile
     env_file:
       - .env.example
     ports:
       - "8012:8000"
   statistics-service:
     build:
-      context: ./services/statistics-service
+      context: .
+      dockerfile: services/statistics-service/Dockerfile
     env_file:
       - .env.example
     ports:
@@ -146,7 +149,8 @@ services:
       - "8016:8000"
   api-gateway:
     build:
-      context: ./services/api-gateway
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
     env_file:
       - .env.example
     ports:

@@ -4,6 +4,7 @@ from app.core.config import settings
 from app.models.signal import SignalEvaluationResponse, SignalThresholdEvent
 from shared.events import EventEnvelope, JetStreamBus
 from shared.persistence import RedisStore
+from shared.realtime import RealtimeBus
 
 
 class EventPublisher:
@@ -13,6 +14,7 @@ class EventPublisher:
             redis_store=RedisStore(settings.redis_url),
             enabled=settings.enable_nats,
         )
+        self._realtime = RealtimeBus(RedisStore(settings.redis_url))
 
     async def connect(self) -> None:
         await self._bus.connect()
@@ -37,6 +39,20 @@ class EventPublisher:
                 source="signal-service",
                 data=event.model_dump(mode="json"),
             ),
+        )
+        self._realtime.publish(
+            event_type="signal.threshold",
+            source="signal-service",
+            data={
+                "asset": asset,
+                "asset_type": asset_type,
+                "signal_score": evaluation.signal_score,
+                "threshold": evaluation.threshold,
+                "threshold_crossed": evaluation.threshold_crossed,
+                "direction": evaluation.direction,
+                "strategy_id": evaluation.strategy_id,
+                "feature_timestamp": evaluation.feature_timestamp.isoformat(),
+            },
         )
 
     def publish_threshold(self, asset: str, asset_type: str, evaluation: SignalEvaluationResponse) -> None:

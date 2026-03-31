@@ -4,6 +4,7 @@ from app.core.config import settings
 from app.models.feature import FeatureResponse, FeatureUpdatedEvent
 from shared.events import EventEnvelope, JetStreamBus
 from shared.persistence import RedisStore
+from shared.realtime import RealtimeBus
 
 
 class EventPublisher:
@@ -13,6 +14,7 @@ class EventPublisher:
             redis_store=RedisStore(settings.redis_url),
             enabled=settings.enable_nats,
         )
+        self._realtime = RealtimeBus(RedisStore(settings.redis_url))
 
     async def connect(self) -> None:
         await self._bus.connect()
@@ -34,6 +36,11 @@ class EventPublisher:
                 source="feature-store",
                 data=event.model_dump(mode="json"),
             ),
+        )
+        self._realtime.publish(
+            event_type="feature.updated",
+            source="feature-store",
+            data=event.model_dump(mode="json"),
         )
 
     def publish_feature(self, asset: str, feature: FeatureResponse) -> None:

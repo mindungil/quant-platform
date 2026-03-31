@@ -7,11 +7,14 @@ from app.services.memory_client import MemoryClient
 from app.services.signal_client import SignalClient
 from app.services.strategy_client import StrategyClient
 from app.core.config import settings
+from shared.persistence import RedisStore
+from shared.realtime import RealtimeBus
 
 signal_client = SignalClient(settings.signal_service_base_url)
 memory_client = MemoryClient(settings.memory_service_base_url)
 strategy_client = StrategyClient(settings.strategy_registry_base_url)
 llm_gateway_client = LlmGatewayClient(settings.llm_gateway_base_url)
+realtime_bus = RealtimeBus(RedisStore(settings.redis_url))
 
 
 def _fallback_reasoning(
@@ -77,4 +80,19 @@ def run_decision_loop(asset: str) -> DecisionRecord:
 
     decision_repository.save(asset, decision)
     memory_client.record(decision.to_memory_record())
+    realtime_bus.publish(
+        event_type="agent.decision",
+        source="crypto-agent",
+        data={
+            "asset": decision.asset,
+            "asset_type": decision.asset_type,
+            "action": decision.action,
+            "signal_score": decision.signal_score,
+            "strategy_id": decision.strategy_id,
+            "strategy_name": decision.strategy_name,
+            "reasoning": decision.reasoning,
+            "threshold_crossed": decision.threshold_crossed,
+            "timestamp": decision.timestamp.isoformat(),
+        },
+    )
     return decision

@@ -16,6 +16,8 @@ class Settings:
     jwt_secret: str = os.getenv("JWT_SECRET", "dev-secret")
     jwt_algorithm: str = os.getenv("JWT_ALGORITHM", "HS256")
     jwt_issuer: str = os.getenv("JWT_ISSUER", "quant-auth-service")
+    redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    realtime_replay_limit: int = int(os.getenv("REALTIME_REPLAY_LIMIT", "200"))
 
 
 settings = Settings()

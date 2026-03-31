@@ -21,7 +21,13 @@ def record_trade(payload: StatisticsInput) -> StatisticsSnapshot:
     if payload.user_id is None:
         return compute_statistics(payload)
     pnl = payload.trade_pnls[-1] if payload.trade_pnls else 0.0
-    return statistics_repository.record_trade(payload.user_id, pnl, payload.expected_return)
+    return statistics_repository.record_trade(
+        payload.user_id,
+        pnl,
+        payload.expected_return,
+        order_id=payload.order_id,
+        asset=payload.asset,
+    )
 
 
 @router.get("/statistics/{user_id}", response_model=StatisticsSnapshot)

@@ -1,4 +1,4 @@
-import asyncio
+import json
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
@@ -10,6 +10,8 @@ from app.core.dashboard import build_dashboard_summary
 from app.core.summary import gateway_summary
 from app.models.auth import GatewayPrincipal
 from app.services.gateway_client import GatewayClient
+from shared.persistence import RedisStore
+from shared.realtime import RealtimeBus
 
 router = APIRouter()
 auth_client = GatewayClient(settings.auth_service_base_url)
@@ -19,6 +21,7 @@ signal_client = GatewayClient(settings.signal_service_base_url)
 order_client = GatewayClient(settings.order_service_base_url)
 credential_client = GatewayClient(settings.credential_store_base_url)
 risk_client = GatewayClient(settings.risk_service_base_url)
+realtime_bus = RealtimeBus(RedisStore(settings.redis_url), replay_limit=settings.realtime_replay_limit)
 
 
 @router.get("/health")
@@ -216,57 +219,23 @@ async def gateway_ws(websocket: WebSocket) -> None:
         return
 
     await websocket.accept()
+    pubsub = None
     try:
+        for event in realtime_bus.recent(user_id=principal.user_id, limit=settings.realtime_replay_limit):
+            await websocket.send_json({"type": event["type"], "data": event["data"]})
+
+        pubsub = await realtime_bus.subscribe(user_id=principal.user_id)
         while True:
-            snapshot = build_dashboard_summary(principal)
-            orders = snapshot.get("orders", [])
-            signals = snapshot.get("signals", []) if isinstance(snapshot.get("signals"), list) else []
-            memory_probe = snapshot.get("memory_probe", {})
-            feed_items = memory_probe.get("items", []) if isinstance(memory_probe, dict) else []
-
-            if orders:
-                latest_order = orders[-1]
-                await websocket.send_json({"type": "order.filled", "data": latest_order})
-            if signals:
-                latest_signal = signals[0]
-                await websocket.send_json(
-                    {
-                        "type": "signal.threshold",
-                        "data": {
-                            "asset": latest_signal.get("asset"),
-                            "score": latest_signal.get("signal_score"),
-                            "crossed": latest_signal.get("threshold_crossed"),
-                        },
-                    }
-                )
-                await websocket.send_json({"type": "feature.updated", "data": latest_signal})
-            if feed_items:
-                latest_feed = feed_items[0]["record"]
-                await websocket.send_json(
-                    {
-                        "type": "agent.decision",
-                        "data": {
-                            "asset": latest_feed.get("asset"),
-                            "action": latest_feed.get("action"),
-                            "reasoning": latest_feed.get("reasoning"),
-                        },
-                    }
-                )
-
-            statistics = snapshot.get("statistics", {})
-            if isinstance(statistics, dict):
-                await websocket.send_json(
-                    {
-                        "type": "risk.triggered",
-                        "data": {
-                            "level": "WARNING" if statistics.get("drift_detected") else "NORMAL",
-                            "drawdown": statistics.get("max_drawdown", 0.0),
-                        },
-                    }
-                )
-            await asyncio.sleep(2)
+            message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=5.0)
+            if message is None:
+                continue
+            event = json.loads(message["data"]) if isinstance(message["data"], str) else message["data"]
+            await websocket.send_json({"type": event["type"], "data": event["data"]})
     except WebSocketDisconnect:
         return
+    finally:
+        if pubsub is not None:
+            await pubsub.aclose()
 
 
 @router.websocket("/ws")

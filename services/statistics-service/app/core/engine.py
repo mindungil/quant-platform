@@ -26,4 +26,5 @@ def compute_statistics(payload: StatisticsInput) -> StatisticsSnapshot:
         sharpe=0.0 if variance == 0 else round(mean_return / (variance**0.5), 4),
         sortino=0.0 if downside_variance == 0 else round(mean_return / (downside_variance**0.5), 4),
         max_drawdown=round(abs(max_drawdown), 4),
+        recent_trade_pnls=payload.trade_pnls[-10:],
     )

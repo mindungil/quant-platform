@@ -22,10 +22,11 @@ Productionizing local runtime for the startup-club autonomous trading platform.
 - `etf-agent`, `stock-agent`: non-crypto agent stubs with trading-hour guards
 - `auth-service`: bootstrap JWT issue/verify boundary for user propagation
 - `llm-gateway`: reasoning-text gateway for agent explanations
-- `api-gateway`: aggregate product-facing API with authenticated proxy routes and a WebSocket snapshot bridge
+- `api-gateway`: aggregate product-facing API with authenticated proxy routes and a Redis-backed WebSocket replay bridge
 - `frontend`: Next.js App Router product UI for dashboard, signals, feed, strategies, and settings
 - `AGENT.md`: local implementation contract derived from the Notion documents
 - `docs/`: roadmap, architecture contract, and phase breakdown
+- `docs/PRODUCTION_PROGRAM.md`: long-horizon productionization program and release-train plan
 - `Makefile`: local install, test, and compile helpers
 
 ## Production Progress
@@ -35,13 +36,15 @@ Productionizing local runtime for the startup-club autonomous trading platform.
 - `market-data -> feature-store -> signal-service -> crypto-agent` now has durable event scaffolding with idempotency and DLQ support
 - `memory-service` and `strategy-registry` now write through durable repositories with local fallback behavior
 - `frontend` is now a Next.js application backed by the gateway public routes
+- `order-service`, `portfolio-service`, and `statistics-service` now persist execution-state scaffolding through PostgreSQL-backed repositories
+- gateway websocket now replays Redis-backed recent events instead of polling dashboard snapshots
 
 ## What Is Not Included Yet
 
-- Full durable migration for `order-service`, `portfolio-service`, and `statistics-service`
 - JetStream rollout for the full downstream execution and fill graph
 - Full provider-complete live exchange connectivity beyond the current runnable local adapters
 - Prometheus/Grafana/Loki-grade observability across every service
+- full event-backed replay coverage for every product event type and every service
 
 ## Services
 
@@ -144,3 +147,4 @@ open http://localhost:8018
 - `signal-service` reads calculated features and composes signal plus external context.
 - Gateway routes expose product-facing REST and websocket surfaces around the service mesh.
 - JetStream is currently rolled out for the market, feature, signal, and crypto-agent path first.
+- Execution-state services now write durable state first and fall back in-memory only when local infra is unavailable.
