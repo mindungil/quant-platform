@@ -2,7 +2,7 @@ PYTHON ?= python3
 VENV ?= .venv
 NPM ?= npm
 
-.PHONY: venv operator-deps install test test-integration compile smoke compose-config compose-up compose-down seed-admin demo-flow smoke-e2e release-check migration-smoke
+.PHONY: venv operator-deps install test test-integration compile smoke compose-config compose-up compose-down seed-admin seed-data demo-flow smoke-e2e release-check migration-smoke
 
 venv:
 	$(PYTHON) -m venv $(VENV)
@@ -81,6 +81,9 @@ compose-down:
 
 seed-admin: operator-deps
 	. $(VENV)/bin/activate && python scripts/seed_admin.py
+
+seed-data:
+	$(PYTHON) scripts/seed_data.py
 
 demo-flow: operator-deps
 	. $(VENV)/bin/activate && python scripts/demo_flow.py
