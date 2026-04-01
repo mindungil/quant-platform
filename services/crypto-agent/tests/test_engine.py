@@ -172,7 +172,9 @@ def test_check_phase_passes_cleanly(monkeypatch) -> None:
     """Check phase should pass with no warnings for a fresh signal and active strategy."""
     _patch_engine(monkeypatch)
 
-    decision = engine.run_decision_loop("ETHUSDT")
+    import uuid
+    unique_asset = f"CLEAN_{uuid.uuid4().hex[:8].upper()}"
+    decision = engine.run_decision_loop(unique_asset)
 
     check_phase = next(p for p in decision.decision_phases if p.name == "check")
     assert check_phase.detail == "all checks passed"
