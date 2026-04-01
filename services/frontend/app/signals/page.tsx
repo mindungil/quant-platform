@@ -3,6 +3,12 @@
 import { useEffect, useState } from "react";
 import { gatewayFetch } from "../../lib/api";
 import { ChartPlaceholder } from "../../components/chart-placeholder";
+import {
+  PageTransition,
+  StaggerContainer,
+  StaggerItem,
+  motion,
+} from "../../components/motion";
 
 interface SignalComponent {
   name?: string;
@@ -34,10 +40,9 @@ function directionBadgeClass(direction: string): string {
   return "bg-neutral-100 text-neutral-500";
 }
 
-function scoreBarWidth(score: number): string {
-  // Score ranges roughly -1 to 1; normalize to 0-100%
-  const pct = Math.min(100, Math.max(0, (score + 1) * 50));
-  return `${pct}%`;
+function scoreBarWidth(score: number): number {
+  // Score ranges roughly -1 to 1; normalize to 0-100
+  return Math.min(100, Math.max(0, (score + 1) * 50));
 }
 
 export default function SignalsPage() {
@@ -60,91 +65,111 @@ export default function SignalsPage() {
   }, []);
 
   return (
-    <main className="grid gap-6">
-      <section className="card">
-        <h2 className="mb-4 text-2xl font-semibold text-neutral-900">Signal View</h2>
-        <ChartPlaceholder />
-      </section>
-
-      {loading ? (
-        <div className="card animate-pulse">
-          <p className="text-neutral-400">Loading signals...</p>
-        </div>
-      ) : error ? (
-        <div className="card">
-          <p className="text-red-500">{error}</p>
-          <p className="mt-2 text-sm text-neutral-500">
-            Make sure you are logged in and the signal service is running.
-          </p>
-        </div>
-      ) : signals.length === 0 ? (
-        <div className="card">
-          <p className="text-neutral-400">No signals available yet.</p>
-        </div>
-      ) : (
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {signals.map((signal, idx) => (
-            <article
-              key={`${signal.asset}-${signal.feature_timestamp ?? idx}`}
-              className="card"
-            >
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-medium uppercase tracking-wide text-neutral-500">
-                  {signal.asset}
-                </p>
-                <span
-                  className={`badge ${directionBadgeClass(signal.direction)}`}
-                >
-                  {signal.direction}
-                </span>
-              </div>
-
-              <h3 className="mt-2 text-3xl font-semibold text-neutral-900">
-                {formatScore(signal.signal_score)}
-              </h3>
-
-              {/* Score bar */}
-              <div className="mt-3 h-1.5 w-full rounded-full bg-neutral-100">
-                <div
-                  className={`h-1.5 rounded-full ${
-                    signal.signal_score >= 0 ? "bg-green-500" : "bg-red-500"
-                  }`}
-                  style={{ width: scoreBarWidth(signal.signal_score) }}
-                />
-              </div>
-
-              {signal.feature_timestamp ? (
-                <p className="mt-2 text-xs text-neutral-400">
-                  {new Date(signal.feature_timestamp).toLocaleString()}
-                </p>
-              ) : null}
-
-              {signal.confidence != null ? (
-                <p className="mt-1 text-xs text-neutral-500">
-                  Confidence: {(signal.confidence * 100).toFixed(1)}%
-                </p>
-              ) : null}
-
-              {signal.model_version ? (
-                <p className="mt-1 text-xs text-neutral-400">
-                  Model: {signal.model_version}
-                </p>
-              ) : null}
-
-              {signal.components ? (
-                <details className="mt-3">
-                  <summary className="cursor-pointer text-xs text-neutral-400 hover:text-neutral-700">
-                    Components
-                  </summary>
-                  <pre className="mt-2 overflow-x-auto rounded-lg border border-neutral-100 bg-neutral-50 p-3 text-xs text-neutral-600">
-                    {JSON.stringify(signal.components, null, 2)}
-                  </pre>
-                </details>
-              ) : null}
-            </article>
-          ))}
+    <PageTransition>
+      <main className="grid gap-6">
+        <section className="card">
+          <h2 className="mb-4 text-2xl font-semibold text-neutral-900">Signal View</h2>
+          <ChartPlaceholder />
         </section>
-      )}
-    </main>
+
+        {loading ? (
+          <StaggerContainer className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {[0, 1, 2].map((i) => (
+              <StaggerItem key={i}>
+                <div className="card animate-pulse space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="h-4 w-20 rounded bg-neutral-200" />
+                    <div className="h-5 w-14 rounded-full bg-neutral-200" />
+                  </div>
+                  <div className="h-8 w-32 rounded bg-neutral-200" />
+                  <div className="h-1.5 w-full rounded-full bg-neutral-100" />
+                  <div className="h-3 w-40 rounded bg-neutral-100" />
+                </div>
+              </StaggerItem>
+            ))}
+          </StaggerContainer>
+        ) : error ? (
+          <div className="card">
+            <p className="text-red-500">{error}</p>
+            <p className="mt-2 text-sm text-neutral-500">
+              Make sure you are logged in and the signal service is running.
+            </p>
+          </div>
+        ) : signals.length === 0 ? (
+          <div className="card">
+            <p className="text-neutral-400">No signals available yet.</p>
+          </div>
+        ) : (
+          <StaggerContainer className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {signals.map((signal, idx) => (
+              <StaggerItem
+                key={`${signal.asset}-${signal.feature_timestamp ?? idx}`}
+              >
+                <article className="card">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium uppercase tracking-wide text-neutral-500">
+                      {signal.asset}
+                    </p>
+                    <motion.span
+                      initial={{ scale: 0, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ type: "spring", stiffness: 300, damping: 20, delay: 0.15 }}
+                      className={`badge ${directionBadgeClass(signal.direction)}`}
+                    >
+                      {signal.direction}
+                    </motion.span>
+                  </div>
+
+                  <h3 className="mt-2 text-3xl font-semibold text-neutral-900">
+                    {formatScore(signal.signal_score)}
+                  </h3>
+
+                  {/* Score bar */}
+                  <div className="mt-3 h-1.5 w-full rounded-full bg-neutral-100">
+                    <motion.div
+                      className={`h-1.5 rounded-full ${
+                        signal.signal_score >= 0 ? "bg-green-500" : "bg-red-500"
+                      }`}
+                      initial={{ width: 0 }}
+                      animate={{ width: `${scoreBarWidth(signal.signal_score)}%` }}
+                      transition={{ duration: 0.7, ease: "easeOut", delay: 0.2 }}
+                    />
+                  </div>
+
+                  {signal.feature_timestamp ? (
+                    <p className="mt-2 text-xs text-neutral-400">
+                      {new Date(signal.feature_timestamp).toLocaleString()}
+                    </p>
+                  ) : null}
+
+                  {signal.confidence != null ? (
+                    <p className="mt-1 text-xs text-neutral-500">
+                      Confidence: {(signal.confidence * 100).toFixed(1)}%
+                    </p>
+                  ) : null}
+
+                  {signal.model_version ? (
+                    <p className="mt-1 text-xs text-neutral-400">
+                      Model: {signal.model_version}
+                    </p>
+                  ) : null}
+
+                  {signal.components ? (
+                    <details className="mt-3">
+                      <summary className="cursor-pointer text-xs text-neutral-400 hover:text-neutral-700">
+                        Components
+                      </summary>
+                      <pre className="mt-2 overflow-x-auto rounded-lg border border-neutral-100 bg-neutral-50 p-3 text-xs text-neutral-600">
+                        {JSON.stringify(signal.components, null, 2)}
+                      </pre>
+                    </details>
+                  ) : null}
+                </article>
+              </StaggerItem>
+            ))}
+          </StaggerContainer>
+        )}
+      </main>
+    </PageTransition>
   );
 }
