@@ -1,17 +1,30 @@
 import hashlib
 import hmac
+import logging
 import os
 from datetime import UTC, datetime
 
+from app.adapters.base import ExchangeAdapter
+from app.adapters.binance import BinanceAdapter
+from app.adapters.upbit import UpbitAdapter
+from app.adapters.alpaca import AlpacaAdapter
 from app.core.config import settings
 from app.models.exchange import ExchangeAuditRecord, ExchangeOrderRequest, ExchangeOrderResponse
 from shared.persistence import SqlStore, deserialize_json, serialize_json
+
+logger = logging.getLogger(__name__)
+
+
+def _build_adapter_registry() -> dict[str, ExchangeAdapter]:
+    adapters: list[ExchangeAdapter] = [BinanceAdapter(), UpbitAdapter(), AlpacaAdapter()]
+    return {a.name: a for a in adapters}
 
 
 class ExchangeRepository:
     def __init__(self) -> None:
         self._failure_counts: dict[tuple[str, str], int] = {}
         self._store = SqlStore(os.getenv("POSTGRES_URL", settings.postgres_url))
+        self._adapters = _build_adapter_registry()
         self._ensure_schema()
 
     def _ensure_schema(self) -> None:
@@ -79,8 +92,16 @@ class ExchangeRepository:
         )
         return None if latest is None else latest["audit_id"]
 
+    def _get_adapter(self, exchange: str) -> ExchangeAdapter | None:
+        return self._adapters.get(exchange.lower())
+
     def place(self, payload: ExchangeOrderRequest) -> ExchangeOrderResponse:
         key = (payload.user_id, payload.exchange)
+        mode = "shadow" if payload.shadow_mode else "live"
+        adapter = self._get_adapter(payload.exchange)
+        adapter_name = adapter.name if adapter else "simulated"
+
+        # Circuit breaker check
         if self._failure_counts.get(key, 0) >= 5:
             response = ExchangeOrderResponse(
                 exchange=payload.exchange,
@@ -90,22 +111,78 @@ class ExchangeRepository:
                 status="REJECTED_CIRCUIT_OPEN",
                 shadow_mode=payload.shadow_mode,
                 circuit_state="OPEN",
-                mode="shadow" if payload.shadow_mode else "live",
+                mode=mode,
+                adapter_name=adapter_name,
                 exchange_payload_signature=self._signature(payload),
             )
             response.audit_id = self._record_audit(payload, response)
             return response
 
-        status = "SIMULATED_FILLED" if payload.shadow_mode else "FILLED"
+        # Shadow mode: simulate regardless of adapter availability
+        if payload.shadow_mode:
+            response = ExchangeOrderResponse(
+                exchange=payload.exchange,
+                asset=payload.asset,
+                side=payload.side,
+                quantity=payload.quantity,
+                status="SIMULATED_FILLED",
+                shadow_mode=True,
+                circuit_state="CLOSED",
+                mode="shadow",
+                adapter_name=adapter_name,
+                exchange_payload_signature=self._signature(payload),
+            )
+            response.audit_id = self._record_audit(payload, response)
+            return response
+
+        # Live mode: dispatch to the real adapter
+        if adapter is None:
+            response = ExchangeOrderResponse(
+                exchange=payload.exchange,
+                asset=payload.asset,
+                side=payload.side,
+                quantity=payload.quantity,
+                status="REJECTED_NO_ADAPTER",
+                shadow_mode=False,
+                circuit_state="CLOSED",
+                mode="live",
+                adapter_name="none",
+                exchange_payload_signature=self._signature(payload),
+            )
+            response.audit_id = self._record_audit(payload, response)
+            return response
+
+        try:
+            result = adapter.place_order(
+                asset=payload.asset,
+                side=payload.side,
+                quantity=payload.quantity,
+                notional=payload.requested_notional,
+                api_key=payload.api_key,
+                api_secret=payload.api_secret,
+                sandbox=payload.sandbox,
+            )
+            status = result.get("status", "FILLED")
+            self._failure_counts[key] = 0
+        except NotImplementedError:
+            status = "REJECTED_NOT_IMPLEMENTED"
+            self._failure_counts[key] = self._failure_counts.get(key, 0) + 1
+            logger.warning("adapter %s is not implemented", adapter.name)
+        except Exception:
+            status = "REJECTED_EXCHANGE_ERROR"
+            self._failure_counts[key] = self._failure_counts.get(key, 0) + 1
+            logger.exception("adapter %s failed", adapter.name)
+
         response = ExchangeOrderResponse(
             exchange=payload.exchange,
             asset=payload.asset,
             side=payload.side,
             quantity=payload.quantity,
             status=status,
-            shadow_mode=payload.shadow_mode,
+            shadow_mode=False,
             circuit_state="CLOSED",
-            mode="shadow" if payload.shadow_mode else "live",
+            mode="live",
+            adapter_name=adapter_name,
             exchange_payload_signature=self._signature(payload),
         )
         response.audit_id = self._record_audit(payload, response)

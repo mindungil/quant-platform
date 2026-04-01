@@ -29,6 +29,7 @@ class ExchangeOrderResponse(BaseModel):
     shadow_mode: bool
     circuit_state: str = "CLOSED"
     mode: str = "shadow"
+    adapter_name: str = "simulated"
     audit_id: int | None = None
     exchange_payload_signature: str | None = None
     filled_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
