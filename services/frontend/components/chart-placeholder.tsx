@@ -11,10 +11,10 @@ export function ChartPlaceholder() {
     const chart = createChart(ref.current, {
       width: ref.current.clientWidth,
       height: 280,
-      layout: { background: { color: "transparent" }, textColor: "#eef7fb" },
-      grid: { vertLines: { color: "rgba(255,255,255,0.08)" }, horzLines: { color: "rgba(255,255,255,0.08)" } }
+      layout: { background: { color: "transparent" }, textColor: "#737373" },
+      grid: { vertLines: { color: "#F5F5F5" }, horzLines: { color: "#F5F5F5" } }
     });
-    const series = chart.addAreaSeries({ lineColor: "#f6bd60", topColor: "rgba(246,189,96,0.45)", bottomColor: "rgba(246,189,96,0.05)" });
+    const series = chart.addAreaSeries({ lineColor: "#171717", topColor: "rgba(23,23,23,0.12)", bottomColor: "rgba(23,23,23,0.02)" });
     series.setData([
       { time: "2026-03-26", value: 12 },
       { time: "2026-03-27", value: 15 },

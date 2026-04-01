@@ -38,10 +38,10 @@ const INDICATOR_OPTIONS = [
 
 function statusBadgeClass(status: string): string {
   const s = status.toUpperCase();
-  if (s === "ACTIVE") return "bg-green-500/20 text-green-400";
-  if (s === "PAUSED") return "bg-sand/20 text-sand";
-  if (s === "ARCHIVED") return "bg-white/10 text-white/40";
-  return "bg-mint/20 text-mint"; // DRAFT
+  if (s === "ACTIVE") return "bg-green-50 text-green-700";
+  if (s === "PAUSED") return "bg-yellow-50 text-yellow-700";
+  if (s === "ARCHIVED") return "bg-neutral-100 text-neutral-400";
+  return "bg-neutral-100 text-neutral-500"; // DRAFT
 }
 
 function formatNumber(value: number | undefined | null, decimals = 2): string {
@@ -266,19 +266,19 @@ function StrategiesContent() {
   return (
     <main className="grid gap-6">
       {/* Header */}
-      <section className="panel">
+      <section className="card">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-2xl font-semibold">Strategies</h2>
+          <h2 className="text-2xl font-semibold text-neutral-900">Strategies</h2>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setModal("new")}
-              className="rounded-full bg-sand px-4 py-2 text-sm font-medium text-ink hover:bg-sand/90"
+              className="btn-primary"
             >
               + New Strategy
             </button>
             <button
               onClick={fetchStrategies}
-              className="rounded-full border border-white/10 px-3 py-1 text-xs text-white/60 hover:bg-white/10"
+              className="btn-secondary"
             >
               Refresh
             </button>
@@ -288,12 +288,12 @@ function StrategiesContent() {
 
       {/* New Strategy Modal */}
       {modal === "new" && (
-        <section className="panel border-sand/30">
+        <section className="card border-neutral-300">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold">Create New Strategy</h3>
+            <h3 className="text-lg font-semibold text-neutral-900">Create New Strategy</h3>
             <button
               onClick={() => setModal("none")}
-              className="text-sm text-white/50 hover:text-white"
+              className="text-sm text-neutral-400 hover:text-neutral-900"
             >
               Close
             </button>
@@ -301,13 +301,13 @@ function StrategiesContent() {
 
           <div className="mt-4 space-y-4">
             {formError && (
-              <p className="rounded-xl bg-red-500/10 p-3 text-sm text-red-400">{formError}</p>
+              <p className="rounded-lg bg-red-50 p-3 text-sm text-red-600">{formError}</p>
             )}
 
             <div>
-              <label className="text-xs uppercase tracking-wider text-mint">Strategy Name</label>
+              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-neutral-500">Strategy Name</label>
               <input
-                className="mt-1 w-full rounded-2xl bg-white/10 px-4 py-3 text-sm"
+                className="input-field"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 placeholder="My Momentum Strategy"
@@ -315,14 +315,14 @@ function StrategiesContent() {
             </div>
 
             <div>
-              <label className="text-xs uppercase tracking-wider text-mint">Asset Type</label>
+              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-neutral-500">Asset Type</label>
               <select
-                className="mt-1 w-full rounded-2xl bg-white/10 px-4 py-3 text-sm"
+                className="input-field"
                 value={newAssetType}
                 onChange={(e) => setNewAssetType(e.target.value)}
               >
                 {ASSET_TYPES.map((t) => (
-                  <option key={t} value={t} className="bg-ink">
+                  <option key={t} value={t}>
                     {t.charAt(0).toUpperCase() + t.slice(1)}
                   </option>
                 ))}
@@ -330,16 +330,16 @@ function StrategiesContent() {
             </div>
 
             <div>
-              <label className="text-xs uppercase tracking-wider text-mint">Indicators</label>
+              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-neutral-500">Indicators</label>
               <div className="mt-2 flex flex-wrap gap-2">
                 {INDICATOR_OPTIONS.map((ind) => (
                   <button
                     key={ind}
                     onClick={() => toggleIndicator(ind)}
-                    className={`rounded-full border px-3 py-1 text-xs transition ${
+                    className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
                       newIndicators.has(ind)
-                        ? "border-sand bg-sand/20 text-sand"
-                        : "border-white/10 text-white/60 hover:bg-white/10"
+                        ? "border-neutral-900 bg-neutral-900 text-white"
+                        : "border-neutral-200 text-neutral-500 hover:border-neutral-400"
                     }`}
                   >
                     {ind}
@@ -350,11 +350,11 @@ function StrategiesContent() {
 
             {newIndicators.size > 0 && (
               <div>
-                <label className="text-xs uppercase tracking-wider text-mint">Weights</label>
+                <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-neutral-500">Weights</label>
                 <div className="mt-2 space-y-2">
                   {Array.from(newIndicators).map((ind) => (
                     <div key={ind} className="flex items-center gap-3">
-                      <span className="w-20 text-xs text-white/70">{ind}</span>
+                      <span className="w-20 text-xs text-neutral-600">{ind}</span>
                       <input
                         type="range"
                         min="0"
@@ -362,9 +362,9 @@ function StrategiesContent() {
                         step="0.1"
                         value={newWeights[ind] ?? 1.0}
                         onChange={(e) => setWeight(ind, parseFloat(e.target.value))}
-                        className="flex-1"
+                        className="flex-1 accent-neutral-900"
                       />
-                      <span className="w-10 text-right text-xs text-white/60">
+                      <span className="w-10 text-right text-xs text-neutral-400">
                         {(newWeights[ind] ?? 1.0).toFixed(1)}
                       </span>
                     </div>
@@ -375,7 +375,7 @@ function StrategiesContent() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-xs uppercase tracking-wider text-mint">Entry Threshold</label>
+                <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-neutral-500">Entry Threshold</label>
                 <div className="mt-1 flex items-center gap-2">
                   <input
                     type="range"
@@ -384,15 +384,15 @@ function StrategiesContent() {
                     step="0.05"
                     value={newEntryThreshold}
                     onChange={(e) => setNewEntryThreshold(parseFloat(e.target.value))}
-                    className="flex-1"
+                    className="flex-1 accent-neutral-900"
                   />
-                  <span className="w-10 text-right text-sm text-white/60">
+                  <span className="w-10 text-right text-sm text-neutral-400">
                     {newEntryThreshold.toFixed(2)}
                   </span>
                 </div>
               </div>
               <div>
-                <label className="text-xs uppercase tracking-wider text-mint">Exit Threshold</label>
+                <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-neutral-500">Exit Threshold</label>
                 <div className="mt-1 flex items-center gap-2">
                   <input
                     type="range"
@@ -401,9 +401,9 @@ function StrategiesContent() {
                     step="0.05"
                     value={newExitThreshold}
                     onChange={(e) => setNewExitThreshold(parseFloat(e.target.value))}
-                    className="flex-1"
+                    className="flex-1 accent-neutral-900"
                   />
-                  <span className="w-10 text-right text-sm text-white/60">
+                  <span className="w-10 text-right text-sm text-neutral-400">
                     {newExitThreshold.toFixed(2)}
                   </span>
                 </div>
@@ -413,7 +413,7 @@ function StrategiesContent() {
             <button
               onClick={createStrategy}
               disabled={actionLoading === "create"}
-              className="rounded-full bg-sand px-6 py-2 text-sm font-medium text-ink hover:bg-sand/90 disabled:opacity-40"
+              className="btn-primary disabled:opacity-40"
             >
               {actionLoading === "create" ? "Creating..." : "Create Strategy"}
             </button>
@@ -423,12 +423,12 @@ function StrategiesContent() {
 
       {/* Backtest Modal */}
       {modal === "backtest" && (
-        <section className="panel border-mint/30">
+        <section className="card border-neutral-300">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold">Backtest Results</h3>
+            <h3 className="text-lg font-semibold text-neutral-900">Backtest Results</h3>
             <button
               onClick={() => { setModal("none"); setBacktestResult(null); }}
-              className="text-sm text-white/50 hover:text-white"
+              className="text-sm text-neutral-400 hover:text-neutral-900"
             >
               Close
             </button>
@@ -436,43 +436,43 @@ function StrategiesContent() {
 
           {backtestPolling && !backtestResult && (
             <div className="mt-4 animate-pulse">
-              <p className="text-white/60">Starting backtest...</p>
+              <p className="text-neutral-400">Starting backtest...</p>
             </div>
           )}
 
           {backtestResult && (
             <div className="mt-4 space-y-3">
               <div className="flex items-center gap-3">
-                <span className={`rounded-full px-3 py-1 text-xs font-medium ${
-                  backtestResult.status === "PASSED" ? "bg-green-500/20 text-green-400" :
-                  backtestResult.status === "FAILED" ? "bg-red-500/20 text-red-400" :
-                  "bg-sand/20 text-sand"
+                <span className={`badge ${
+                  backtestResult.status === "PASSED" ? "bg-green-50 text-green-700" :
+                  backtestResult.status === "FAILED" ? "bg-red-50 text-red-700" :
+                  "bg-yellow-50 text-yellow-700"
                 }`}>
                   {backtestResult.status}
                 </span>
-                {backtestPolling && <span className="text-xs text-white/50 animate-pulse">Polling...</span>}
+                {backtestPolling && <span className="text-xs text-neutral-400 animate-pulse">Polling...</span>}
               </div>
 
               <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                <div className="rounded-xl bg-black/20 p-3">
-                  <p className="text-xs uppercase tracking-wider text-mint">Sharpe Ratio</p>
-                  <p className="mt-1 text-lg font-semibold">{formatNumber(backtestResult.sharpe_ratio)}</p>
+                <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                  <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">Sharpe Ratio</p>
+                  <p className="mt-1 text-lg font-semibold text-neutral-900">{formatNumber(backtestResult.sharpe_ratio)}</p>
                 </div>
-                <div className="rounded-xl bg-black/20 p-3">
-                  <p className="text-xs uppercase tracking-wider text-mint">Max Drawdown</p>
-                  <p className="mt-1 text-lg font-semibold">
+                <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                  <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">Max Drawdown</p>
+                  <p className="mt-1 text-lg font-semibold text-neutral-900">
                     {backtestResult.max_drawdown != null ? `${(backtestResult.max_drawdown * 100).toFixed(1)}%` : "--"}
                   </p>
                 </div>
-                <div className="rounded-xl bg-black/20 p-3">
-                  <p className="text-xs uppercase tracking-wider text-mint">Total Return</p>
-                  <p className="mt-1 text-lg font-semibold">
+                <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                  <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">Total Return</p>
+                  <p className="mt-1 text-lg font-semibold text-neutral-900">
                     {backtestResult.total_return != null ? `${(backtestResult.total_return * 100).toFixed(1)}%` : "--"}
                   </p>
                 </div>
-                <div className="rounded-xl bg-black/20 p-3">
-                  <p className="text-xs uppercase tracking-wider text-mint">Trades</p>
-                  <p className="mt-1 text-lg font-semibold">{backtestResult.trades ?? "--"}</p>
+                <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                  <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">Trades</p>
+                  <p className="mt-1 text-lg font-semibold text-neutral-900">{backtestResult.trades ?? "--"}</p>
                 </div>
               </div>
 
@@ -483,7 +483,7 @@ function StrategiesContent() {
                     setModal("none");
                     setBacktestResult(null);
                   }}
-                  className="rounded-full bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-500"
+                  className="rounded-lg bg-green-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-green-700"
                 >
                   Activate Strategy
                 </button>
@@ -495,45 +495,45 @@ function StrategiesContent() {
 
       {/* Strategy List */}
       {loading ? (
-        <div className="panel animate-pulse">
-          <p className="text-white/60">Loading strategies...</p>
+        <div className="card animate-pulse">
+          <p className="text-neutral-400">Loading strategies...</p>
         </div>
       ) : error ? (
-        <div className="panel">
-          <p className="text-red-400">{error}</p>
-          <p className="mt-2 text-sm text-white/60">
+        <div className="card">
+          <p className="text-red-500">{error}</p>
+          <p className="mt-2 text-sm text-neutral-500">
             Make sure you are logged in and the strategy service is running.
           </p>
         </div>
       ) : strategies.length === 0 ? (
-        <div className="panel">
-          <p className="text-white/50">No strategies yet. Create one to get started.</p>
+        <div className="card">
+          <p className="text-neutral-400">No strategies yet. Create one to get started.</p>
         </div>
       ) : (
         <section className="grid gap-4 md:grid-cols-2">
           {strategies.map((strategy) => {
             const isLoading = actionLoading === strategy.strategy_id;
             return (
-              <article key={strategy.strategy_id} className="panel">
+              <article key={strategy.strategy_id} className="card">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">{strategy.name}</h3>
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeClass(strategy.status)}`}>
+                  <h3 className="text-lg font-semibold text-neutral-900">{strategy.name}</h3>
+                  <span className={`badge ${statusBadgeClass(strategy.status)}`}>
                     {strategy.status}
                   </span>
                 </div>
 
-                <div className="mt-3 space-y-2 text-sm text-white/70">
+                <div className="mt-3 space-y-2 text-sm text-neutral-600">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs uppercase tracking-wider text-mint">Asset</span>
+                    <span className="text-xs font-medium uppercase tracking-wider text-neutral-400">Asset</span>
                     <span>{strategy.asset_type}</span>
                   </div>
 
                   {strategy.indicators && strategy.indicators.length > 0 && (
                     <div>
-                      <span className="text-xs uppercase tracking-wider text-mint">Indicators</span>
+                      <span className="text-xs font-medium uppercase tracking-wider text-neutral-400">Indicators</span>
                       <div className="mt-1 flex flex-wrap gap-1">
                         {strategy.indicators.map((ind) => (
-                          <span key={ind} className="rounded-full bg-white/10 px-2 py-0.5 text-xs">
+                          <span key={ind} className="rounded-md bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600">
                             {ind}
                           </span>
                         ))}
@@ -544,16 +544,16 @@ function StrategiesContent() {
                   {strategy.thresholds && (
                     <div className="flex gap-4">
                       <span className="text-xs">
-                        Entry: <span className="text-white">{strategy.thresholds.entry ?? "--"}</span>
+                        Entry: <span className="font-medium text-neutral-900">{strategy.thresholds.entry ?? "--"}</span>
                       </span>
                       <span className="text-xs">
-                        Exit: <span className="text-white">{strategy.thresholds.exit ?? "--"}</span>
+                        Exit: <span className="font-medium text-neutral-900">{strategy.thresholds.exit ?? "--"}</span>
                       </span>
                     </div>
                   )}
 
                   {strategy.version != null && (
-                    <p className="text-xs text-white/40">Version: {strategy.version}</p>
+                    <p className="text-xs text-neutral-400">Version: {strategy.version}</p>
                   )}
                 </div>
 
@@ -564,7 +564,7 @@ function StrategiesContent() {
                       <button
                         onClick={() => runBacktest(strategy.strategy_id)}
                         disabled={isLoading}
-                        className="rounded-full border border-mint/30 px-3 py-1 text-xs text-mint hover:bg-mint/10 disabled:opacity-40"
+                        className="btn-secondary text-xs disabled:opacity-40"
                       >
                         Run Backtest
                       </button>
@@ -572,7 +572,7 @@ function StrategiesContent() {
                         <button
                           onClick={() => activateStrategy(strategy.strategy_id)}
                           disabled={isLoading}
-                          className="rounded-full bg-green-600 px-3 py-1 text-xs text-white hover:bg-green-500 disabled:opacity-40"
+                          className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-40"
                         >
                           {isLoading ? "Activating..." : "Activate"}
                         </button>
@@ -583,7 +583,7 @@ function StrategiesContent() {
                     <button
                       onClick={() => pauseStrategy(strategy.strategy_id)}
                       disabled={isLoading}
-                      className="rounded-full border border-sand/30 px-3 py-1 text-xs text-sand hover:bg-sand/10 disabled:opacity-40"
+                      className="rounded-lg border border-yellow-300 px-3 py-1.5 text-xs font-medium text-yellow-700 hover:bg-yellow-50 disabled:opacity-40"
                     >
                       {isLoading ? "Pausing..." : "Pause"}
                     </button>
@@ -592,7 +592,7 @@ function StrategiesContent() {
                     <button
                       onClick={() => resumeStrategy(strategy.strategy_id)}
                       disabled={isLoading}
-                      className="rounded-full border border-green-400/30 px-3 py-1 text-xs text-green-400 hover:bg-green-500/10 disabled:opacity-40"
+                      className="rounded-lg border border-green-300 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50 disabled:opacity-40"
                     >
                       {isLoading ? "Resuming..." : "Resume"}
                     </button>
@@ -601,7 +601,7 @@ function StrategiesContent() {
                     <button
                       onClick={() => archiveStrategy(strategy.strategy_id)}
                       disabled={isLoading}
-                      className="rounded-full border border-white/10 px-3 py-1 text-xs text-white/40 hover:bg-white/10 disabled:opacity-40"
+                      className="rounded-lg border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-400 hover:bg-neutral-50 disabled:opacity-40"
                     >
                       Archive
                     </button>

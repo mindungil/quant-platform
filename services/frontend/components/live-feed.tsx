@@ -13,12 +13,12 @@ export function LiveFeed() {
   }, []);
 
   return (
-    <div className="panel">
-      <h3 className="mb-3 text-lg font-semibold">Realtime Events</h3>
-      <div className="space-y-2 text-sm text-white/80">
-        {events.length === 0 ? <p>No events yet. Log in and wait for gateway pushes.</p> : null}
+    <div className="card">
+      <h3 className="mb-3 text-lg font-semibold text-neutral-900">Realtime Events</h3>
+      <div className="space-y-2 text-sm text-neutral-600">
+        {events.length === 0 ? <p className="text-neutral-400">No events yet. Log in and wait for gateway pushes.</p> : null}
         {events.map((event, index) => (
-          <pre key={`${event}-${index}`} className="overflow-x-auto rounded-2xl bg-black/20 p-3 text-xs">
+          <pre key={`${event}-${index}`} className="overflow-x-auto rounded-lg border border-neutral-100 bg-neutral-50 p-3 text-xs text-neutral-600">
             {event}
           </pre>
         ))}

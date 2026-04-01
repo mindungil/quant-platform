@@ -37,8 +37,8 @@ export function AuthGuard({ children }: { children: ReactNode }) {
   if (authorized === null) {
     return (
       <main className="grid gap-6">
-        <div className="panel animate-pulse">
-          <p className="text-white/60">Authenticating...</p>
+        <div className="card animate-pulse">
+          <p className="text-neutral-400">Authenticating...</p>
         </div>
       </main>
     );
@@ -47,9 +47,9 @@ export function AuthGuard({ children }: { children: ReactNode }) {
   if (!authorized) {
     return (
       <main className="grid gap-6">
-        <div className="panel">
-          <h2 className="text-2xl font-semibold">Session Expired</h2>
-          <p className="mt-3 text-white/70">
+        <div className="card">
+          <h2 className="text-2xl font-semibold text-neutral-900">Session Expired</h2>
+          <p className="mt-3 text-neutral-500">
             Redirecting to login...
           </p>
         </div>

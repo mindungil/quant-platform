@@ -140,10 +140,10 @@ export default function AdminTradingPage() {
     : "unknown";
 
   const statusStyles: Record<string, { bg: string; text: string; label: string }> = {
-    live: { bg: "bg-green-500/20 border-green-500/40", text: "text-green-400", label: "LIVE" },
-    shadow: { bg: "bg-yellow-500/20 border-yellow-500/40", text: "text-yellow-400", label: "SHADOW" },
-    stopped: { bg: "bg-red-500/20 border-red-500/40", text: "text-red-400", label: "STOPPED" },
-    unknown: { bg: "bg-white/5 border-white/20", text: "text-white/50", label: "UNKNOWN" },
+    live: { bg: "border-green-200 bg-green-50", text: "text-green-700", label: "LIVE" },
+    shadow: { bg: "border-yellow-200 bg-yellow-50", text: "text-yellow-700", label: "SHADOW" },
+    stopped: { bg: "border-red-200 bg-red-50", text: "text-red-700", label: "STOPPED" },
+    unknown: { bg: "border-neutral-200 bg-neutral-50", text: "text-neutral-400", label: "UNKNOWN" },
   };
 
   const style = statusStyles[currentMode];
@@ -152,16 +152,16 @@ export default function AdminTradingPage() {
     <AdminGuard>
       <main className="grid gap-6">
         {/* Header with status */}
-        <section className="panel">
+        <section className="card">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-3xl font-semibold">Live Trading Control</h2>
-              <p className="mt-2 text-white/70">
+              <h2 className="text-3xl font-semibold text-neutral-900">Live Trading Control</h2>
+              <p className="mt-2 text-neutral-500">
                 Pre-flight checks, execution controls, and configuration.
               </p>
             </div>
             <div className={`rounded-xl border px-6 py-3 text-center ${style.bg}`}>
-              <p className="text-xs text-white/50">Current Status</p>
+              <p className="text-xs text-neutral-400">Current Status</p>
               <p className={`text-2xl font-bold ${style.text}`}>{style.label}</p>
             </div>
           </div>
@@ -169,18 +169,18 @@ export default function AdminTradingPage() {
 
         {/* Alerts */}
         {error && (
-          <div className="rounded-xl bg-red-900/40 px-4 py-3 text-sm text-red-200">{error}</div>
+          <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
         )}
         {success && (
-          <div className="rounded-xl bg-green-900/40 px-4 py-3 text-sm text-green-200">{success}</div>
+          <div className="rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700">{success}</div>
         )}
 
         {/* Pre-flight Checks */}
-        <section className="panel">
+        <section className="card">
           <div className="flex items-center justify-between">
-            <h3 className="text-xl font-semibold">Pre-flight Checks</h3>
+            <h3 className="text-xl font-semibold text-neutral-900">Pre-flight Checks</h3>
             <button
-              className="rounded-full bg-sand px-5 py-2 text-sm font-semibold text-ink hover:bg-sand/80 disabled:opacity-50"
+              className="btn-primary disabled:opacity-50"
               disabled={preflightLoading}
               onClick={runPreflight}
             >
@@ -192,7 +192,7 @@ export default function AdminTradingPage() {
               {preflight.checks.map((check) => (
                 <div
                   key={check.name}
-                  className="flex items-center gap-3 rounded-xl bg-black/20 px-4 py-3"
+                  className="flex items-center gap-3 rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3"
                 >
                   <span
                     className={`inline-block h-3 w-3 flex-shrink-0 rounded-full ${
@@ -200,27 +200,27 @@ export default function AdminTradingPage() {
                     }`}
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium">{check.name}</p>
+                    <p className="text-sm font-medium text-neutral-900">{check.name}</p>
                     {check.message && (
-                      <p className="text-xs text-white/50">{check.message}</p>
+                      <p className="text-xs text-neutral-400">{check.message}</p>
                     )}
                   </div>
                   <span
-                    className={`text-xs font-semibold ${check.passed ? "text-green-400" : "text-red-400"}`}
+                    className={`text-xs font-semibold ${check.passed ? "text-green-600" : "text-red-600"}`}
                   >
                     {check.passed ? "PASS" : "FAIL"}
                   </span>
                 </div>
               ))}
-              <div className={`mt-2 rounded-xl px-4 py-2 text-center text-sm font-semibold ${
-                preflight.all_passed ? "bg-green-900/30 text-green-300" : "bg-red-900/30 text-red-300"
+              <div className={`mt-2 rounded-lg px-4 py-2 text-center text-sm font-semibold ${
+                preflight.all_passed ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
               }`}>
                 {preflight.all_passed ? "All checks passed" : "Some checks failed"}
               </div>
             </div>
           )}
           {!preflight && !preflightLoading && (
-            <p className="mt-4 text-sm text-white/50">
+            <p className="mt-4 text-sm text-neutral-400">
               Run pre-flight to verify credentials, exchange connectivity, risk limits, and active strategies.
             </p>
           )}
@@ -229,14 +229,14 @@ export default function AdminTradingPage() {
         {/* Enable Live / Emergency Stop */}
         <div className="grid gap-4 sm:grid-cols-2">
           {/* Enable Live */}
-          <section className="panel">
-            <h3 className="mb-3 text-xl font-semibold">Enable Live Trading</h3>
-            <p className="mb-4 text-sm text-white/60">
+          <section className="card">
+            <h3 className="mb-3 text-xl font-semibold text-neutral-900">Enable Live Trading</h3>
+            <p className="mb-4 text-sm text-neutral-500">
               Requires all pre-flight checks to pass before activation.
             </p>
             {!enableConfirm ? (
               <button
-                className="w-full rounded-full bg-green-600 py-3 text-sm font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-40"
+                className="w-full rounded-lg bg-green-600 py-3 text-sm font-semibold text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-40"
                 disabled={!preflight?.all_passed || execConfig?.live_trading_enabled === true}
                 onClick={() => setEnableConfirm(true)}
               >
@@ -244,19 +244,19 @@ export default function AdminTradingPage() {
               </button>
             ) : (
               <div className="space-y-3">
-                <p className="text-sm font-medium text-yellow-300">
+                <p className="text-sm font-medium text-yellow-700">
                   Confirm: Enable live trading with real funds?
                 </p>
                 <div className="flex gap-3">
                   <button
-                    className="flex-1 rounded-full bg-green-600 py-3 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+                    className="flex-1 rounded-lg bg-green-600 py-3 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
                     disabled={enableLoading}
                     onClick={enableLive}
                   >
                     {enableLoading ? "Enabling..." : "Yes, Enable Live"}
                   </button>
                   <button
-                    className="flex-1 rounded-full border border-white/20 py-3 text-sm hover:bg-white/10"
+                    className="btn-secondary flex-1 py-3"
                     onClick={() => setEnableConfirm(false)}
                   >
                     Cancel
@@ -267,33 +267,33 @@ export default function AdminTradingPage() {
           </section>
 
           {/* Emergency Stop */}
-          <section className="panel">
-            <h3 className="mb-3 text-xl font-semibold">Emergency Stop</h3>
-            <p className="mb-4 text-sm text-white/60">
+          <section className="card">
+            <h3 className="mb-3 text-xl font-semibold text-neutral-900">Emergency Stop</h3>
+            <p className="mb-4 text-sm text-neutral-500">
               Immediately halt all trading operations and cancel open orders.
             </p>
             {!stopConfirm ? (
               <button
-                className="w-full rounded-full bg-red-600 py-3 text-lg font-bold text-white hover:bg-red-700"
+                className="w-full rounded-lg bg-red-600 py-3 text-lg font-bold text-white hover:bg-red-700"
                 onClick={() => setStopConfirm(true)}
               >
                 EMERGENCY STOP
               </button>
             ) : (
               <div className="space-y-3">
-                <p className="text-sm font-medium text-red-300">
+                <p className="text-sm font-medium text-red-700">
                   Are you sure? This will stop ALL trading immediately.
                 </p>
                 <div className="flex gap-3">
                   <button
-                    className="flex-1 rounded-full bg-red-600 py-3 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-50"
+                    className="flex-1 rounded-lg bg-red-600 py-3 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-50"
                     disabled={stopLoading}
                     onClick={emergencyStop}
                   >
                     {stopLoading ? "Stopping..." : "Yes, Stop Everything"}
                   </button>
                   <button
-                    className="flex-1 rounded-full border border-white/20 py-3 text-sm hover:bg-white/10"
+                    className="btn-secondary flex-1 py-3"
                     onClick={() => setStopConfirm(false)}
                   >
                     Cancel
@@ -305,22 +305,22 @@ export default function AdminTradingPage() {
         </div>
 
         {/* Execution Config Editor */}
-        <section className="panel">
-          <h3 className="mb-4 text-xl font-semibold">Execution Config</h3>
+        <section className="card">
+          <h3 className="mb-4 text-xl font-semibold text-neutral-900">Execution Config</h3>
           {execConfig ? (
             <div className="space-y-4">
-              <div className="rounded-2xl bg-black/20 p-4">
-                <p className="text-xs text-white/50">live_trading_enabled</p>
-                <p className={`mt-1 text-lg font-semibold ${execConfig.live_trading_enabled ? "text-green-400" : "text-red-400"}`}>
+              <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
+                <p className="text-xs text-neutral-400">live_trading_enabled</p>
+                <p className={`mt-1 text-lg font-semibold ${execConfig.live_trading_enabled ? "text-green-600" : "text-red-600"}`}>
                   {execConfig.live_trading_enabled ? "true" : "false"}
                 </p>
-                <p className="mt-1 text-xs text-white/40">
+                <p className="mt-1 text-xs text-neutral-400">
                   Controlled via Enable Live / Emergency Stop buttons above.
                 </p>
               </div>
 
-              <div className="rounded-2xl bg-black/20 p-4">
-                <label className="block text-xs text-white/50">allowed_exchanges</label>
+              <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
+                <label className="block text-xs text-neutral-400">allowed_exchanges</label>
                 <input
                   type="text"
                   value={editExchanges}
@@ -329,12 +329,12 @@ export default function AdminTradingPage() {
                     setConfigDirty(true);
                   }}
                   placeholder="binance, bybit, okx"
-                  className="mt-2 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white/90 outline-none focus:border-mint/50"
+                  className="mt-2 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900"
                 />
-                <p className="mt-1 text-xs text-white/40">Comma-separated exchange identifiers.</p>
+                <p className="mt-1 text-xs text-neutral-400">Comma-separated exchange identifiers.</p>
               </div>
 
-              <div className="rounded-2xl bg-black/20 p-4">
+              <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
                 <label className="flex items-center gap-3">
                   <input
                     type="checkbox"
@@ -343,17 +343,17 @@ export default function AdminTradingPage() {
                       setEditShadow(e.target.checked);
                       setConfigDirty(true);
                     }}
-                    className="h-4 w-4 rounded border-white/20 bg-black/30 accent-mint"
+                    className="h-4 w-4 rounded border-neutral-300 accent-neutral-900"
                   />
-                  <span className="text-sm">default_shadow_mode</span>
+                  <span className="text-sm text-neutral-900">default_shadow_mode</span>
                 </label>
-                <p className="mt-2 text-xs text-white/40">
+                <p className="mt-2 text-xs text-neutral-400">
                   When enabled, new strategies start in shadow mode by default.
                 </p>
               </div>
 
               <button
-                className="rounded-full bg-sand px-6 py-2.5 text-sm font-semibold text-ink hover:bg-sand/80 disabled:opacity-40"
+                className="btn-primary disabled:opacity-40"
                 disabled={!configDirty || configSaving}
                 onClick={saveConfig}
               >
@@ -361,7 +361,7 @@ export default function AdminTradingPage() {
               </button>
             </div>
           ) : (
-            <p className="text-sm text-white/50">Loading execution config...</p>
+            <p className="text-sm text-neutral-400">Loading execution config...</p>
           )}
         </section>
       </main>

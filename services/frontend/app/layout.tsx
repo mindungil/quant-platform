@@ -5,12 +5,22 @@ import { Navigation } from "../components/navigation";
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
+      <head>
+        <link
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+          rel="stylesheet"
+        />
+      </head>
       <body>
-        <div className="mx-auto min-h-screen w-full max-w-7xl px-4 py-8">
-          <header className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-sm uppercase tracking-[0.3em] text-mint">Quant Platform</p>
-              <h1 className="text-4xl font-semibold tracking-tight">Production Dashboard</h1>
+        <div className="mx-auto min-h-screen w-full max-w-7xl px-6 py-8">
+          <header className="mb-8 flex items-center justify-between border-b border-neutral-200 pb-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-neutral-900">
+                <span className="text-sm font-bold text-white">Q</span>
+              </div>
+              <span className="text-lg font-semibold tracking-tight text-neutral-900">
+                Quant Platform
+              </span>
             </div>
             <Navigation />
           </header>

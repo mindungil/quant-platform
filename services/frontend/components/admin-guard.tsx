@@ -18,14 +18,18 @@ export function AdminGuard({ children }: { children: ReactNode }) {
   }, [router]);
 
   if (authorized === null) {
-    return <main className="panel">Checking admin access…</main>;
+    return (
+      <main className="card">
+        <p className="text-neutral-400">Checking admin access...</p>
+      </main>
+    );
   }
 
   if (!authorized) {
     return (
-      <main className="panel">
-        <h2 className="text-2xl font-semibold">403</h2>
-        <p className="mt-3 text-white/70">Admin access is required for this section. Redirecting to the dashboard.</p>
+      <main className="card">
+        <h2 className="text-2xl font-semibold text-neutral-900">403</h2>
+        <p className="mt-3 text-neutral-500">Admin access is required for this section. Redirecting to the dashboard.</p>
       </main>
     );
   }

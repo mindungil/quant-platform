@@ -42,17 +42,17 @@ const TERMINAL_STATUSES = new Set(["FILLED", "CANCELLED", "REJECTED", "EXPIRED"]
 
 function statusBadgeClass(status: string): string {
   const s = status.toUpperCase();
-  if (s === "FILLED") return "bg-green-500/20 text-green-400";
-  if (s === "CANCELLED" || s === "EXPIRED") return "bg-white/10 text-white/60";
-  if (s === "REJECTED") return "bg-red-500/20 text-red-400";
-  if (s === "PENDING" || s === "NEW" || s === "OPEN") return "bg-sand/20 text-sand";
-  return "bg-white/10 text-white/60";
+  if (s === "FILLED") return "bg-green-50 text-green-700";
+  if (s === "CANCELLED" || s === "EXPIRED") return "bg-neutral-100 text-neutral-400";
+  if (s === "REJECTED") return "bg-red-50 text-red-700";
+  if (s === "PENDING" || s === "NEW" || s === "OPEN") return "bg-yellow-50 text-yellow-700";
+  return "bg-neutral-100 text-neutral-400";
 }
 
 function sideBadgeClass(side: string): string {
   return side === "BUY"
-    ? "bg-green-500/20 text-green-400"
-    : "bg-red-500/20 text-red-400";
+    ? "bg-green-50 text-green-700"
+    : "bg-red-50 text-red-700";
 }
 
 function formatTs(ts: string | undefined): string {
@@ -122,18 +122,18 @@ function OrdersContent() {
 
   return (
     <main className="grid gap-6">
-      <section className="panel">
+      <section className="card">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-2xl font-semibold">Orders</h2>
+          <h2 className="text-2xl font-semibold text-neutral-900">Orders</h2>
           <div className="flex flex-wrap items-center gap-2">
             {STATUS_FILTERS.map((f) => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`rounded-full border px-3 py-1 text-xs transition ${
+                className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
                   filter === f
-                    ? "border-sand bg-sand/20 text-sand"
-                    : "border-white/10 text-white/60 hover:bg-white/10"
+                    ? "border-neutral-900 bg-neutral-900 text-white"
+                    : "border-neutral-200 text-neutral-500 hover:border-neutral-400"
                 }`}
               >
                 {f}
@@ -141,7 +141,7 @@ function OrdersContent() {
             ))}
             <button
               onClick={fetchOrders}
-              className="ml-2 rounded-full border border-white/10 px-3 py-1 text-xs text-white/60 hover:bg-white/10"
+              className="btn-secondary ml-2 text-xs"
             >
               Refresh
             </button>
@@ -150,19 +150,19 @@ function OrdersContent() {
       </section>
 
       {loading ? (
-        <div className="panel animate-pulse">
-          <p className="text-white/60">Loading orders...</p>
+        <div className="card animate-pulse">
+          <p className="text-neutral-400">Loading orders...</p>
         </div>
       ) : error ? (
-        <div className="panel">
-          <p className="text-red-400">{error}</p>
-          <p className="mt-2 text-sm text-white/60">
+        <div className="card">
+          <p className="text-red-500">{error}</p>
+          <p className="mt-2 text-sm text-neutral-500">
             Make sure you are logged in and the order service is running.
           </p>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="panel">
-          <p className="text-white/50">
+        <div className="card">
+          <p className="text-neutral-400">
             {filter === "ALL" ? "No orders found." : `No ${filter} orders found.`}
           </p>
         </div>
@@ -174,23 +174,23 @@ function OrdersContent() {
             const isCancelling = cancelling.has(order.order_id);
 
             return (
-              <article key={order.order_id} className="panel">
+              <article key={order.order_id} className="card">
                 <div
                   className="flex cursor-pointer flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
                   onClick={() => setExpandedId(isExpanded ? null : order.order_id)}
                 >
                   <div className="flex items-center gap-3">
-                    <span className="text-sm font-semibold uppercase tracking-wider text-mint">
+                    <span className="text-sm font-semibold uppercase tracking-wider text-neutral-900">
                       {order.asset}
                     </span>
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${sideBadgeClass(order.side)}`}>
+                    <span className={`badge ${sideBadgeClass(order.side)}`}>
                       {order.side}
                     </span>
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeClass(order.status)}`}>
+                    <span className={`badge ${statusBadgeClass(order.status)}`}>
                       {order.status}
                     </span>
                   </div>
-                  <div className="flex items-center gap-4 text-sm text-white/60">
+                  <div className="flex items-center gap-4 text-sm text-neutral-500">
                     <span>Qty: {formatNumber(order.quantity, 4)}</span>
                     {order.price != null && <span>Price: ${formatNumber(order.price)}</span>}
                     <span className="text-xs">{formatTs(order.created_at)}</span>
@@ -201,7 +201,7 @@ function OrdersContent() {
                           cancelOrder(order.order_id);
                         }}
                         disabled={isCancelling}
-                        className="rounded-full border border-red-400/30 px-3 py-1 text-xs text-red-300 hover:bg-red-500/10 disabled:opacity-40"
+                        className="rounded-lg border border-red-200 px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-40"
                       >
                         {isCancelling ? "Cancelling..." : "Cancel"}
                       </button>
@@ -210,48 +210,48 @@ function OrdersContent() {
                 </div>
 
                 {isExpanded && (
-                  <div className="mt-4 space-y-3 border-t border-white/10 pt-4">
+                  <div className="mt-4 space-y-3 border-t border-neutral-200 pt-4">
                     <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
                       <div>
-                        <p className="text-xs uppercase tracking-wider text-mint">Order ID</p>
-                        <p className="mt-1 font-mono text-xs text-white/70">{order.order_id}</p>
+                        <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">Order ID</p>
+                        <p className="mt-1 font-mono text-xs text-neutral-600">{order.order_id}</p>
                       </div>
                       <div>
-                        <p className="text-xs uppercase tracking-wider text-mint">Type</p>
-                        <p className="mt-1 text-white/70">{order.order_type ?? "MARKET"}</p>
+                        <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">Type</p>
+                        <p className="mt-1 text-neutral-600">{order.order_type ?? "MARKET"}</p>
                       </div>
                       <div>
-                        <p className="text-xs uppercase tracking-wider text-mint">Exchange</p>
-                        <p className="mt-1 text-white/70">{order.exchange ?? "--"}</p>
+                        <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">Exchange</p>
+                        <p className="mt-1 text-neutral-600">{order.exchange ?? "--"}</p>
                       </div>
                       <div>
-                        <p className="text-xs uppercase tracking-wider text-mint">Updated</p>
-                        <p className="mt-1 text-white/70">{formatTs(order.updated_at)}</p>
+                        <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">Updated</p>
+                        <p className="mt-1 text-neutral-600">{formatTs(order.updated_at)}</p>
                       </div>
                     </div>
 
                     {order.filled_quantity != null && (
-                      <div className="rounded-xl bg-black/20 p-3 text-sm">
-                        <p className="text-xs uppercase tracking-wider text-mint">Fill Info</p>
-                        <p className="mt-1 text-white/70">
+                      <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-sm">
+                        <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">Fill Info</p>
+                        <p className="mt-1 text-neutral-600">
                           Filled: {formatNumber(order.filled_quantity, 4)} @ ${formatNumber(order.filled_price)}
                         </p>
                       </div>
                     )}
 
                     {order.reject_reason && (
-                      <div className="rounded-xl bg-red-500/10 p-3 text-sm">
-                        <p className="text-xs uppercase tracking-wider text-red-400">Reject Reason</p>
-                        <p className="mt-1 text-red-300">{order.reject_reason}</p>
+                      <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm">
+                        <p className="text-xs font-medium uppercase tracking-wider text-red-600">Reject Reason</p>
+                        <p className="mt-1 text-red-700">{order.reject_reason}</p>
                       </div>
                     )}
 
                     {order.protections && order.protections.length > 0 && (
                       <div>
-                        <p className="text-xs uppercase tracking-wider text-mint">Protections</p>
+                        <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">Protections</p>
                         <div className="mt-2 space-y-1">
                           {order.protections.map((p, idx) => (
-                            <div key={idx} className="rounded-xl bg-black/20 p-2 text-xs text-white/70">
+                            <div key={idx} className="rounded-lg border border-neutral-100 bg-neutral-50 p-2 text-xs text-neutral-600">
                               {p.type} {p.trigger_price != null ? `| Trigger: $${formatNumber(p.trigger_price)}` : ""}
                               {p.limit_price != null ? ` | Limit: $${formatNumber(p.limit_price)}` : ""}
                             </div>
@@ -262,14 +262,14 @@ function OrdersContent() {
 
                     {order.lifecycle_events && order.lifecycle_events.length > 0 && (
                       <div>
-                        <p className="text-xs uppercase tracking-wider text-mint">Lifecycle Events</p>
+                        <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">Lifecycle Events</p>
                         <div className="mt-2 space-y-1">
                           {order.lifecycle_events.map((ev, idx) => (
-                            <div key={idx} className="flex items-center gap-3 rounded-xl bg-black/20 p-2 text-xs">
-                              <span className="font-medium text-white/80">{ev.event}</span>
-                              <span className="text-white/40">{formatTs(ev.timestamp)}</span>
+                            <div key={idx} className="flex items-center gap-3 rounded-lg border border-neutral-100 bg-neutral-50 p-2 text-xs">
+                              <span className="font-medium text-neutral-700">{ev.event}</span>
+                              <span className="text-neutral-400">{formatTs(ev.timestamp)}</span>
                               {ev.details && (
-                                <span className="text-white/50">{JSON.stringify(ev.details)}</span>
+                                <span className="text-neutral-500">{JSON.stringify(ev.details)}</span>
                               )}
                             </div>
                           ))}

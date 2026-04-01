@@ -27,18 +27,11 @@ function formatScore(score: number): string {
   });
 }
 
-function directionColor(direction: string): string {
+function directionBadgeClass(direction: string): string {
   const d = direction.toUpperCase();
-  if (d === "LONG" || d === "BUY") return "text-green-400";
-  if (d === "SHORT" || d === "SELL") return "text-red-400";
-  return "text-yellow-400";
-}
-
-function directionBg(direction: string): string {
-  const d = direction.toUpperCase();
-  if (d === "LONG" || d === "BUY") return "bg-green-500/20";
-  if (d === "SHORT" || d === "SELL") return "bg-red-500/20";
-  return "bg-yellow-500/20";
+  if (d === "LONG" || d === "BUY") return "bg-green-50 text-green-700";
+  if (d === "SHORT" || d === "SELL") return "bg-red-50 text-red-700";
+  return "bg-neutral-100 text-neutral-500";
 }
 
 function scoreBarWidth(score: number): string {
@@ -68,82 +61,82 @@ export default function SignalsPage() {
 
   return (
     <main className="grid gap-6">
-      <section className="panel">
-        <h2 className="mb-4 text-2xl font-semibold">Signal View</h2>
+      <section className="card">
+        <h2 className="mb-4 text-2xl font-semibold text-neutral-900">Signal View</h2>
         <ChartPlaceholder />
       </section>
 
       {loading ? (
-        <div className="panel animate-pulse">
-          <p className="text-white/60">Loading signals...</p>
+        <div className="card animate-pulse">
+          <p className="text-neutral-400">Loading signals...</p>
         </div>
       ) : error ? (
-        <div className="panel">
-          <p className="text-red-400">{error}</p>
-          <p className="mt-2 text-sm text-white/60">
+        <div className="card">
+          <p className="text-red-500">{error}</p>
+          <p className="mt-2 text-sm text-neutral-500">
             Make sure you are logged in and the signal service is running.
           </p>
         </div>
       ) : signals.length === 0 ? (
-        <div className="panel">
-          <p className="text-white/50">No signals available yet.</p>
+        <div className="card">
+          <p className="text-neutral-400">No signals available yet.</p>
         </div>
       ) : (
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {signals.map((signal, idx) => (
             <article
               key={`${signal.asset}-${signal.feature_timestamp ?? idx}`}
-              className="panel"
+              className="card"
             >
               <div className="flex items-center justify-between">
-                <p className="text-sm uppercase tracking-[0.2em] text-mint">
+                <p className="text-sm font-medium uppercase tracking-wide text-neutral-500">
                   {signal.asset}
                 </p>
                 <span
-                  className={`rounded-full px-2 py-0.5 text-xs font-medium ${directionBg(signal.direction)} ${directionColor(signal.direction)}`}
+                  className={`badge ${directionBadgeClass(signal.direction)}`}
                 >
                   {signal.direction}
                 </span>
               </div>
 
-              <h3 className="mt-2 text-3xl font-semibold">
+              <h3 className="mt-2 text-3xl font-semibold text-neutral-900">
                 {formatScore(signal.signal_score)}
               </h3>
 
               {/* Score bar */}
-              <div className="mt-3 h-2 w-full rounded-full bg-white/10">
+              <div className="mt-3 h-1.5 w-full rounded-full bg-neutral-100">
                 <div
-                  className={`h-2 rounded-full ${
-                    signal.signal_score >= 0 ? "bg-green-500/70" : "bg-red-500/70"
+                  className={`h-1.5 rounded-full ${
+                    signal.signal_score >= 0 ? "bg-green-500" : "bg-red-500"
                   }`}
                   style={{ width: scoreBarWidth(signal.signal_score) }}
                 />
               </div>
 
               {signal.feature_timestamp ? (
-                <p className="mt-2 text-xs text-white/40">
+                <p className="mt-2 text-xs text-neutral-400">
                   {new Date(signal.feature_timestamp).toLocaleString()}
                 </p>
               ) : null}
 
               {signal.confidence != null ? (
-                <p className="mt-1 text-xs text-white/50">
+                <p className="mt-1 text-xs text-neutral-500">
                   Confidence: {(signal.confidence * 100).toFixed(1)}%
                 </p>
               ) : null}
 
               {signal.model_version ? (
-                <p className="mt-1 text-xs text-white/40">
+                <p className="mt-1 text-xs text-neutral-400">
                   Model: {signal.model_version}
                 </p>
               ) : null}
 
               {signal.components ? (
                 <details className="mt-3">
-                  <summary className="cursor-pointer text-xs text-white/50 hover:text-white/80">
+                  <summary className="cursor-pointer text-xs text-neutral-400 hover:text-neutral-700">
                     Components
                   </summary>
-                  <pre className="mt-2 overflow-x-auto rounded-xl bg-black/20 p-3 text-xs text-white/70">
+                  <pre className="mt-2 overflow-x-auto rounded-lg border border-neutral-100 bg-neutral-50 p-3 text-xs text-neutral-600">
                     {JSON.stringify(signal.components, null, 2)}
                   </pre>
                 </details>

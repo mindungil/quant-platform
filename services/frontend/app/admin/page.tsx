@@ -77,55 +77,55 @@ export default function AdminPage() {
     live: "bg-green-500",
     shadow: "bg-yellow-500",
     stopped: "bg-red-500",
-    unknown: "bg-white/30",
+    unknown: "bg-neutral-300",
   };
 
   return (
     <AdminGuard>
       <main className="grid gap-6">
         {/* Header */}
-        <section className="panel">
-          <p className="text-sm uppercase tracking-[0.2em] text-mint">Admin</p>
-          <h2 className="mt-2 text-3xl font-semibold">Operator Control Surface</h2>
-          <p className="mt-3 text-white/75">
+        <section className="card">
+          <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">Admin</p>
+          <h2 className="mt-2 text-3xl font-semibold text-neutral-900">Operator Control Surface</h2>
+          <p className="mt-3 text-neutral-500">
             System overview, quick actions, and navigation to detailed control panels.
           </p>
         </section>
 
         {/* Overview Cards */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="panel text-center">
-            <p className="text-sm text-white/60">Services</p>
-            <p className="mt-1 text-3xl font-bold text-mint">{serviceCount}</p>
+          <div className="card text-center">
+            <p className="text-sm text-neutral-500">Services</p>
+            <p className="mt-1 text-3xl font-bold text-neutral-900">{serviceCount}</p>
           </div>
-          <div className="panel text-center">
-            <p className="text-sm text-white/60">Uptime</p>
-            <p className="mt-1 text-3xl font-bold text-mint">
+          <div className="card text-center">
+            <p className="text-sm text-neutral-500">Uptime</p>
+            <p className="mt-1 text-3xl font-bold text-neutral-900">
               {uptimeHours !== null ? `${uptimeHours}h` : "--"}
             </p>
           </div>
-          <div className="panel text-center">
-            <p className="text-sm text-white/60">Mode</p>
+          <div className="card text-center">
+            <p className="text-sm text-neutral-500">Mode</p>
             <div className="mt-2 flex items-center justify-center gap-2">
               <span className={`inline-block h-3 w-3 rounded-full ${modeColors[currentMode]}`} />
-              <span className="text-lg font-semibold capitalize">{currentMode}</span>
+              <span className="text-lg font-semibold capitalize text-neutral-900">{currentMode}</span>
             </div>
           </div>
-          <div className="panel text-center">
-            <p className="text-sm text-white/60">DLQ Messages</p>
-            <p className="mt-1 text-3xl font-bold text-sand">
+          <div className="card text-center">
+            <p className="text-sm text-neutral-500">DLQ Messages</p>
+            <p className="mt-1 text-3xl font-bold text-yellow-600">
               {dlqStats?.total_messages ?? "--"}
             </p>
           </div>
         </div>
 
         {/* Quick Actions */}
-        <section className="panel">
-          <h3 className="mb-4 text-xl font-semibold">Quick Actions</h3>
+        <section className="card">
+          <h3 className="mb-4 text-xl font-semibold text-neutral-900">Quick Actions</h3>
           {actionResult && (
             <div
-              className={`mb-4 rounded-xl px-4 py-3 text-sm ${
-                actionResult.type === "ok" ? "bg-green-900/40 text-green-200" : "bg-red-900/40 text-red-200"
+              className={`mb-4 rounded-lg px-4 py-3 text-sm ${
+                actionResult.type === "ok" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
               }`}
             >
               {actionResult.message}
@@ -133,21 +133,21 @@ export default function AdminPage() {
           )}
           <div className="flex flex-wrap gap-3">
             <button
-              className="rounded-full bg-red-600 px-6 py-3 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+              className="btn-danger px-6 py-3 font-semibold"
               disabled={actionLoading === "emergency-stop"}
               onClick={() => handleAction("emergency-stop")}
             >
               {actionLoading === "emergency-stop" ? "Stopping..." : "Emergency Stop"}
             </button>
             <button
-              className="rounded-full bg-green-600 px-6 py-3 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+              className="rounded-lg bg-green-600 px-6 py-3 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
               disabled={actionLoading === "enable-live"}
               onClick={() => handleAction("enable-live")}
             >
               {actionLoading === "enable-live" ? "Enabling..." : "Enable Live"}
             </button>
             <button
-              className="rounded-full bg-sand px-6 py-3 text-sm font-semibold text-ink hover:bg-sand/80 disabled:opacity-50"
+              className="btn-primary px-6 py-3 font-semibold"
               disabled={actionLoading === "preflight"}
               onClick={() => handleAction("preflight")}
             >
@@ -158,24 +158,24 @@ export default function AdminPage() {
 
         {/* Execution Config */}
         {execConfig && (
-          <section className="panel">
-            <h3 className="mb-4 text-xl font-semibold">Execution Config</h3>
+          <section className="card">
+            <h3 className="mb-4 text-xl font-semibold text-neutral-900">Execution Config</h3>
             <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-2xl bg-black/20 p-4">
-                <p className="text-xs text-white/50">live_trading_enabled</p>
-                <p className={`mt-1 text-lg font-semibold ${execConfig.live_trading_enabled ? "text-green-400" : "text-red-400"}`}>
+              <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
+                <p className="text-xs text-neutral-400">live_trading_enabled</p>
+                <p className={`mt-1 text-lg font-semibold ${execConfig.live_trading_enabled ? "text-green-600" : "text-red-600"}`}>
                   {execConfig.live_trading_enabled ? "true" : "false"}
                 </p>
               </div>
-              <div className="rounded-2xl bg-black/20 p-4">
-                <p className="text-xs text-white/50">default_shadow_mode</p>
-                <p className={`mt-1 text-lg font-semibold ${execConfig.default_shadow_mode ? "text-yellow-400" : "text-white/80"}`}>
+              <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
+                <p className="text-xs text-neutral-400">default_shadow_mode</p>
+                <p className={`mt-1 text-lg font-semibold ${execConfig.default_shadow_mode ? "text-yellow-600" : "text-neutral-600"}`}>
                   {execConfig.default_shadow_mode ? "true" : "false"}
                 </p>
               </div>
-              <div className="rounded-2xl bg-black/20 p-4">
-                <p className="text-xs text-white/50">allowed_exchanges</p>
-                <p className="mt-1 text-lg font-semibold text-mint">
+              <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
+                <p className="text-xs text-neutral-400">allowed_exchanges</p>
+                <p className="mt-1 text-lg font-semibold text-neutral-900">
                   {execConfig.allowed_exchanges?.join(", ") || "none"}
                 </p>
               </div>
@@ -185,13 +185,13 @@ export default function AdminPage() {
 
         {/* DLQ Stats */}
         {dlqStats && dlqStats.streams && Object.keys(dlqStats.streams).length > 0 && (
-          <section className="panel">
-            <h3 className="mb-4 text-xl font-semibold">DLQ Streams</h3>
+          <section className="card">
+            <h3 className="mb-4 text-xl font-semibold text-neutral-900">DLQ Streams</h3>
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {Object.entries(dlqStats.streams).map(([stream, count]) => (
-                <div key={stream} className="flex items-center justify-between rounded-2xl bg-black/20 px-4 py-3">
-                  <span className="text-sm text-white/70">{stream}</span>
-                  <span className="text-lg font-bold text-sand">{count}</span>
+                <div key={stream} className="flex items-center justify-between rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3">
+                  <span className="text-sm text-neutral-600">{stream}</span>
+                  <span className="text-lg font-bold text-yellow-600">{count}</span>
                 </div>
               ))}
             </div>
@@ -200,17 +200,17 @@ export default function AdminPage() {
 
         {/* Navigation */}
         <div className="grid gap-4 sm:grid-cols-3">
-          <Link href="/admin/trading" className="panel hover:bg-white/5">
-            <h3 className="text-xl font-semibold">Live Trading Control</h3>
-            <p className="mt-2 text-white/70">Pre-flight checks, enable live, emergency stop, and execution config.</p>
+          <Link href="/admin/trading" className="card transition hover:border-neutral-300 hover:shadow-md">
+            <h3 className="text-xl font-semibold text-neutral-900">Live Trading Control</h3>
+            <p className="mt-2 text-neutral-500">Pre-flight checks, enable live, emergency stop, and execution config.</p>
           </Link>
-          <Link href="/admin/system" className="panel hover:bg-white/5">
-            <h3 className="text-xl font-semibold">System Health</h3>
-            <p className="mt-2 text-white/70">Service health grid, events, and DLQ management.</p>
+          <Link href="/admin/system" className="card transition hover:border-neutral-300 hover:shadow-md">
+            <h3 className="text-xl font-semibold text-neutral-900">System Health</h3>
+            <p className="mt-2 text-neutral-500">Service health grid, events, and DLQ management.</p>
           </Link>
-          <Link href="/admin/users" className="panel hover:bg-white/5">
-            <h3 className="text-xl font-semibold">User Management</h3>
-            <p className="mt-2 text-white/70">User list, role management, and stats.</p>
+          <Link href="/admin/users" className="card transition hover:border-neutral-300 hover:shadow-md">
+            <h3 className="text-xl font-semibold text-neutral-900">User Management</h3>
+            <p className="mt-2 text-neutral-500">User list, role management, and stats.</p>
           </Link>
         </div>
       </main>

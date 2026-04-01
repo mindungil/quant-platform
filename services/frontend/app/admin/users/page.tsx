@@ -52,35 +52,35 @@ export default function AdminUsersPage() {
     <AdminGuard>
       <main className="grid gap-6">
         {/* Header */}
-        <section className="panel">
-          <h2 className="text-3xl font-semibold">User Management</h2>
-          <p className="mt-2 text-white/70">
+        <section className="card">
+          <h2 className="text-3xl font-semibold text-neutral-900">User Management</h2>
+          <p className="mt-2 text-neutral-500">
             Manage user accounts, review plans, and assign roles.
           </p>
-          {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
+          {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
         </section>
 
         {/* Stats */}
         <div className="grid gap-4 sm:grid-cols-3">
-          <div className="panel text-center">
-            <p className="text-sm text-white/60">Total Users</p>
-            <p className="mt-1 text-3xl font-bold text-mint">{users.length}</p>
+          <div className="card text-center">
+            <p className="text-sm text-neutral-500">Total Users</p>
+            <p className="mt-1 text-3xl font-bold text-neutral-900">{users.length}</p>
           </div>
-          <div className="panel text-center">
-            <p className="text-sm text-white/60">Admins</p>
-            <p className="mt-1 text-3xl font-bold text-sand">{adminCount}</p>
+          <div className="card text-center">
+            <p className="text-sm text-neutral-500">Admins</p>
+            <p className="mt-1 text-3xl font-bold text-neutral-900">{adminCount}</p>
           </div>
-          <div className="panel text-center">
-            <p className="text-sm text-white/60">Regular Users</p>
-            <p className="mt-1 text-3xl font-bold text-white/80">{users.length - adminCount}</p>
+          <div className="card text-center">
+            <p className="text-sm text-neutral-500">Regular Users</p>
+            <p className="mt-1 text-3xl font-bold text-neutral-900">{users.length - adminCount}</p>
           </div>
         </div>
 
         {/* User Table */}
-        <section className="panel overflow-x-auto">
+        <section className="card overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-white/10 text-xs uppercase tracking-wider text-white/50">
+              <tr className="border-b border-neutral-200 text-xs font-medium uppercase tracking-wider text-neutral-400">
                 <th className="pb-3 pr-4">User</th>
                 <th className="pb-3 pr-4">Plan</th>
                 <th className="pb-3 pr-4">Role</th>
@@ -90,13 +90,13 @@ export default function AdminUsersPage() {
             </thead>
             <tbody>
               {users.map((user) => (
-                <tr key={user.user_id} className="border-b border-white/5">
+                <tr key={user.user_id} className="border-b border-neutral-100">
                   <td className="py-3 pr-4">
-                    <p className="font-semibold">{user.display_name}</p>
-                    <p className="text-xs text-white/50">{user.email}</p>
+                    <p className="font-semibold text-neutral-900">{user.display_name}</p>
+                    <p className="text-xs text-neutral-400">{user.email}</p>
                   </td>
                   <td className="py-3 pr-4">
-                    <span className="rounded-full bg-mint/20 px-3 py-1 text-xs font-medium text-mint">
+                    <span className="badge bg-neutral-100 text-neutral-600">
                       {user.plan}
                     </span>
                   </td>
@@ -104,17 +104,17 @@ export default function AdminUsersPage() {
                     <select
                       value={user.roles.includes("admin") ? "admin" : "user"}
                       onChange={(e) => updateRole(user, e.target.value)}
-                      className="rounded-lg border border-white/10 bg-black/30 px-3 py-1.5 text-xs text-white/90"
+                      className="rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-xs text-neutral-900 outline-none focus:border-neutral-900"
                     >
                       <option value="user">user</option>
                       <option value="admin">admin</option>
                     </select>
                   </td>
-                  <td className="py-3 pr-4 text-xs text-white/50">
+                  <td className="py-3 pr-4 text-xs text-neutral-400">
                     {user.created_at ? new Date(user.created_at).toLocaleDateString() : "--"}
                   </td>
                   <td className="py-3">
-                    <span className="text-xs text-white/40">
+                    <span className="text-xs text-neutral-400">
                       {user.roles.join(", ")}
                     </span>
                   </td>
@@ -122,7 +122,7 @@ export default function AdminUsersPage() {
               ))}
               {users.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-white/50">
+                  <td colSpan={5} className="py-8 text-center text-neutral-400">
                     No users found.
                   </td>
                 </tr>

@@ -123,39 +123,39 @@ function SettingsContent() {
 
   return (
     <main className="grid gap-6">
-      <h2 className="text-2xl font-semibold">Settings</h2>
+      <h2 className="text-2xl font-semibold text-neutral-900">Settings</h2>
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* API Credentials */}
-        <section className="panel space-y-4">
-          <h3 className="text-lg font-semibold">API Credentials</h3>
+        <section className="card space-y-4">
+          <h3 className="text-lg font-semibold text-neutral-900">API Credentials</h3>
 
           {credError && (
-            <p className="rounded-xl bg-red-500/10 p-3 text-sm text-red-400">{credError}</p>
+            <p className="rounded-lg bg-red-50 p-3 text-sm text-red-600">{credError}</p>
           )}
           {credSuccess && (
-            <p className="rounded-xl bg-green-500/10 p-3 text-sm text-green-400">{credSuccess}</p>
+            <p className="rounded-lg bg-green-50 p-3 text-sm text-green-700">{credSuccess}</p>
           )}
 
           <div className="space-y-3">
             <div>
-              <label className="text-xs uppercase tracking-wider text-mint">Exchange</label>
+              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-neutral-500">Exchange</label>
               <select
-                className="mt-1 w-full rounded-2xl bg-white/10 px-4 py-3 text-sm"
+                className="input-field"
                 value={exchange}
                 onChange={(e) => setExchange(e.target.value)}
               >
                 {EXCHANGES.map((ex) => (
-                  <option key={ex} value={ex} className="bg-ink">
+                  <option key={ex} value={ex}>
                     {ex.charAt(0).toUpperCase() + ex.slice(1)}
                   </option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="text-xs uppercase tracking-wider text-mint">API Key</label>
+              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-neutral-500">API Key</label>
               <input
-                className="mt-1 w-full rounded-2xl bg-white/10 px-4 py-3 text-sm"
+                className="input-field"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 placeholder="Enter API key"
@@ -163,9 +163,9 @@ function SettingsContent() {
               />
             </div>
             <div>
-              <label className="text-xs uppercase tracking-wider text-mint">API Secret</label>
+              <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-neutral-500">API Secret</label>
               <input
-                className="mt-1 w-full rounded-2xl bg-white/10 px-4 py-3 text-sm"
+                className="input-field"
                 value={apiSecret}
                 onChange={(e) => setApiSecret(e.target.value)}
                 placeholder="Enter API secret"
@@ -175,37 +175,37 @@ function SettingsContent() {
             <button
               onClick={saveCredential}
               disabled={credSaving}
-              className="rounded-full bg-sand px-4 py-2 text-sm font-medium text-ink hover:bg-sand/90 disabled:opacity-40"
+              className="btn-primary disabled:opacity-40"
             >
               {credSaving ? "Saving..." : "Add Credentials"}
             </button>
           </div>
 
           {/* Saved credentials list */}
-          <div className="border-t border-white/10 pt-4">
-            <p className="mb-2 text-xs uppercase tracking-wider text-mint">Saved Credentials</p>
+          <div className="border-t border-neutral-200 pt-4">
+            <p className="mb-2 text-xs font-medium uppercase tracking-wider text-neutral-400">Saved Credentials</p>
             {credLoading ? (
-              <p className="animate-pulse text-sm text-white/50">Loading...</p>
+              <p className="animate-pulse text-sm text-neutral-400">Loading...</p>
             ) : credentials.length === 0 ? (
-              <p className="text-sm text-white/50">No credentials saved</p>
+              <p className="text-sm text-neutral-400">No credentials saved</p>
             ) : (
               <div className="space-y-2">
                 {credentials.map((cred) => (
                   <div
                     key={cred.credential_id}
-                    className="flex items-center justify-between rounded-xl bg-black/20 p-3"
+                    className="flex items-center justify-between rounded-lg border border-neutral-200 bg-neutral-50 p-3"
                   >
                     <div>
-                      <span className="text-sm font-medium uppercase">{cred.exchange}</span>
-                      <p className="mt-0.5 font-mono text-xs text-white/50">{cred.api_key_masked}</p>
+                      <span className="text-sm font-medium uppercase text-neutral-900">{cred.exchange}</span>
+                      <p className="mt-0.5 font-mono text-xs text-neutral-400">{cred.api_key_masked}</p>
                       {cred.sandbox && (
-                        <span className="text-xs text-sand">sandbox</span>
+                        <span className="text-xs text-yellow-600">sandbox</span>
                       )}
                     </div>
                     <button
                       onClick={() => deleteCredential(cred.credential_id)}
                       disabled={deletingId === cred.credential_id}
-                      className="rounded-full border border-red-400/30 px-3 py-1 text-xs text-red-300 hover:bg-red-500/10 disabled:opacity-40"
+                      className="rounded-lg border border-red-200 px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-40"
                     >
                       {deletingId === cred.credential_id ? "..." : "Delete"}
                     </button>
@@ -219,34 +219,34 @@ function SettingsContent() {
         {/* Right column: Risk + Profile */}
         <div className="space-y-6">
           {/* Risk Settings */}
-          <section className="panel space-y-4">
-            <h3 className="text-lg font-semibold">Risk Settings</h3>
+          <section className="card space-y-4">
+            <h3 className="text-lg font-semibold text-neutral-900">Risk Settings</h3>
             {riskLoading ? (
-              <p className="animate-pulse text-sm text-white/50">Loading...</p>
+              <p className="animate-pulse text-sm text-neutral-400">Loading...</p>
             ) : risk ? (
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-xl bg-black/20 p-3">
-                    <p className="text-xs uppercase tracking-wider text-mint">Max Notional</p>
-                    <p className="mt-1 text-lg font-semibold">
+                  <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                    <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">Max Notional</p>
+                    <p className="mt-1 text-lg font-semibold text-neutral-900">
                       {risk.max_notional != null ? `$${risk.max_notional.toLocaleString()}` : "--"}
                     </p>
                   </div>
-                  <div className="rounded-xl bg-black/20 p-3">
-                    <p className="text-xs uppercase tracking-wider text-mint">Exposure Limit</p>
-                    <p className="mt-1 text-lg font-semibold">
+                  <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                    <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">Exposure Limit</p>
+                    <p className="mt-1 text-lg font-semibold text-neutral-900">
                       {risk.exposure_limit != null ? `$${risk.exposure_limit.toLocaleString()}` : "--"}
                     </p>
                   </div>
-                  <div className="rounded-xl bg-black/20 p-3">
-                    <p className="text-xs uppercase tracking-wider text-mint">Max Drawdown</p>
-                    <p className="mt-1 text-lg font-semibold">
+                  <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                    <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">Max Drawdown</p>
+                    <p className="mt-1 text-lg font-semibold text-neutral-900">
                       {risk.max_drawdown != null ? `${(risk.max_drawdown * 100).toFixed(1)}%` : "--"}
                     </p>
                   </div>
-                  <div className="rounded-xl bg-black/20 p-3">
-                    <p className="text-xs uppercase tracking-wider text-mint">Automation</p>
-                    <p className={`mt-1 text-lg font-semibold ${risk.automation_enabled ? "text-green-400" : "text-red-400"}`}>
+                  <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                    <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">Automation</p>
+                    <p className={`mt-1 text-lg font-semibold ${risk.automation_enabled ? "text-green-600" : "text-red-600"}`}>
                       {risk.automation_enabled ? "Enabled" : "Disabled"}
                     </p>
                   </div>
@@ -257,43 +257,43 @@ function SettingsContent() {
                   !["max_notional", "exposure_limit", "max_drawdown", "automation_enabled"].includes(k)
                 ).length > 0 && (
                   <details className="mt-2">
-                    <summary className="cursor-pointer text-xs text-white/50 hover:text-white/80">
+                    <summary className="cursor-pointer text-xs text-neutral-400 hover:text-neutral-700">
                       All Risk Parameters
                     </summary>
-                    <pre className="mt-2 overflow-x-auto rounded-xl bg-black/20 p-3 text-xs text-white/70">
+                    <pre className="mt-2 overflow-x-auto rounded-lg border border-neutral-100 bg-neutral-50 p-3 text-xs text-neutral-600">
                       {JSON.stringify(risk, null, 2)}
                     </pre>
                   </details>
                 )}
               </div>
             ) : (
-              <p className="text-sm text-white/50">Unable to load risk settings</p>
+              <p className="text-sm text-neutral-400">Unable to load risk settings</p>
             )}
           </section>
 
           {/* Profile */}
-          <section className="panel space-y-4">
-            <h3 className="text-lg font-semibold">Profile</h3>
+          <section className="card space-y-4">
+            <h3 className="text-lg font-semibold text-neutral-900">Profile</h3>
             {profile ? (
               <div className="space-y-3">
-                <div className="rounded-xl bg-black/20 p-3">
-                  <p className="text-xs uppercase tracking-wider text-mint">Email</p>
-                  <p className="mt-1 text-sm">{profile.email}</p>
+                <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                  <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">Email</p>
+                  <p className="mt-1 text-sm text-neutral-900">{profile.email}</p>
                 </div>
                 {profile.plan && (
-                  <div className="rounded-xl bg-black/20 p-3">
-                    <p className="text-xs uppercase tracking-wider text-mint">Plan</p>
-                    <p className="mt-1 text-sm">{profile.plan}</p>
+                  <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                    <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">Plan</p>
+                    <p className="mt-1 text-sm text-neutral-900">{profile.plan}</p>
                   </div>
                 )}
                 {profile.roles && profile.roles.length > 0 && (
-                  <div className="rounded-xl bg-black/20 p-3">
-                    <p className="text-xs uppercase tracking-wider text-mint">Roles</p>
+                  <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                    <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">Roles</p>
                     <div className="mt-1 flex flex-wrap gap-1">
                       {profile.roles.map((role) => (
                         <span
                           key={role}
-                          className="rounded-full bg-mint/20 px-2 py-0.5 text-xs text-mint"
+                          className="badge bg-neutral-100 text-neutral-600"
                         >
                           {role}
                         </span>
@@ -303,7 +303,7 @@ function SettingsContent() {
                 )}
               </div>
             ) : (
-              <p className="text-sm text-white/50">Profile information unavailable</p>
+              <p className="text-sm text-neutral-400">Profile information unavailable</p>
             )}
           </section>
         </div>
