@@ -1,4 +1,7 @@
+import time
 from uuid import uuid4
+
+from prometheus_client import Counter, Histogram
 
 from app.core.config import settings
 from app.db.repository import order_repository
@@ -10,6 +13,17 @@ from app.services.event_publisher import publisher
 from app.services.portfolio_client import PortfolioClient
 from app.services.statistics_client import StatisticsClient
 from shared.logging import get_logger
+
+orders_total = Counter(
+    "orders_total",
+    "Total orders processed",
+    ["status", "shadow_mode"],
+)
+order_fill_latency_seconds = Histogram(
+    "order_fill_latency_seconds",
+    "End-to-end order processing latency",
+    buckets=(0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
+)
 
 risk_client = RiskClient(settings.risk_service_base_url)
 exchange_client = ExchangeClient(settings.exchange_adapter_base_url)
@@ -24,7 +38,13 @@ def _record_lifecycle(order_id: str, user_id: str, status: str, detail: dict) ->
         order_repository.record_lifecycle(order_id, user_id, status, detail=detail)
 
 
+def _record_order_metrics(status: str, shadow_mode: bool, start: float) -> None:
+    orders_total.labels(status=status, shadow_mode=str(shadow_mode).lower()).inc()
+    order_fill_latency_seconds.observe(time.monotonic() - start)
+
+
 def process_order(payload: OrderRequest) -> OrderResponse:
+    _start = time.monotonic()
     local_order_id = str(uuid4())
     payload.correlation_id = payload.correlation_id or local_order_id
     execution_config = order_repository.get_execution_config()
@@ -51,6 +71,7 @@ def process_order(payload: OrderRequest) -> OrderResponse:
             level="REJECTED",
             requested_notional=payload.requested_notional,
         )
+        _record_order_metrics(response.status, payload.shadow_mode, _start)
         return response
 
     approval = risk_client.approve(payload)
@@ -78,6 +99,7 @@ def process_order(payload: OrderRequest) -> OrderResponse:
             level=approval.get("level", "REJECTED"),
             requested_notional=payload.requested_notional,
         )
+        _record_order_metrics(response.status, payload.shadow_mode, _start)
         return response
     _record_lifecycle(local_order_id, payload.user_id, "APPROVED", {"stage": "risk", "approval": approval})
 
@@ -96,6 +118,7 @@ def process_order(payload: OrderRequest) -> OrderResponse:
             credential=CredentialSnapshot(user_id=payload.user_id, exchange=payload.exchange, loaded=False),
         )
         order_repository.save(payload.user_id, response, detail={"stage": "credential", "reason": "missing_credentials"})
+        _record_order_metrics(response.status, payload.shadow_mode, _start)
         return response
     if not payload.shadow_mode:
         if not execution_config.live_trading_enabled:
@@ -124,6 +147,7 @@ def process_order(payload: OrderRequest) -> OrderResponse:
                 level="REJECTED",
                 requested_notional=payload.requested_notional,
             )
+            _record_order_metrics(response.status, payload.shadow_mode, _start)
             return response
         if payload.exchange.lower() not in {item.lower() for item in execution_config.allowed_exchanges}:
             response = OrderResponse(
@@ -151,6 +175,7 @@ def process_order(payload: OrderRequest) -> OrderResponse:
                 level="REJECTED",
                 requested_notional=payload.requested_notional,
             )
+            _record_order_metrics(response.status, payload.shadow_mode, _start)
             return response
         if credential.get("sandbox", True):
             response = OrderResponse(
@@ -182,6 +207,7 @@ def process_order(payload: OrderRequest) -> OrderResponse:
                 level="REJECTED",
                 requested_notional=payload.requested_notional,
             )
+            _record_order_metrics(response.status, payload.shadow_mode, _start)
             return response
 
     payload.api_key = credential.get("api_key")
@@ -290,4 +316,5 @@ def process_order(payload: OrderRequest) -> OrderResponse:
         },
     )
     publisher.publish_order_filled(payload, response)
+    _record_order_metrics(response.status, payload.shadow_mode, _start)
     return response

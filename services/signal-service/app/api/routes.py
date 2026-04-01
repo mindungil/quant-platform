@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Header, HTTPException, Response
-from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, generate_latest
 
 from app.core.config import settings
 from app.core.scoring import build_signal_response
@@ -11,6 +11,12 @@ from app.services.external_data_client import ExternalDataClient
 from app.services.feature_store_client import FeatureStoreClient
 from app.services.strategy_registry_client import StrategyRegistryClient
 from shared.health import check_redis, check_sql, check_tcp, health_payload
+
+signals_evaluated_total = Counter(
+    "signals_evaluated_total",
+    "Total signals evaluated",
+    ["direction"],
+)
 
 router = APIRouter()
 client = FeatureStoreClient(base_url=settings.feature_store_base_url)
@@ -55,6 +61,7 @@ def evaluate_signal(asset: str, x_user_id: str | None = Header(default=None)):
         external_signal_weight=settings.external_signal_weight,
     )
     signal_repository.save(asset=asset, evaluation=evaluation)
+    signals_evaluated_total.labels(direction=evaluation.direction).inc()
     if evaluation.threshold_crossed:
         publisher.publish_threshold(asset=asset, asset_type=asset_type, evaluation=evaluation)
     return evaluation

@@ -3,6 +3,8 @@ from __future__ import annotations
 import time
 from datetime import UTC, datetime, timedelta
 
+from prometheus_client import Counter, Histogram
+
 from app.core.config import settings
 from app.db.repository import decision_repository
 from app.models.agent import DecisionRecord, MemorySearchRequest, PhaseResult, SignalSnapshot, StrategySnapshot, MemorySearchResponse
@@ -14,6 +16,17 @@ from app.services.event_publisher import publisher
 from shared.logging import get_logger
 from shared.persistence import RedisStore
 from shared.realtime import RealtimeBus
+
+agent_decisions_total = Counter(
+    "agent_decisions_total",
+    "Total agent decisions",
+    ["action", "threshold_crossed"],
+)
+agent_decision_latency_seconds = Histogram(
+    "agent_decision_latency_seconds",
+    "Total decision loop latency",
+    buckets=(0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0),
+)
 
 signal_client = SignalClient(settings.signal_service_base_url)
 memory_client = MemoryClient(settings.memory_service_base_url)
@@ -345,6 +358,7 @@ def _phase_record(
 
 def run_decision_loop(asset: str, *, user_id: str | None = None, correlation_id: str | None = None) -> DecisionRecord:
     """Execute the full 6-phase decision loop: gather -> select -> retrieve -> check -> execute -> record."""
+    _loop_start = time.monotonic()
     phases: list[PhaseResult] = []
 
     # Phase 1 — Gather
@@ -370,5 +384,12 @@ def run_decision_loop(asset: str, *, user_id: str | None = None, correlation_id:
 
     # Phase 6 — Record
     _phase_record(asset, decision, phases)
+
+    # Record business metrics
+    agent_decisions_total.labels(
+        action=decision.action,
+        threshold_crossed=str(decision.threshold_crossed).lower(),
+    ).inc()
+    agent_decision_latency_seconds.observe(time.monotonic() - _loop_start)
 
     return decision

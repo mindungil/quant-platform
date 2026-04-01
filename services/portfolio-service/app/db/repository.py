@@ -1,5 +1,7 @@
 import os
 
+from prometheus_client import Counter
+
 from app.core.config import settings
 from app.models.portfolio import PortfolioSnapshot, PositionUpdate
 from shared.asyncio_utils import run_coro
@@ -9,6 +11,12 @@ from shared.persistence import RedisStore, SqlStore
 from shared.realtime import RealtimeBus
 
 logger = get_logger("portfolio-service")
+
+portfolio_fills_total = Counter(
+    "portfolio_fills_total",
+    "Total portfolio fills recorded",
+    ["side"],
+)
 
 
 class PortfolioRepository:
@@ -66,6 +74,7 @@ class PortfolioRepository:
         if payload.side == "BUY" and payload.price > 0:
             self._prices[payload.user_id][payload.asset] = payload.price
         self._fills[payload.user_id].append(payload)
+        portfolio_fills_total.labels(side=payload.side).inc()
 
         self._store.execute(
             """
