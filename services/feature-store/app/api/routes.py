@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from app.core.config import settings
-from app.core.indicators import calculate_features
+from app.core.indicators import calculate_features, interpolate_gaps
 from app.db.repository import candle_repository, feature_repository
 from app.models.feature import CandlePayload, FeatureResponse
 from app.services.event_publisher import publisher
@@ -34,6 +34,7 @@ def metrics() -> Response:
 def ingest_candle(asset: str, payload: CandlePayload) -> FeatureResponse:
     candle_repository.add(asset, payload)
     candles = candle_repository.get(asset)
+    candles = interpolate_gaps(candles)
     feature = calculate_features(asset=asset, candles=candles)
     feature_repository.save(asset, feature)
     publisher.publish_feature(asset=asset, feature=feature)

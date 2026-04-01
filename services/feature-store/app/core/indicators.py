@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 import pandas as pd
 
 from app.models.feature import CandlePayload, FeatureResponse
@@ -7,6 +9,41 @@ def _safe_float(value: float | None) -> float | None:
     if value is None or pd.isna(value):
         return None
     return float(value)
+
+
+def interpolate_gaps(candles: list[CandlePayload], interval_minutes: int = 60) -> list[CandlePayload]:
+    """Fill gaps with linear interpolation between surrounding candles."""
+    if len(candles) < 2:
+        return list(candles)
+
+    sorted_candles = sorted(candles, key=lambda c: c.timestamp)
+    interval = timedelta(minutes=interval_minutes)
+    result: list[CandlePayload] = [sorted_candles[0]]
+
+    for i in range(1, len(sorted_candles)):
+        prev = sorted_candles[i - 1]
+        curr = sorted_candles[i]
+        diff = curr.timestamp - prev.timestamp
+
+        if diff > interval * 1.5:
+            missing_count = int(diff / interval) - 1
+            for step in range(1, missing_count + 1):
+                ratio = step / (missing_count + 1)
+                interp_ts = prev.timestamp + interval * step
+                result.append(
+                    CandlePayload(
+                        timestamp=interp_ts,
+                        open=prev.open + (curr.open - prev.open) * ratio,
+                        high=prev.high + (curr.high - prev.high) * ratio,
+                        low=prev.low + (curr.low - prev.low) * ratio,
+                        close=prev.close + (curr.close - prev.close) * ratio,
+                        volume=prev.volume + (curr.volume - prev.volume) * ratio,
+                    )
+                )
+
+        result.append(curr)
+
+    return result
 
 
 def calculate_features(asset: str, candles: list[CandlePayload]) -> FeatureResponse:

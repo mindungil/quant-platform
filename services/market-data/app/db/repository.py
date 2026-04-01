@@ -82,6 +82,18 @@ class MarketDataRepository:
                 },
             )
 
+    def get_history(self, asset: str) -> list[CandlePayload]:
+        rows = self._store.fetch_all(
+            """
+            SELECT timestamp, open, high, low, close, volume
+            FROM market_candles
+            WHERE asset = :asset
+            ORDER BY timestamp ASC
+            """,
+            {"asset": asset},
+        )
+        return [CandlePayload(**row) for row in rows]
+
     def get_latest(self, asset: str) -> CandlePayload | None:
         row = self._store.fetch_one(
             """

@@ -2,7 +2,7 @@ PYTHON ?= python3
 VENV ?= .venv
 NPM ?= npm
 
-.PHONY: venv operator-deps install test test-integration compile smoke compose-config compose-up compose-down seed-admin seed-data demo-flow smoke-e2e release-check migration-smoke
+.PHONY: venv operator-deps install test test-integration compile smoke compose-config compose-up compose-down seed-admin seed-data demo-flow smoke-e2e release-check migration-smoke dlq-reprocess dlq-stats
 
 venv:
 	$(PYTHON) -m venv $(VENV)
@@ -93,5 +93,11 @@ smoke-e2e: operator-deps
 
 migration-smoke: operator-deps
 	. $(VENV)/bin/activate && python scripts/migration_smoke.py
+
+dlq-reprocess:
+	. $(VENV)/bin/activate && PYTHONPATH=. python scripts/dlq_reprocess.py
+
+dlq-stats:
+	. $(VENV)/bin/activate && PYTHONPATH=. python scripts/dlq_reprocess.py --dry-run
 
 release-check: compile test compose-config migration-smoke

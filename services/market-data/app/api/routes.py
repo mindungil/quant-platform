@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from app.core.config import settings
-from app.core.validator import validate_candle_transition
+from app.core.validator import detect_gaps, validate_candle_transition
 from app.db.repository import market_data_repository
 from app.models.candle import CandleIngestResponse, CandlePayload, CandleUpdatedEvent
 from app.services.collectors import list_collectors
@@ -63,6 +63,13 @@ def get_latest_candle(asset: str) -> CandlePayload:
     if candle is None:
         raise HTTPException(status_code=404, detail="candle_not_found")
     return candle
+
+
+@router.get("/candles/{asset}/gaps")
+def get_candle_gaps(asset: str, interval_minutes: int = 60) -> dict:
+    candles = market_data_repository.get_history(asset)
+    gaps = detect_gaps(candles, expected_interval_minutes=interval_minutes)
+    return {"asset": asset, "interval_minutes": interval_minutes, "gaps": gaps, "gap_count": len(gaps)}
 
 
 @router.get("/collectors")
