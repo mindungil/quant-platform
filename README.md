@@ -160,15 +160,27 @@ Admin UI is available after admin login at:
 open http://localhost:8018/admin
 ```
 
+## Deployment Architecture
+
+The stack runs in **5 containers** (down from 25):
+
+| Container | Description | Port(s) |
+|-----------|-------------|---------|
+| `backend` | All 20 Python microservices (separate uvicorn processes) | 8001-8021 |
+| `frontend` | Next.js product UI | 8018 |
+| `db` | TimescaleDB + pgvector (single database server) | 5432 |
+| `redis` | Cache + realtime pub/sub | 6379 |
+| `nats` | JetStream event bus | 4222 |
+
+Optional: `docker-compose --profile observability up -d` adds Prometheus (9090) and Grafana (3001).
+
 ## Notes
 
-- The product UI now lives in `services/frontend` as a Next.js app, while Grafana remains an internal ops concern.
-- Compose is now intended to run with `STRICT_RUNTIME=true`; the critical stateful services should fail fast when backing dependencies are unavailable.
+- All backend services share one container but run as isolated processes with separate ports.
+- Services communicate via `localhost` within the backend container.
 - `feature-store` owns all indicator computation by design.
 - `signal-service` reads calculated features and composes signal plus external context.
-- Gateway routes expose product-facing REST and websocket surfaces around the service mesh.
-- JetStream now spans the crypto-first graph from signal thresholding through agent action and downstream order/portfolio/statistics events.
-- The first crypto release is operator-oriented and Binance-first. Live trading remains admin-gated and off by default.
-- `quant` is now the only live repository. `quant-agent-platform` has been archived under `docs/legacy/`.
+- Gateway (port 8017) is the product-facing entry point for REST and WebSocket.
+- JetStream spans the full crypto execution graph from signal thresholding through order/portfolio/statistics events.
+- Live trading is admin-gated and off by default. The first crypto release is Binance-first.
 - RBAC is intentionally simple for now: `user` and `admin`.
-- The observability profile is Compose-first: `docker-compose --profile observability up -d prometheus grafana`
