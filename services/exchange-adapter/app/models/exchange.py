@@ -35,6 +35,49 @@ class ExchangeOrderResponse(BaseModel):
     filled_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
+class CancelOrderRequest(BaseModel):
+    user_id: str = "system"
+    exchange: str
+    api_key: str | None = None
+    api_secret: str | None = None
+    shadow_mode: bool = False
+
+
+class CancelOrderResponse(BaseModel):
+    order_id: str
+    status: str
+    exchange: str
+    shadow_mode: bool
+
+
+class BalanceRequest(BaseModel):
+    exchange: str
+    api_key: str | None = None
+    api_secret: str | None = None
+    shadow_mode: bool = False
+
+
+class BalanceResponse(BaseModel):
+    user_id: str
+    exchange: str
+    balances: list[dict] = Field(default_factory=list)
+    shadow_mode: bool
+
+
+class PositionsResponse(BaseModel):
+    user_id: str
+    exchange: str
+    positions: list[dict] = Field(default_factory=list)
+    shadow_mode: bool
+
+
+class OrderbookResponse(BaseModel):
+    asset: str
+    exchange: str
+    bids: list[list] = Field(default_factory=list)
+    asks: list[list] = Field(default_factory=list)
+
+
 class ExchangeAuditRecord(BaseModel):
     audit_id: int | None = None
     user_id: str

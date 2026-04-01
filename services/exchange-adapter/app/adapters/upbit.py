@@ -31,3 +31,43 @@ class UpbitAdapter(ExchangeAdapter):
 
     def validate_credentials(self, api_key: str, api_secret: str) -> bool:
         raise NotImplementedError("Upbit adapter is not yet implemented")
+
+    def cancel_order(
+        self,
+        *,
+        order_id: str,
+        user_id: str,
+        exchange: str,
+        api_key: str | None = None,
+        api_secret: str | None = None,
+    ) -> dict[str, Any]:
+        raise NotImplementedError("Upbit adapter is not yet implemented")
+
+    def get_balance(
+        self,
+        *,
+        user_id: str,
+        exchange: str,
+        api_key: str | None = None,
+        api_secret: str | None = None,
+    ) -> dict[str, Any]:
+        raise NotImplementedError("Upbit adapter is not yet implemented")
+
+    def get_positions(
+        self,
+        *,
+        user_id: str,
+        exchange: str,
+        api_key: str | None = None,
+        api_secret: str | None = None,
+    ) -> dict[str, Any]:
+        raise NotImplementedError("Upbit adapter is not yet implemented")
+
+    def get_orderbook(
+        self,
+        *,
+        asset: str,
+        exchange: str,
+        depth: int = 20,
+    ) -> dict[str, Any]:
+        raise NotImplementedError("Upbit adapter is not yet implemented")

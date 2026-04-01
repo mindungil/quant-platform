@@ -145,3 +145,101 @@ class BinanceAdapter(ExchangeAdapter):
             return True
         except Exception:
             return False
+
+    def cancel_order(
+        self,
+        *,
+        order_id: str,
+        user_id: str,
+        exchange: str,
+        api_key: str | None = None,
+        api_secret: str | None = None,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {"orderId": order_id}
+        raw = self._request(
+            "DELETE",
+            "/api/v3/order",
+            params,
+            api_key=api_key,
+            api_secret=api_secret,
+            signed=True,
+        )
+        return {
+            "status": raw.get("status", "CANCELED"),
+            "raw": raw,
+        }
+
+    def get_balance(
+        self,
+        *,
+        user_id: str,
+        exchange: str,
+        api_key: str | None = None,
+        api_secret: str | None = None,
+    ) -> dict[str, Any]:
+        raw = self._request(
+            "GET",
+            "/api/v3/account",
+            api_key=api_key,
+            api_secret=api_secret,
+            signed=True,
+        )
+        balances = [
+            {"asset": b["asset"], "free": b["free"], "locked": b["locked"]}
+            for b in raw.get("balances", [])
+            if float(b.get("free", 0)) > 0 or float(b.get("locked", 0)) > 0
+        ]
+        return {
+            "balances": balances,
+            "raw": raw,
+        }
+
+    def get_positions(
+        self,
+        *,
+        user_id: str,
+        exchange: str,
+        api_key: str | None = None,
+        api_secret: str | None = None,
+    ) -> dict[str, Any]:
+        raw = self._request(
+            "GET",
+            "/api/v3/openOrders",
+            api_key=api_key,
+            api_secret=api_secret,
+            signed=True,
+        )
+        positions = [
+            {
+                "symbol": o.get("symbol"),
+                "orderId": o.get("orderId"),
+                "side": o.get("side"),
+                "type": o.get("type"),
+                "quantity": o.get("origQty"),
+                "price": o.get("price"),
+                "status": o.get("status"),
+            }
+            for o in (raw if isinstance(raw, list) else [])
+        ]
+        return {
+            "positions": positions,
+            "raw": raw,
+        }
+
+    def get_orderbook(
+        self,
+        *,
+        asset: str,
+        exchange: str,
+        depth: int = 20,
+    ) -> dict[str, Any]:
+        raw = self._request(
+            "GET",
+            "/api/v3/depth",
+            {"symbol": asset, "limit": depth},
+        )
+        return {
+            "bids": raw.get("bids", []),
+            "asks": raw.get("asks", []),
+            "raw": raw,
+        }

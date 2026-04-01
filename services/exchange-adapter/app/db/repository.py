@@ -9,7 +9,16 @@ from app.adapters.binance import BinanceAdapter
 from app.adapters.upbit import UpbitAdapter
 from app.adapters.alpaca import AlpacaAdapter
 from app.core.config import settings
-from app.models.exchange import ExchangeAuditRecord, ExchangeOrderRequest, ExchangeOrderResponse
+from app.models.exchange import (
+    BalanceResponse,
+    CancelOrderRequest,
+    CancelOrderResponse,
+    ExchangeAuditRecord,
+    ExchangeOrderRequest,
+    ExchangeOrderResponse,
+    OrderbookResponse,
+    PositionsResponse,
+)
 from shared.persistence import SqlStore, deserialize_json, serialize_json
 
 logger = logging.getLogger(__name__)
@@ -187,6 +196,172 @@ class ExchangeRepository:
         )
         response.audit_id = self._record_audit(payload, response)
         return response
+
+    def cancel_order(self, order_id: str, payload: CancelOrderRequest) -> CancelOrderResponse:
+        adapter = self._get_adapter(payload.exchange)
+
+        if payload.shadow_mode:
+            return CancelOrderResponse(
+                order_id=order_id,
+                status="SIMULATED_CANCELED",
+                exchange=payload.exchange,
+                shadow_mode=True,
+            )
+
+        if adapter is None:
+            return CancelOrderResponse(
+                order_id=order_id,
+                status="REJECTED_NO_ADAPTER",
+                exchange=payload.exchange,
+                shadow_mode=False,
+            )
+
+        try:
+            result = adapter.cancel_order(
+                order_id=order_id,
+                user_id=payload.user_id,
+                exchange=payload.exchange,
+                api_key=payload.api_key,
+                api_secret=payload.api_secret,
+            )
+            status = result.get("status", "CANCELED")
+        except NotImplementedError:
+            status = "REJECTED_NOT_IMPLEMENTED"
+        except Exception:
+            status = "REJECTED_EXCHANGE_ERROR"
+            logger.exception("cancel_order failed for %s", payload.exchange)
+
+        return CancelOrderResponse(
+            order_id=order_id,
+            status=status,
+            exchange=payload.exchange,
+            shadow_mode=False,
+        )
+
+    def get_balance(self, user_id: str, exchange: str, *, api_key: str | None = None, api_secret: str | None = None, shadow_mode: bool = False) -> BalanceResponse:
+        adapter = self._get_adapter(exchange)
+
+        if shadow_mode:
+            return BalanceResponse(
+                user_id=user_id,
+                exchange=exchange,
+                balances=[],
+                shadow_mode=True,
+            )
+
+        if adapter is None:
+            return BalanceResponse(
+                user_id=user_id,
+                exchange=exchange,
+                balances=[],
+                shadow_mode=False,
+            )
+
+        try:
+            result = adapter.get_balance(
+                user_id=user_id,
+                exchange=exchange,
+                api_key=api_key,
+                api_secret=api_secret,
+            )
+            balances = result.get("balances", [])
+        except NotImplementedError:
+            balances = []
+            logger.warning("get_balance not implemented for %s", exchange)
+        except Exception:
+            balances = []
+            logger.exception("get_balance failed for %s", exchange)
+
+        return BalanceResponse(
+            user_id=user_id,
+            exchange=exchange,
+            balances=balances,
+            shadow_mode=False,
+        )
+
+    def get_positions(self, user_id: str, exchange: str, *, api_key: str | None = None, api_secret: str | None = None, shadow_mode: bool = False) -> PositionsResponse:
+        adapter = self._get_adapter(exchange)
+
+        if shadow_mode:
+            return PositionsResponse(
+                user_id=user_id,
+                exchange=exchange,
+                positions=[],
+                shadow_mode=True,
+            )
+
+        if adapter is None:
+            return PositionsResponse(
+                user_id=user_id,
+                exchange=exchange,
+                positions=[],
+                shadow_mode=False,
+            )
+
+        try:
+            result = adapter.get_positions(
+                user_id=user_id,
+                exchange=exchange,
+                api_key=api_key,
+                api_secret=api_secret,
+            )
+            positions = result.get("positions", [])
+        except NotImplementedError:
+            positions = []
+            logger.warning("get_positions not implemented for %s", exchange)
+        except Exception:
+            positions = []
+            logger.exception("get_positions failed for %s", exchange)
+
+        return PositionsResponse(
+            user_id=user_id,
+            exchange=exchange,
+            positions=positions,
+            shadow_mode=False,
+        )
+
+    def get_orderbook(self, asset: str, exchange: str, *, depth: int = 20, shadow_mode: bool = False) -> OrderbookResponse:
+        adapter = self._get_adapter(exchange)
+
+        if shadow_mode:
+            simulated_bids = [[str(50000 - i * 10), str(0.1)] for i in range(min(depth, 5))]
+            simulated_asks = [[str(50000 + i * 10), str(0.1)] for i in range(min(depth, 5))]
+            return OrderbookResponse(
+                asset=asset,
+                exchange=exchange,
+                bids=simulated_bids,
+                asks=simulated_asks,
+            )
+
+        if adapter is None:
+            return OrderbookResponse(
+                asset=asset,
+                exchange=exchange,
+                bids=[],
+                asks=[],
+            )
+
+        try:
+            result = adapter.get_orderbook(
+                asset=asset,
+                exchange=exchange,
+                depth=depth,
+            )
+            bids = result.get("bids", [])
+            asks = result.get("asks", [])
+        except NotImplementedError:
+            bids, asks = [], []
+            logger.warning("get_orderbook not implemented for %s", exchange)
+        except Exception:
+            bids, asks = [], []
+            logger.exception("get_orderbook failed for %s", exchange)
+
+        return OrderbookResponse(
+            asset=asset,
+            exchange=exchange,
+            bids=bids,
+            asks=asks,
+        )
 
     def list_for_user(self, user_id: str, *, limit: int = 50) -> list[ExchangeAuditRecord]:
         rows = self._store.fetch_all(
