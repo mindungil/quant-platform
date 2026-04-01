@@ -1,6 +1,6 @@
-# Quant Agent Platform
+# Quant Platform
 
-Productionizing local runtime for the startup-club autonomous trading platform.
+Docker Compose productionization runtime for the startup-club autonomous trading platform.
 
 ## What Is Included
 
@@ -20,14 +20,15 @@ Productionizing local runtime for the startup-club autonomous trading platform.
 - `statistics-service`: aggregate metrics and drift signals
 - `orchestrator-agent`: cross-service health and coordination summary
 - `etf-agent`, `stock-agent`: non-crypto agent stubs with trading-hour guards
-- `auth-service`: bootstrap JWT issue/verify boundary for user propagation
+- `auth-service`: user registration, login, refresh, bootstrap admin, and RBAC-backed profile boundary
 - `llm-gateway`: reasoning-text gateway for agent explanations
-- `api-gateway`: aggregate product-facing API with authenticated proxy routes and a Redis-backed WebSocket replay bridge
-- `frontend`: Next.js App Router product UI for dashboard, signals, feed, strategies, and settings
+- `api-gateway`: aggregate product-facing API with authenticated proxy routes, admin RBAC, and a Redis-backed WebSocket replay bridge
+- `frontend`: Next.js App Router product UI for dashboard, signals, feed, strategies, settings, and admin surfaces
 - `AGENT.md`: local implementation contract derived from the Notion documents
 - `docs/`: roadmap, architecture contract, and phase breakdown
 - `docs/PRODUCTION_PROGRAM.md`: long-horizon productionization program and release-train plan
 - `Makefile`: local install, test, and compile helpers
+- `docs/legacy/quant-agent-platform/`: archived reference snapshot from the retired bootstrap repo
 
 ## Production Progress
 
@@ -38,12 +39,15 @@ Productionizing local runtime for the startup-club autonomous trading platform.
 - `frontend` is now a Next.js application backed by the gateway public routes
 - `order-service`, `portfolio-service`, and `statistics-service` now persist execution-state scaffolding through PostgreSQL-backed repositories
 - gateway websocket now replays Redis-backed recent events instead of polling dashboard snapshots
+- bootstrap admin, gateway RBAC, and admin operator routes now exist for `user` and `admin`
+- Docker Compose now includes service healthchecks plus operator commands for `seed-admin`, `demo-flow`, and `smoke-e2e`
+- `quant-agent-platform` is now archived as legacy reference only; `quant` is the single active repository
 
 ## What Is Not Included Yet
 
 - JetStream rollout for the full downstream execution and fill graph
 - Full provider-complete live exchange connectivity beyond the current runnable local adapters
-- Prometheus/Grafana/Loki-grade observability across every service
+- Prometheus/Grafana-grade metrics across every service
 - full event-backed replay coverage for every product event type and every service
 
 ## Services
@@ -67,14 +71,22 @@ services/
 
 ## Local Run
 
-1. Copy `.env.example` to `.env` if needed.
+1. Copy `.env.example` to `.env` if you want a local override file.
 2. Start the stack:
 
 ```bash
 docker-compose up --build
 ```
 
-3. Example flow:
+3. Bootstrap the admin and run a seeded operator flow:
+
+```bash
+make seed-admin
+make demo-flow
+make smoke-e2e
+```
+
+4. Manual example flow:
 
 ```bash
 curl -X POST http://localhost:8001/candles/BTCUSDT \
@@ -111,7 +123,7 @@ curl http://localhost:8005/strategies/active?asset_type=crypto
 curl -X POST http://localhost:8006/decisions/run/BTCUSDT
 ```
 
-4. Auth and gateway example flow:
+5. Auth and gateway example flow:
 
 ```bash
 curl -X POST http://localhost:8017/auth/register \
@@ -133,10 +145,16 @@ curl http://localhost:8017/signals -H "Authorization: Bearer <token>"
 curl http://localhost:8017/feed -H "Authorization: Bearer <token>"
 ```
 
-5. Product UI:
+6. Product UI:
 
 ```bash
 open http://localhost:8018
+```
+
+Admin UI is available after admin login at:
+
+```bash
+open http://localhost:8018/admin
 ```
 
 ## Notes
@@ -148,3 +166,6 @@ open http://localhost:8018
 - Gateway routes expose product-facing REST and websocket surfaces around the service mesh.
 - JetStream is currently rolled out for the market, feature, signal, and crypto-agent path first.
 - Execution-state services now write durable state first and fall back in-memory only when local infra is unavailable.
+- `quant` is now the only live repository. `quant-agent-platform` has been archived under `docs/legacy/`.
+- RBAC is intentionally simple for now: `user` and `admin`.
+- The observability profile is Compose-first: `docker-compose --profile observability up -d prometheus grafana`

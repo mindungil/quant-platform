@@ -25,8 +25,8 @@ What is still materially missing relative to Notion:
 
 - full JetStream durable event flow across the entire graph
 - durable storage migration for the remaining exchange-side and orchestration stateful services
-- full JWT + `X-User-ID` propagation + RLS isolation
-- observability stack and production-grade runtime controls
+- deeper RLS-style isolation and signed internal trust expansion beyond the current gateway boundary
+- observability stack and production-grade runtime controls across every service
 
 ## Gap Classification
 
@@ -39,8 +39,8 @@ What is still materially missing relative to Notion:
 
 ### Tier 2: Product blockers
 
-- settings, signals, and feed pages need richer UX depth on top of the new Next.js surface
-- websocket replay exists but still needs broader event coverage and stronger delivery guarantees
+- settings, signals, and feed pages still need richer UX depth on top of the new Next.js surface
+- websocket replay now exists with admin inspection, but still needs stronger delivery guarantees
 - strategy validation and shadow lifecycle are simplified
 
 ### Tier 3: Hardening blockers
@@ -71,6 +71,7 @@ Tasks:
 - [x] update `/home/ubuntu/.codex/memories/quant-platform.md` at each architectural change
 - [ ] record milestone completion in this file
 - [x] keep `README.md` aligned with actual repository state
+- [x] retire `quant-agent-platform` as an active workspace and archive it under `docs/legacy/`
 
 ### Milestone 1: Phase 1 productionization
 
@@ -130,12 +131,15 @@ Tasks:
 - [x] implement WebSocket bridge for trading events
 - [x] replace FastAPI frontend with Next.js app router application
 - [x] render dashboard views for portfolio, signals, agent feed, strategy management, and settings
+- [x] add admin bootstrap, RBAC, and operator UI surfaces
 Current status:
 
 - gateway now proxies authenticated memory and strategy routes
 - gateway now exposes public `/dashboard`, `/signals`, `/feed`, `/settings`, `/orders`, and `/ws`
 - frontend now consumes the gateway dashboard and websocket bridge through a Next.js App Router surface
 - gateway websocket now replays Redis-backed recent events instead of rebuilding dashboard snapshots on a loop
+- gateway now exposes `/admin/users`, `/admin/system/health`, and `/admin/system/events`
+- frontend now includes `/admin`, `/admin/users`, and `/admin/system`
 
 ### Milestone 6: Missing Notion services
 
@@ -148,7 +152,8 @@ Tasks:
 
 Tasks:
 
-- [ ] add Prometheus metrics, Grafana dashboards, and Loki-compatible logs
+- [x] add Compose-first Prometheus and Grafana profile scaffolding
+- [ ] add Prometheus metrics and structured logs across every service
 - [x] add compose smoke tests and dependency probes
 - [x] add CI workflow for tests and linting
 
@@ -158,16 +163,16 @@ Tasks:
 
 Current execution slice:
 
-1. harden integration coverage for the newly introduced durable execution adapters
-2. extend realtime event coverage to every product-facing event source
-3. layer observability and operational runbooks on top of the new runtime
+1. harden operator flows and admin RBAC around the new runtime
+2. expand metrics and logging beyond gateway/auth into the rest of the mesh
+3. add stronger integration coverage for demo and smoke flows
 
 The highest-value next implementation slice is:
 
 1. Add integration tests for market -> feature -> signal -> crypto-agent JetStream flow.
 2. Add durable exchange-side event capture and richer realtime fanout coverage.
-3. Replace best-effort replay with stronger delivery semantics and operator introspection.
-4. Add observability stack and release smoke commands.
+3. Expand `/metrics` and structured request logging across the service mesh.
+4. Add stronger release smoke and seeded operator verification under Docker Compose.
 
 This is the next smallest sequence that closes the remaining gap between the current local-production baseline and the Notion target architecture.
 

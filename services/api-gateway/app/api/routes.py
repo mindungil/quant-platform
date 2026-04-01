@@ -1,10 +1,12 @@
 import json
 
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
+import httpx
 import jwt
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
-from app.core.auth import require_principal
+from app.core.auth import build_internal_admin_headers, require_principal, require_role
 from app.core.config import settings
 from app.core.dashboard import build_dashboard_summary
 from app.core.summary import gateway_summary
@@ -24,9 +26,24 @@ risk_client = GatewayClient(settings.risk_service_base_url)
 realtime_bus = RealtimeBus(RedisStore(settings.redis_url), replay_limit=settings.realtime_replay_limit)
 
 
+def _probe_service(name: str, base_url: str) -> dict[str, str]:
+    try:
+        response = httpx.get(f"{base_url.rstrip('/')}/health", timeout=3.0)
+        response.raise_for_status()
+        payload = response.json()
+        return {"status": payload.get("status", "ok"), "base_url": base_url}
+    except Exception as exc:
+        return {"status": "error", "base_url": base_url, "detail": str(exc)}
+
+
 @router.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@router.get("/metrics")
+def metrics() -> Response:
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @router.get("/gateway/summary")
@@ -150,8 +167,19 @@ def gateway_update_strategy_status(
 
 @router.get("/gateway/settings")
 def gateway_settings(principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    credentials: list[dict] = []
+    for exchange in ("binance", "upbit", "alpaca"):
+        try:
+            credentials.append(
+                credential_client.get(
+                    f"/credentials/{principal.user_id}/{exchange}",
+                    headers=principal.forwarded_headers,
+                )
+            )
+        except Exception:
+            continue
     payload = {
-        "credentials": [],
+        "credentials": credentials,
         "risk_defaults": {
             "max_notional": 10000,
             "exposure_limit": 50000,
@@ -192,6 +220,62 @@ def gateway_create_order_public(payload: dict, principal: GatewayPrincipal = Dep
     return gateway_create_order(payload=payload, principal=principal)
 
 
+@router.get("/admin/users")
+def admin_users(principal: GatewayPrincipal = Depends(require_role("admin"))) -> JSONResponse:
+    result = auth_client.get(
+        "/admin/users",
+        headers=build_internal_admin_headers(principal, "/admin/users"),
+    )
+    return JSONResponse(result)
+
+
+@router.patch("/admin/users/{user_id}/roles")
+def admin_update_user_roles(
+    user_id: str,
+    payload: dict,
+    principal: GatewayPrincipal = Depends(require_role("admin")),
+) -> JSONResponse:
+    result = auth_client.patch(
+        f"/admin/users/{user_id}/roles",
+        headers=build_internal_admin_headers(principal, f"/admin/users/{user_id}/roles"),
+        json=payload,
+    )
+    return JSONResponse(result)
+
+
+@router.get("/admin/system/health")
+def admin_system_health(principal: GatewayPrincipal = Depends(require_role("admin"))) -> dict:
+    services = {
+        "api-gateway": {"status": "ok", "base_url": "self"},
+        "auth-service": _probe_service("auth-service", settings.auth_service_base_url),
+        "market-data": _probe_service("market-data", settings.market_data_base_url),
+        "feature-store": _probe_service("feature-store", settings.feature_store_base_url),
+        "signal-service": _probe_service("signal-service", settings.signal_service_base_url),
+        "memory-service": _probe_service("memory-service", settings.memory_service_base_url),
+        "strategy-registry": _probe_service("strategy-registry", settings.strategy_registry_base_url),
+        "crypto-agent": _probe_service("crypto-agent", settings.crypto_agent_base_url),
+        "risk-service": _probe_service("risk-service", settings.risk_service_base_url),
+        "credential-store": _probe_service("credential-store", settings.credential_store_base_url),
+        "order-service": _probe_service("order-service", settings.order_service_base_url),
+        "portfolio-service": _probe_service("portfolio-service", settings.portfolio_service_base_url),
+        "statistics-service": _probe_service("statistics-service", settings.statistics_service_base_url),
+        "external-data-service": _probe_service("external-data-service", settings.external_data_service_base_url),
+        "llm-gateway": _probe_service("llm-gateway", settings.llm_gateway_base_url),
+    }
+    overall = "ok" if all(item["status"] == "ok" for item in services.values()) else "degraded"
+    return {
+        "status": overall,
+        "services": services,
+        "redis_replay_bus": {"status": "ok" if RedisStore(settings.redis_url).ping() else "error"},
+    }
+
+
+@router.get("/admin/system/events")
+def admin_system_events(limit: int = 50, principal: GatewayPrincipal = Depends(require_role("admin"))) -> dict:
+    items = realtime_bus.recent(limit=min(max(limit, 1), settings.realtime_replay_limit))
+    return {"items": items, "requested_by": principal.user_id}
+
+
 def _principal_from_websocket(websocket: WebSocket) -> GatewayPrincipal:
     token = websocket.query_params.get("token")
     if token is None:
@@ -220,8 +304,10 @@ async def gateway_ws(websocket: WebSocket) -> None:
 
     await websocket.accept()
     pubsub = None
+    seen_event_ids: set[str] = set()
     try:
         for event in realtime_bus.recent(user_id=principal.user_id, limit=settings.realtime_replay_limit):
+            seen_event_ids.add(event["event_id"])
             await websocket.send_json({"type": event["type"], "data": event["data"]})
 
         pubsub = await realtime_bus.subscribe(user_id=principal.user_id)
@@ -230,6 +316,13 @@ async def gateway_ws(websocket: WebSocket) -> None:
             if message is None:
                 continue
             event = json.loads(message["data"]) if isinstance(message["data"], str) else message["data"]
+            event_id = event.get("event_id")
+            if event_id in seen_event_ids:
+                continue
+            if event_id is not None:
+                seen_event_ids.add(event_id)
+                if len(seen_event_ids) > settings.realtime_replay_limit * 4:
+                    seen_event_ids = set(list(seen_event_ids)[-settings.realtime_replay_limit * 2 :])
             await websocket.send_json({"type": event["type"], "data": event["data"]})
     except WebSocketDisconnect:
         return

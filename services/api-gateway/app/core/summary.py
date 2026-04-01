@@ -32,6 +32,10 @@ def gateway_summary() -> dict:
             "/gateway/settings",
             "/gateway/settings/credentials",
             "/gateway/settings/risk",
+            "/admin/users",
+            "/admin/users/{user_id}/roles",
+            "/admin/system/health",
+            "/admin/system/events",
         ],
         "websocket_bridge": "/ws?token=<jwt>",
         "realtime_topics": [
@@ -39,5 +43,7 @@ def gateway_summary() -> dict:
             "signal.threshold.crossed.*",
             "risk.triggered.*",
             "agent.*.action",
+            "portfolio.updated",
+            "statistics.updated",
         ],
     }

@@ -54,7 +54,7 @@ def issue_for_profile(profile: UserProfile) -> TokenIssueResponse:
         TokenIssueRequest(
             user_id=profile.user_id,
             email=profile.email,
-            roles=profile.roles + [profile.plan.lower()],
+            roles=profile.roles,
         )
     )
 

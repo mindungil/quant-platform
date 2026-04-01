@@ -14,3 +14,8 @@ def test_gateway_summary_exposes_user_propagation_header() -> None:
 def test_gateway_summary_exposes_websocket_bridge() -> None:
     result = gateway_summary()
     assert result["websocket_bridge"] == "/ws?token=<jwt>"
+
+
+def test_gateway_summary_lists_admin_routes() -> None:
+    result = gateway_summary()
+    assert "/admin/users" in result["authenticated_routes"]

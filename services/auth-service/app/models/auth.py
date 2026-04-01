@@ -24,6 +24,15 @@ class UserProfile(BaseModel):
     automation_enabled: bool = False
 
 
+class RoleUpdateRequest(BaseModel):
+    roles: list[str] = Field(default_factory=lambda: ["user"])
+
+
+class BootstrapAdminResponse(BaseModel):
+    user: UserProfile
+    created: bool = False
+
+
 class TokenIssueRequest(BaseModel):
     user_id: str = Field(min_length=1)
     email: str | None = None

@@ -23,7 +23,10 @@ export default function HomePage() {
       body: JSON.stringify({ email, password })
     });
     setToken(response.access_token);
-    setMessage("Logged in. Navigate to /dashboard.");
+    setMessage("Logged in. Redirecting to /dashboard.");
+    window.setTimeout(() => {
+      window.location.href = "/dashboard";
+    }, 300);
   }
 
   return (

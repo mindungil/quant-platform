@@ -1,0 +1,88 @@
+services:
+  market-data:
+    build:
+      context: ./services/market-data
+    env_file:
+      - .env.example
+    ports:
+      - "8001:8000"
+    depends_on:
+      - nats
+
+  feature-store:
+    build:
+      context: ./services/feature-store
+    env_file:
+      - .env.example
+    ports:
+      - "8002:8000"
+    depends_on:
+      - nats
+
+  signal-service:
+    build:
+      context: ./services/signal-service
+    env_file:
+      - .env.example
+    ports:
+      - "8003:8000"
+    depends_on:
+      - feature-store
+      - nats
+
+  memory-service:
+    build:
+      context: ./services/memory-service
+    env_file:
+      - .env.example
+    ports:
+      - "8004:8000"
+
+  strategy-registry:
+    build:
+      context: ./services/strategy-registry
+    env_file:
+      - .env.example
+    ports:
+      - "8005:8000"
+
+  crypto-agent:
+    build:
+      context: ./services/crypto-agent
+    env_file:
+      - .env.example
+    ports:
+      - "8006:8000"
+    depends_on:
+      - signal-service
+      - memory-service
+      - strategy-registry
+      - nats
+
+  nats:
+    image: nats:2.11-alpine
+    ports:
+      - "4222:4222"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: platform
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    environment:
+      POSTGRES_DB: market
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"

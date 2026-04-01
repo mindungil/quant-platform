@@ -4,7 +4,7 @@ This document is the long-horizon execution program for turning the current loca
 
 ## Program Goal
 
-Ship a local-production-grade quant platform in `/home/ubuntu/quant` that a single operator can run, monitor, and use through the gateway and product UI without relying on bootstrap-only in-memory behavior.
+Ship a local-production-grade quant platform in `/home/ubuntu/quant` that a single operator can run, monitor, and use through Docker Compose, the gateway, and the product UI without relying on a second bootstrap repository.
 
 ## Program Rules
 
@@ -141,3 +141,24 @@ Scope:
 - durable execution stores for exchange-side fills and risk incidents
 - observability stack and operator dashboards
 - release automation and smoke seed scenarios
+
+## Current Tranche: Train C
+
+### Immediate objectives
+
+1. Collapse the retired `quant-agent-platform` workspace into a legacy archive under `docs/legacy/`.
+2. Add bootstrap admin creation, RBAC, and gateway-protected admin APIs.
+3. Make Docker Compose immediately operator-testable with `make seed-admin`, `make demo-flow`, and `make smoke-e2e`.
+4. Expose admin UI surfaces in Next.js for user management and system diagnostics.
+5. Add a Compose-first observability profile around Prometheus and Grafana.
+
+### Verification standard
+
+- `python3 -m compileall /home/ubuntu/quant`
+- `docker-compose -f docker-compose.yml config`
+- `make install`
+- `make test`
+- `cd services/frontend && npm run typecheck && npm run build`
+- `make seed-admin`
+- `make demo-flow`
+- `make smoke-e2e`

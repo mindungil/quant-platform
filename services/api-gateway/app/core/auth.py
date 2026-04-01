@@ -1,3 +1,7 @@
+import hmac
+import time
+from hashlib import sha256
+
 from fastapi import Header, HTTPException
 import jwt
 
@@ -26,3 +30,29 @@ def require_principal(authorization: str | None = Header(default=None)) -> Gatew
         roles=payload.get("roles", []),
         forwarded_headers={"X-User-ID": payload["sub"]},
     )
+
+
+def require_role(role: str):
+    def wrapper(authorization: str | None = Header(default=None)) -> GatewayPrincipal:
+        principal = require_principal(authorization)
+        if role not in principal.roles:
+            raise HTTPException(status_code=403, detail="forbidden")
+        return principal
+
+    return wrapper
+
+
+def build_internal_admin_headers(principal: GatewayPrincipal, path: str) -> dict[str, str]:
+    timestamp = str(int(time.time()))
+    message = f"{principal.user_id}:{timestamp}:{path}"
+    signature = hmac.new(
+        settings.internal_admin_secret.encode("utf-8"),
+        message.encode("utf-8"),
+        sha256,
+    ).hexdigest()
+    return {
+        **principal.forwarded_headers,
+        "X-Internal-Actor-User-ID": principal.user_id,
+        "X-Internal-Admin-Timestamp": timestamp,
+        "X-Internal-Admin-Signature": signature,
+    }

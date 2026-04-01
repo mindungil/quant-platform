@@ -1,14 +1,6 @@
 import "./globals.css";
-import Link from "next/link";
 import type { ReactNode } from "react";
-
-const links = [
-  ["/dashboard", "Dashboard"],
-  ["/signals", "Signals"],
-  ["/feed", "Feed"],
-  ["/strategies", "Strategies"],
-  ["/settings", "Settings"]
-];
+import { Navigation } from "../components/navigation";
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
@@ -20,13 +12,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               <p className="text-sm uppercase tracking-[0.3em] text-mint">Quant Platform</p>
               <h1 className="text-4xl font-semibold tracking-tight">Production Dashboard</h1>
             </div>
-            <nav className="flex flex-wrap gap-3 text-sm">
-              {links.map(([href, label]) => (
-                <Link key={href} href={href} className="rounded-full border border-white/10 px-4 py-2 hover:bg-white/10">
-                  {label}
-                </Link>
-              ))}
-            </nav>
+            <Navigation />
           </header>
           {children}
         </div>

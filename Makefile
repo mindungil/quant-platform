@@ -2,10 +2,13 @@ PYTHON ?= python3
 VENV ?= .venv
 NPM ?= npm
 
-.PHONY: venv install test compile smoke compose-config
+.PHONY: venv operator-deps install test compile smoke compose-config compose-up compose-down seed-admin demo-flow smoke-e2e
 
 venv:
 	$(PYTHON) -m venv $(VENV)
+
+operator-deps: venv
+	. $(VENV)/bin/activate && pip install --upgrade pip && pip install requests websocket-client
 
 install: venv
 	. $(VENV)/bin/activate && pip install --upgrade pip && \
@@ -29,7 +32,7 @@ install: venv
 	pip install -r services/auth-service/requirements.txt && \
 	pip install -r services/llm-gateway/requirements.txt && \
 	pip install -r services/api-gateway/requirements.txt && \
-	pip install pytest
+	pip install pytest requests websocket-client
 	cd services/frontend && $(NPM) install
 
 test:
@@ -63,3 +66,18 @@ compose-config:
 	docker-compose -f docker-compose.yml config
 
 smoke: compose-config compile
+
+compose-up:
+	docker-compose up -d --build
+
+compose-down:
+	docker-compose down --remove-orphans
+
+seed-admin: operator-deps
+	. $(VENV)/bin/activate && python scripts/seed_admin.py
+
+demo-flow: operator-deps
+	. $(VENV)/bin/activate && python scripts/demo_flow.py
+
+smoke-e2e: operator-deps
+	. $(VENV)/bin/activate && python scripts/smoke_e2e.py

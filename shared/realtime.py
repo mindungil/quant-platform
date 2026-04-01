@@ -34,8 +34,11 @@ class RealtimeBus:
             "user_id": user_id,
             "data": data,
         }
-        self._redis.lpush_json(self._event_key(user_id), event, max_items=self._replay_limit)
-        self._redis.publish_json(self._channel(user_id), event)
+        self._redis.lpush_json(self._event_key(None), event, max_items=self._replay_limit)
+        self._redis.publish_json(self._channel(None), event)
+        if user_id is not None:
+            self._redis.lpush_json(self._event_key(user_id), event, max_items=self._replay_limit)
+            self._redis.publish_json(self._channel(user_id), event)
         return event
 
     def recent(self, *, user_id: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
