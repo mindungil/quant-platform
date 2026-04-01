@@ -22,6 +22,13 @@ This repository implements the startup-club trading platform described in Notion
 - LLMs must not make trading decisions. Later agent layers may generate reasoning only.
 - Real-time trade execution must never run synchronous backtests in the request path.
 
+## CLI Memory Discipline
+
+- Maintain a persistent session memory file at `/home/ubuntu/.codex/memories/quant-platform.md`.
+- Update that memory whenever the repository direction, architecture scope, or current execution milestone changes.
+- Treat the memory file as an operator handoff note, not a design spec.
+- Keep repository-level plans in `docs/` and keep short-lived execution context in the memory file.
+
 ## Current Bootstrap Decisions
 
 - This repository starts with a local bootstrap implementation for Phase 1.

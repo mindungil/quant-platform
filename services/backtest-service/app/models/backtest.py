@@ -1,4 +1,6 @@
-from pydantic import BaseModel
+from datetime import UTC, datetime
+
+from pydantic import BaseModel, Field
 
 
 class BacktestRequest(BaseModel):
@@ -14,3 +16,13 @@ class BacktestResult(BaseModel):
     max_drawdown: float
     win_rate: float
     status: str
+
+
+class BacktestJob(BaseModel):
+    job_id: str
+    strategy_id: str
+    status: str = "PENDING"  # PENDING | RUNNING | COMPLETED | FAILED
+    result: BacktestResult | None = None
+    error: str | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    completed_at: datetime | None = None

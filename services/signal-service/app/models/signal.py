@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class FeatureSnapshot(BaseModel):
@@ -24,14 +24,30 @@ class FeatureSnapshot(BaseModel):
     vwap: float | None = None
 
 
+class ExternalContextSnapshot(BaseModel):
+    asset: str
+    timestamp: datetime
+    news_sentiment: float | None = None
+    onchain_score: float | None = None
+    macro_risk_score: float | None = None
+    fear_greed_index: int | None = None
+    components: dict[str, float] = Field(default_factory=dict)
+    missing_fields: list[str] = Field(default_factory=list)
+
+
 class SignalEvaluationResponse(BaseModel):
     asset: str
+    asset_type: str = "crypto"
+    strategy_id: str | None = None
+    strategy_user_id: str | None = None
     signal_score: float
     threshold: float
     threshold_crossed: bool
     direction: str
     components: dict[str, float]
     feature_timestamp: datetime
+    external_timestamp: datetime | None = None
+    reference_price: float | None = None
 
 
 class SignalThresholdEvent(BaseModel):

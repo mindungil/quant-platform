@@ -8,3 +8,5 @@ def test_credentials_roundtrip() -> None:
     loaded = repo.get("u1", "binance")
     assert loaded.api_key == "key"
     assert loaded.api_secret == "secret"
+    masked = repo.get_masked("u1", "binance")
+    assert masked.api_key_masked != "key"

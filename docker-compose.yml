@@ -1,63 +1,133 @@
 services:
   market-data:
     build:
-      context: ./services/market-data
+      context: .
+      dockerfile: services/market-data/Dockerfile
     env_file:
       - .env.example
     ports:
       - "8001:8000"
     depends_on:
-      - nats
+      nats:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
 
   feature-store:
     build:
-      context: ./services/feature-store
+      context: .
+      dockerfile: services/feature-store/Dockerfile
     env_file:
       - .env.example
     ports:
       - "8002:8000"
     depends_on:
-      - nats
+      nats:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
 
   signal-service:
     build:
-      context: ./services/signal-service
+      context: .
+      dockerfile: services/signal-service/Dockerfile
     env_file:
       - .env.example
     ports:
       - "8003:8000"
     depends_on:
-      - feature-store
-      - nats
+      feature-store:
+        condition: service_healthy
+      external-data-service:
+        condition: service_healthy
+      strategy-registry:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
 
   memory-service:
     build:
-      context: ./services/memory-service
+      context: .
+      dockerfile: services/memory-service/Dockerfile
     env_file:
       - .env.example
     ports:
       - "8004:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
 
   strategy-registry:
     build:
-      context: ./services/strategy-registry
+      context: .
+      dockerfile: services/strategy-registry/Dockerfile
     env_file:
       - .env.example
     ports:
       - "8005:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
 
   crypto-agent:
     build:
-      context: ./services/crypto-agent
+      context: .
+      dockerfile: services/crypto-agent/Dockerfile
     env_file:
       - .env.example
     ports:
       - "8006:8000"
     depends_on:
-      - signal-service
-      - memory-service
-      - strategy-registry
-      - nats
+      signal-service:
+        condition: service_healthy
+      memory-service:
+        condition: service_healthy
+      strategy-registry:
+        condition: service_healthy
+      llm-gateway:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
   backtest-service:
     build:
       context: ./services/backtest-service
@@ -65,63 +135,141 @@ services:
       - .env.example
     ports:
       - "8007:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
   exchange-adapter:
     build:
-      context: ./services/exchange-adapter
+      context: .
+      dockerfile: services/exchange-adapter/Dockerfile
     env_file:
       - .env.example
     ports:
       - "8008:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
   risk-service:
     build:
-      context: ./services/risk-service
+      context: .
+      dockerfile: services/risk-service/Dockerfile
     env_file:
       - .env.example
     ports:
       - "8009:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
   credential-store:
     build:
-      context: ./services/credential-store
+      context: .
+      dockerfile: services/credential-store/Dockerfile
     env_file:
       - .env.example
     ports:
       - "8010:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
   order-service:
     build:
-      context: ./services/order-service
+      context: .
+      dockerfile: services/order-service/Dockerfile
     env_file:
       - .env.example
     ports:
       - "8011:8000"
     depends_on:
-      - risk-service
-      - exchange-adapter
-      - credential-store
+      risk-service:
+        condition: service_healthy
+      exchange-adapter:
+        condition: service_healthy
+      credential-store:
+        condition: service_healthy
+      portfolio-service:
+        condition: service_healthy
+      statistics-service:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
   portfolio-service:
     build:
-      context: ./services/portfolio-service
+      context: .
+      dockerfile: services/portfolio-service/Dockerfile
     env_file:
       - .env.example
     ports:
       - "8012:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
   statistics-service:
     build:
-      context: ./services/statistics-service
+      context: .
+      dockerfile: services/statistics-service/Dockerfile
     env_file:
       - .env.example
     ports:
       - "8013:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
   orchestrator-agent:
     build:
-      context: ./services/orchestrator-agent
+      context: .
+      dockerfile: services/orchestrator-agent/Dockerfile
     env_file:
       - .env.example
     ports:
       - "8014:8000"
     depends_on:
-      - portfolio-service
-      - statistics-service
-      - risk-service
+      portfolio-service:
+        condition: service_healthy
+      statistics-service:
+        condition: service_healthy
+      risk-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
   etf-agent:
     build:
       context: ./services/etf-agent
@@ -129,6 +277,11 @@ services:
       - .env.example
     ports:
       - "8015:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
   stock-agent:
     build:
       context: ./services/stock-agent
@@ -136,36 +289,125 @@ services:
       - .env.example
     ports:
       - "8016:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
   api-gateway:
     build:
-      context: ./services/api-gateway
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
     env_file:
       - .env.example
     ports:
       - "8017:8000"
     depends_on:
-      - signal-service
-      - portfolio-service
-      - statistics-service
+      auth-service:
+        condition: service_healthy
+      signal-service:
+        condition: service_healthy
+      memory-service:
+        condition: service_healthy
+      strategy-registry:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
+      credential-store:
+        condition: service_healthy
+      risk-service:
+        condition: service_healthy
+      portfolio-service:
+        condition: service_healthy
+      statistics-service:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
   frontend:
     build:
       context: ./services/frontend
+      dockerfile: Dockerfile
     env_file:
       - .env.example
     ports:
-      - "8018:8000"
+      - "8018:3000"
     depends_on:
-      - api-gateway
+      api-gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3000', (res) => process.exit(res.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
+    env_file:
+      - .env.example
+    ports:
+      - "8019:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+
+  external-data-service:
+    build:
+      context: ./services/external-data-service
+    env_file:
+      - .env.example
+    ports:
+      - "8020:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  llm-gateway:
+    build:
+      context: ./services/llm-gateway
+    env_file:
+      - .env.example
+    ports:
+      - "8021:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
 
   nats:
     image: nats:2.11-alpine
+    command: ["-js", "-m", "8222"]
     ports:
       - "4222:4222"
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 4222"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
 
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
 
   postgres:
     image: pgvector/pgvector:pg16
@@ -175,6 +417,11 @@ services:
       POSTGRES_PASSWORD: postgres
     ports:
       - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d platform"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
 
   timescaledb:
     image: timescale/timescaledb:latest-pg16
@@ -184,3 +431,35 @@ services:
       POSTGRES_PASSWORD: postgres
     ports:
       - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d market"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  prometheus:
+    image: prom/prometheus:v3.4.1
+    profiles: ["observability"]
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    volumes:
+      - ./infra/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+
+  grafana:
+    image: grafana/grafana:11.6.0
+    profiles: ["observability"]
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3001:3000"
+    depends_on:
+      prometheus:
+        condition: service_started

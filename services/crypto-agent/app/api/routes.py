@@ -1,19 +1,34 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Response
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
+from app.core.config import settings
 from app.core.engine import run_decision_loop
 from app.db.repository import decision_repository
+from shared.health import check_redis, check_sql, check_tcp, health_payload
 
 router = APIRouter()
 
 
 @router.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+def health() -> dict:
+    return health_payload(
+        "crypto-agent",
+        {
+            "postgres": check_sql("postgres", settings.postgres_url),
+            "redis": check_redis("redis", settings.redis_url),
+            "nats": check_tcp("nats", settings.nats_url, default_port=4222),
+        },
+    )
+
+
+@router.get("/metrics")
+def metrics() -> Response:
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @router.post("/decisions/run/{asset}")
-def run_decision(asset: str):
-    return run_decision_loop(asset)
+def run_decision(asset: str, x_user_id: str | None = Header(default=None)):
+    return run_decision_loop(asset, user_id=x_user_id)
 
 
 @router.get("/decisions/latest/{asset}")

@@ -1,6 +1,10 @@
-FROM python:3.11-slim
+FROM node:20-alpine
 WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY app ./app
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+ENV HOSTNAME=0.0.0.0
+ENV PORT=3000
+COPY package.json ./package.json
+COPY package-lock.json* ./
+RUN npm install
+COPY . ./
+RUN npm run build
+CMD ["node", ".next/standalone/server.js"]
