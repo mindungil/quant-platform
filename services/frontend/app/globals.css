@@ -2,33 +2,111 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 body {
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
   @apply bg-white text-neutral-900 antialiased;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
+/* Cards with subtle hover lift */
 .card {
-  @apply rounded-xl border border-neutral-200 bg-white p-6 shadow-sm;
+  @apply rounded-xl border border-neutral-200 bg-white p-6;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+.card:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+.card-interactive:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  transform: translateY(-1px);
 }
 
+/* Buttons with press effect */
 .btn-primary {
-  @apply rounded-lg bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-neutral-800;
+  @apply rounded-lg bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white;
+  transition: all 0.15s ease;
 }
+.btn-primary:hover { @apply bg-neutral-800; }
+.btn-primary:active { transform: scale(0.98); }
 
 .btn-secondary {
-  @apply rounded-lg border border-neutral-300 bg-white px-4 py-2.5 text-sm font-medium text-neutral-900 transition hover:bg-neutral-50;
+  @apply rounded-lg border border-neutral-200 bg-white px-4 py-2.5 text-sm font-medium text-neutral-700;
+  transition: all 0.15s ease;
 }
+.btn-secondary:hover { @apply bg-neutral-50 border-neutral-300; }
+.btn-secondary:active { transform: scale(0.98); }
 
 .btn-danger {
-  @apply rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-red-700;
+  @apply rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white;
+  transition: all 0.15s ease;
 }
+.btn-danger:hover { @apply bg-red-700; }
+.btn-danger:active { transform: scale(0.98); }
+
+.btn-ghost {
+  @apply rounded-lg px-3 py-2 text-sm text-neutral-500;
+  transition: all 0.15s ease;
+}
+.btn-ghost:hover { @apply bg-neutral-100 text-neutral-900; }
 
 .input-field {
-  @apply w-full rounded-lg border border-neutral-300 bg-white px-4 py-2.5 text-sm text-neutral-900 outline-none transition focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900;
+  @apply w-full rounded-lg border border-neutral-200 bg-white px-4 py-2.5 text-sm text-neutral-900 outline-none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.input-field:focus {
+  @apply border-neutral-400;
+  box-shadow: 0 0 0 3px rgba(0,0,0,0.04);
 }
 
 .badge {
   @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
 }
+
+/* Stat number animation */
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.stat-value {
+  animation: countUp 0.4s ease-out;
+}
+
+/* Table row hover */
+.table-row {
+  @apply border-b border-neutral-100;
+  transition: background-color 0.1s ease;
+}
+.table-row:hover {
+  @apply bg-neutral-50;
+}
+
+/* Skeleton loader */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  @apply rounded-lg bg-neutral-100;
+  background: linear-gradient(90deg, #f5f5f5 25%, #e5e5e5 50%, #f5f5f5 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Pulse dot for live indicators */
+@keyframes livePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.live-dot {
+  @apply inline-block h-2 w-2 rounded-full bg-green-500;
+  animation: livePulse 2s ease-in-out infinite;
+}
+
+/* Smooth scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { @apply rounded-full bg-neutral-200; }
+::-webkit-scrollbar-thumb:hover { @apply bg-neutral-300; }

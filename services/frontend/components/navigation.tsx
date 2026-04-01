@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { motion } from "framer-motion";
 
 import { clearToken, hasRole } from "../lib/api";
 
@@ -29,13 +30,20 @@ export function Navigation() {
           <Link
             key={href}
             href={href}
-            className={`rounded-lg px-3 py-2 transition ${
+            className={`relative rounded-lg px-3 py-2 transition ${
               isActive
-                ? "bg-neutral-100 font-medium text-neutral-900"
-                : "text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900"
+                ? "font-medium text-neutral-900"
+                : "text-neutral-500 hover:text-neutral-900"
             }`}
           >
             {label}
+            {isActive && (
+              <motion.div
+                layoutId="nav-indicator"
+                className="absolute inset-x-1 -bottom-px h-0.5 rounded-full bg-neutral-900"
+                transition={{ type: "spring", stiffness: 380, damping: 30 }}
+              />
+            )}
           </Link>
         );
       })}
