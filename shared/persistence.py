@@ -6,8 +6,12 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-import redis
-import redis.asyncio as aioredis
+try:
+    import redis
+    import redis.asyncio as aioredis
+except ModuleNotFoundError:  # pragma: no cover - handled by runtime fallback paths
+    redis = None
+    aioredis = None
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
@@ -70,8 +74,8 @@ class SqlStore:
 
 class RedisStore:
     def __init__(self, url: str) -> None:
-        self._client = redis.Redis.from_url(url, decode_responses=True)
-        self._async_client = aioredis.from_url(url, decode_responses=True)
+        self._client = None if redis is None else redis.Redis.from_url(url, decode_responses=True)
+        self._async_client = None if aioredis is None else aioredis.from_url(url, decode_responses=True)
         self._fallback_hashes: dict[str, dict[str, str]] = {}
         self._fallback_sets: dict[str, set[str]] = {}
         self._fallback_lists: dict[str, list[str]] = {}
@@ -79,6 +83,10 @@ class RedisStore:
             self.require_ping()
 
     def require_ping(self) -> None:
+        if self._client is None:
+            if strict_runtime_enabled():
+                raise RuntimeDependencyError("redis_module_missing")
+            return
         try:
             if not self._client.ping():
                 raise RuntimeDependencyError("redis_ping_failed")
@@ -89,6 +97,8 @@ class RedisStore:
     def hset_json(self, key: str, field: str, value: dict[str, Any]) -> None:
         payload = json.dumps(value, default=str)
         try:
+            if self._client is None:
+                raise RuntimeDependencyError("redis_module_missing")
             self._client.hset(key, field, payload)
         except Exception as exc:
             if strict_runtime_enabled():
@@ -97,6 +107,8 @@ class RedisStore:
 
     def hget_json(self, key: str, field: str) -> dict[str, Any] | None:
         try:
+            if self._client is None:
+                raise RuntimeDependencyError("redis_module_missing")
             value = self._client.hget(key, field)
         except Exception as exc:
             if strict_runtime_enabled():
@@ -108,6 +120,8 @@ class RedisStore:
 
     def sadd(self, key: str, value: str) -> None:
         try:
+            if self._client is None:
+                raise RuntimeDependencyError("redis_module_missing")
             self._client.sadd(key, value)
         except Exception as exc:
             if strict_runtime_enabled():
@@ -116,6 +130,8 @@ class RedisStore:
 
     def sismember(self, key: str, value: str) -> bool:
         try:
+            if self._client is None:
+                raise RuntimeDependencyError("redis_module_missing")
             return bool(self._client.sismember(key, value))
         except Exception as exc:
             if strict_runtime_enabled():
@@ -124,6 +140,8 @@ class RedisStore:
 
     def ping(self) -> bool:
         try:
+            if self._client is None:
+                return False
             return bool(self._client.ping())
         except Exception:
             return False
@@ -131,6 +149,8 @@ class RedisStore:
     def lpush_json(self, key: str, value: dict[str, Any], max_items: int | None = None) -> None:
         payload = json.dumps(value, default=str)
         try:
+            if self._client is None:
+                raise RuntimeDependencyError("redis_module_missing")
             self._client.lpush(key, payload)
             if max_items is not None:
                 self._client.ltrim(key, 0, max_items - 1)
@@ -144,6 +164,8 @@ class RedisStore:
 
     def lrange_json(self, key: str, start: int, stop: int) -> list[dict[str, Any]]:
         try:
+            if self._client is None:
+                raise RuntimeDependencyError("redis_module_missing")
             values = self._client.lrange(key, start, stop)
         except Exception as exc:
             if strict_runtime_enabled():
@@ -155,6 +177,8 @@ class RedisStore:
     def publish_json(self, channel: str, value: dict[str, Any]) -> None:
         payload = json.dumps(value, default=str)
         try:
+            if self._client is None:
+                raise RuntimeDependencyError("redis_module_missing")
             self._client.publish(channel, payload)
         except Exception as exc:
             if strict_runtime_enabled():
@@ -163,11 +187,15 @@ class RedisStore:
 
     async def close_async(self) -> None:
         try:
+            if self._async_client is None:
+                return
             await self._async_client.aclose()
         except Exception:
             return
 
     async def subscribe(self, *channels: str):
+        if self._async_client is None:
+            raise RuntimeDependencyError("redis_async_module_missing")
         pubsub = self._async_client.pubsub()
         await pubsub.subscribe(*channels)
         return pubsub
