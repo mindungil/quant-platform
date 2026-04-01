@@ -12,23 +12,38 @@ export default function HomePage() {
   const [isLogin, setIsLogin] = useState(true);
 
   async function register() {
-    const response = await gatewayFetch("/auth/register", {
-      method: "POST",
-      body: JSON.stringify({ email, password, display_name: displayName, plan: "premium" })
-    });
-    setMessage(JSON.stringify(response, null, 2));
+    try {
+      setMessage("");
+      const response = await gatewayFetch("/auth/register", {
+        method: "POST",
+        body: JSON.stringify({ email, password, display_name: displayName, plan: "premium" })
+      });
+      setMessage("Account created. You can now sign in.");
+      setIsLogin(true);
+    } catch (err: any) {
+      setMessage(`Registration failed: ${err.message || "Unknown error"}`);
+    }
   }
 
   async function login() {
-    const response = await gatewayFetch("/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ email, password })
-    });
-    setToken(response.access_token);
-    setMessage("Logged in. Redirecting to /dashboard.");
-    window.setTimeout(() => {
-      window.location.href = "/dashboard";
-    }, 300);
+    try {
+      setMessage("");
+      const response = await gatewayFetch("/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email, password })
+      });
+      if (!response.access_token) {
+        setMessage("Login failed: Invalid credentials");
+        return;
+      }
+      setToken(response.access_token);
+      setMessage("Logged in. Redirecting…");
+      window.setTimeout(() => {
+        window.location.href = "/dashboard";
+      }, 300);
+    } catch (err: any) {
+      setMessage(`Login failed: ${err.message || "Unknown error"}`);
+    }
   }
 
   return (

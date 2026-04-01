@@ -32,7 +32,7 @@ type SystemEvent = {
 };
 
 type DlqStats = {
-  total_messages: number;
+  total: number;
   streams: Record<string, number>;
 };
 
@@ -129,7 +129,7 @@ export default function AdminSystemPage() {
             {dlqStats ? (
               <>
                 <p className="mb-3 text-sm text-neutral-500">
-                  Total messages: <span className="font-semibold text-yellow-600">{dlqStats.total_messages}</span>
+                  Total messages: <span className="font-semibold text-yellow-600">{dlqStats.total}</span>
                 </p>
                 {dlqStats.streams && Object.keys(dlqStats.streams).length > 0 ? (
                   <StaggerContainer className="space-y-2">

@@ -74,7 +74,7 @@ export default function AdminTradingPage() {
     setError("");
     setSuccess("");
     try {
-      const result = await gatewayFetch("/admin/execution/preflight", { method: "POST" });
+      const result = await gatewayFetch("/admin/execution/pre-flight", { method: "POST", body: JSON.stringify({}) });
       setPreflight(result);
       if (result.all_passed) {
         setSuccess("All pre-flight checks passed.");
@@ -92,7 +92,7 @@ export default function AdminTradingPage() {
     setError("");
     setSuccess("");
     try {
-      await gatewayFetch("/admin/execution/enable-live", { method: "POST" });
+      await gatewayFetch("/admin/execution/enable-live", { method: "POST", body: JSON.stringify({}) });
       setSuccess("Live trading has been enabled.");
       setEnableConfirm(false);
       await loadConfig();
@@ -108,7 +108,7 @@ export default function AdminTradingPage() {
     setError("");
     setSuccess("");
     try {
-      await gatewayFetch("/admin/execution/emergency-stop", { method: "POST" });
+      await gatewayFetch("/admin/execution/emergency-stop", { method: "POST", body: JSON.stringify({}) });
       setSuccess("Emergency stop executed. All trading halted.");
       setStopConfirm(false);
       setPreflight(null);

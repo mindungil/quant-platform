@@ -5,6 +5,8 @@ import os
 from datetime import UTC, datetime
 from uuid import uuid4
 
+import bcrypt
+
 from app.core.config import settings
 from app.models.auth import UserProfile, UserRegistrationRequest
 from shared.persistence import SqlStore, deserialize_json, serialize_json
@@ -19,7 +21,13 @@ class AuthRepository:
         self._ensure_schema()
 
     def _hash_password(self, password: str) -> str:
-        return hashlib.sha256(password.encode("utf-8")).hexdigest()
+        return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+    def _verify_password(self, password: str, password_hash: str) -> bool:
+        # Support legacy SHA256 hashes (64 hex chars) with auto-upgrade
+        if len(password_hash) == 64 and not password_hash.startswith("$2"):
+            return hashlib.sha256(password.encode("utf-8")).hexdigest() == password_hash
+        return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
 
     def _ensure_schema(self) -> None:
         self._store.execute(
@@ -150,8 +158,12 @@ class AuthRepository:
         record = self._get_record_by_email(email)
         if record is None:
             return None
-        if record["password_hash"] != self._hash_password(password):
+        if not self._verify_password(password, record["password_hash"]):
             return None
+        # Auto-upgrade legacy SHA256 hashes to bcrypt
+        if len(record["password_hash"]) == 64 and not record["password_hash"].startswith("$2"):
+            record["password_hash"] = self._hash_password(password)
+            self._persist_user(record)
         return self._profile(record)
 
     def get_by_user_id(self, user_id: str) -> UserProfile | None:

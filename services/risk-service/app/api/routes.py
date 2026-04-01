@@ -31,6 +31,17 @@ def approve(payload: RiskApprovalRequest) -> RiskApprovalResponse:
     return approve_order(payload)
 
 
+@router.get("/risk/settings/{user_id}")
+def risk_settings(user_id: str) -> dict:
+    return {
+        "max_notional": 10000,
+        "exposure_limit": 50000,
+        "max_drawdown": 0.10,
+        "warning_drawdown": 0.05,
+        "automation_enabled": True,
+    }
+
+
 @router.get("/risk/incidents/{user_id}", response_model=list[RiskIncident])
 def incidents(user_id: str, limit: int = 50) -> list[RiskIncident]:
     return risk_repository.list_for_user(user_id, limit=limit)

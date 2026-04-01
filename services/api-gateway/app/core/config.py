@@ -1,5 +1,5 @@
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from shared.runtime import env_bool
 
@@ -27,6 +27,7 @@ class Settings:
     redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     realtime_replay_limit: int = int(os.getenv("REALTIME_REPLAY_LIMIT", "200"))
     internal_admin_secret: str = os.getenv("INTERNAL_ADMIN_SECRET", "dev-internal-admin-secret")
+    cors_origins: list[str] = field(default_factory=lambda: list(filter(None, os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:8018").split(","))))
     strict_runtime: bool = env_bool("STRICT_RUNTIME", False)
     live_trading_enabled: bool = env_bool("LIVE_TRADING_ENABLED", False)
     default_shadow_mode: bool = env_bool("DEFAULT_SHADOW_MODE", True)

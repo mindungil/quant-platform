@@ -211,7 +211,7 @@ function StrategiesContent() {
   async function activateStrategy(strategyId: string) {
     setActionLoading(strategyId);
     try {
-      await gatewayFetch(`/strategies/${strategyId}`, {
+      await gatewayFetch(`/strategies/${strategyId}/status`, {
         method: "PATCH",
         body: JSON.stringify({ status: "ACTIVE" }),
       });
@@ -226,7 +226,7 @@ function StrategiesContent() {
   async function pauseStrategy(strategyId: string) {
     setActionLoading(strategyId);
     try {
-      await gatewayFetch(`/strategies/${strategyId}`, {
+      await gatewayFetch(`/strategies/${strategyId}/status`, {
         method: "PATCH",
         body: JSON.stringify({ status: "PAUSED" }),
       });
@@ -241,7 +241,7 @@ function StrategiesContent() {
   async function resumeStrategy(strategyId: string) {
     setActionLoading(strategyId);
     try {
-      await gatewayFetch(`/strategies/${strategyId}`, {
+      await gatewayFetch(`/strategies/${strategyId}/status`, {
         method: "PATCH",
         body: JSON.stringify({ status: "ACTIVE" }),
       });
@@ -256,7 +256,7 @@ function StrategiesContent() {
   async function archiveStrategy(strategyId: string) {
     setActionLoading(strategyId);
     try {
-      await gatewayFetch(`/strategies/${strategyId}`, {
+      await gatewayFetch(`/strategies/${strategyId}/status`, {
         method: "PATCH",
         body: JSON.stringify({ status: "ARCHIVED" }),
       });

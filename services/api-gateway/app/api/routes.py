@@ -112,7 +112,7 @@ def gateway_signals(principal: GatewayPrincipal = Depends(require_principal)) ->
 
 @router.get("/signals")
 def gateway_signals_public(principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
-    return JSONResponse(signal_client.get("/signals"))
+    return JSONResponse(signal_client.get("/signals", headers=principal.forwarded_headers))
 
 
 @router.get("/gateway/feed")
@@ -343,8 +343,15 @@ def store_credentials(payload: dict, principal: GatewayPrincipal = Depends(requi
 
 @router.get("/settings/credentials")
 def list_credentials(principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
-    result = credential_client.get(f"/credentials/{principal.user_id}", headers=principal.forwarded_headers)
-    return JSONResponse(result)
+    try:
+        result = credential_client.get(f"/credentials/{principal.user_id}", headers=principal.forwarded_headers)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 404:
+            return JSONResponse([])
+        raise
+    if isinstance(result, dict):
+        return JSONResponse(result.get("credentials", []))
+    return JSONResponse(result if isinstance(result, list) else [])
 
 
 @router.delete("/settings/credentials/{exchange}")
@@ -353,6 +360,15 @@ def delete_credentials(exchange: str, principal: GatewayPrincipal = Depends(requ
         "DELETE", f"/credentials/{principal.user_id}/{exchange}", headers=principal.forwarded_headers
     )
     return _proxy_json(response)
+
+
+# ── Risk Settings (proxy to risk-service) ─────────────────────────────
+
+
+@router.get("/settings/risk")
+def get_risk_settings(principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    result = risk_client.get(f"/risk/settings/{principal.user_id}", headers=principal.forwarded_headers)
+    return JSONResponse(result)
 
 
 # ── Portfolio (proxy to portfolio-service) ──────────────────────────────
