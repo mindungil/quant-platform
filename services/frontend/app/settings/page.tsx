@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { gatewayFetch } from "../../lib/api";
 
 export default function SettingsPage() {
@@ -8,6 +8,11 @@ export default function SettingsPage() {
   const [apiKey, setApiKey] = useState("");
   const [apiSecret, setApiSecret] = useState("");
   const [result, setResult] = useState("");
+  const [settings, setSettings] = useState<Record<string, any> | null>(null);
+
+  useEffect(() => {
+    gatewayFetch("/settings").then(setSettings).catch(() => setSettings(null));
+  }, []);
 
   async function saveCredentials() {
     const response = await gatewayFetch("/gateway/settings/credentials", {
@@ -43,8 +48,9 @@ export default function SettingsPage() {
         <button className="rounded-full bg-sand px-4 py-2 text-ink" onClick={saveCredentials}>Save Credentials</button>
       </section>
       <section className="panel space-y-3">
-        <h2 className="text-2xl font-semibold">Risk</h2>
+        <h2 className="text-2xl font-semibold">Risk and Execution</h2>
         <button className="rounded-full border border-white/20 px-4 py-2" onClick={checkRisk}>Check Risk Defaults</button>
+        <pre className="overflow-x-auto rounded-2xl bg-black/20 p-4 text-xs">{JSON.stringify(settings, null, 2)}</pre>
         <pre className="overflow-x-auto rounded-2xl bg-black/20 p-4 text-xs">{result}</pre>
       </section>
     </main>

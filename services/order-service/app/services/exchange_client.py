@@ -18,6 +18,11 @@ class ExchangeClient:
                 "quantity": payload.quantity,
                 "requested_notional": payload.requested_notional,
                 "shadow_mode": payload.shadow_mode,
+                "api_key": getattr(payload, "api_key", None),
+                "api_secret": getattr(payload, "api_secret", None),
+                "credential_label": getattr(payload, "credential_label", None),
+                "sandbox": getattr(payload, "credential_sandbox", True),
+                "correlation_id": payload.correlation_id,
             },
             timeout=5.0,
         )

@@ -25,12 +25,16 @@ class RealtimeBus:
         source: str,
         data: dict[str, Any],
         user_id: str | None = None,
+        correlation_id: str | None = None,
     ) -> dict[str, Any]:
+        event_id = str(uuid4())
         event = {
-            "event_id": str(uuid4()),
+            "event_id": event_id,
             "type": event_type,
+            "event_type": event_type,
             "source": source,
             "occurred_at": datetime.now(UTC).isoformat(),
+            "correlation_id": correlation_id or event_id,
             "user_id": user_id,
             "data": data,
         }

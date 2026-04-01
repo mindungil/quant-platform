@@ -22,6 +22,7 @@ export default function FeedPage() {
               <span className="text-sm uppercase tracking-[0.2em] text-mint">{item.record.asset}</span>
               <span>{item.record.action}</span>
             </div>
+            <p className="mt-2 text-xs uppercase tracking-[0.18em] text-white/50">{item.record.strategy_name ?? "strategy"} / score {item.record.signal_score ?? "n/a"}</p>
             <p className="mt-3 text-white/80">{item.record.reasoning}</p>
           </article>
         ))}

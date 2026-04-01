@@ -186,7 +186,18 @@ def gateway_settings(principal: GatewayPrincipal = Depends(require_principal)) -
             "warning_drawdown": 0.05,
             "liquidate_drawdown": 0.10,
         },
+        "execution": {
+            "live_trading_enabled": settings.live_trading_enabled,
+            "default_shadow_mode": settings.default_shadow_mode,
+            "allowed_exchanges": list(settings.allowed_live_exchanges),
+            "strict_runtime": settings.strict_runtime,
+        },
     }
+    if "admin" in principal.roles:
+        payload["execution"] = order_client.get(
+            "/admin/execution/config",
+            headers=build_internal_admin_headers(principal, "/admin/execution/config"),
+        )
     return JSONResponse(payload)
 
 
@@ -267,6 +278,12 @@ def admin_system_health(principal: GatewayPrincipal = Depends(require_role("admi
         "status": overall,
         "services": services,
         "redis_replay_bus": {"status": "ok" if RedisStore(settings.redis_url).ping() else "error"},
+        "runtime_flags": {
+            "strict_runtime": settings.strict_runtime,
+            "live_trading_enabled": settings.live_trading_enabled,
+            "default_shadow_mode": settings.default_shadow_mode,
+            "allowed_live_exchanges": list(settings.allowed_live_exchanges),
+        },
     }
 
 
@@ -274,6 +291,28 @@ def admin_system_health(principal: GatewayPrincipal = Depends(require_role("admi
 def admin_system_events(limit: int = 50, principal: GatewayPrincipal = Depends(require_role("admin"))) -> dict:
     items = realtime_bus.recent(limit=min(max(limit, 1), settings.realtime_replay_limit))
     return {"items": items, "requested_by": principal.user_id}
+
+
+@router.get("/admin/execution/config")
+def admin_execution_config(principal: GatewayPrincipal = Depends(require_role("admin"))) -> JSONResponse:
+    result = order_client.get(
+        "/admin/execution/config",
+        headers=build_internal_admin_headers(principal, "/admin/execution/config"),
+    )
+    return JSONResponse(result)
+
+
+@router.patch("/admin/execution/config")
+def admin_update_execution_config(
+    payload: dict,
+    principal: GatewayPrincipal = Depends(require_role("admin")),
+) -> JSONResponse:
+    result = order_client.patch(
+        "/admin/execution/config",
+        headers=build_internal_admin_headers(principal, "/admin/execution/config"),
+        json=payload,
+    )
+    return JSONResponse(result)
 
 
 def _principal_from_websocket(websocket: WebSocket) -> GatewayPrincipal:

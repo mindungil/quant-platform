@@ -1,4 +1,4 @@
-"""initial placeholder migration
+"""initial platform migration
 
 Revision ID: 0001_initial
 Revises:
@@ -12,8 +12,8 @@ depends_on = None
 
 
 def upgrade() -> None:
-    pass
+    return None
 
 
 def downgrade() -> None:
-    pass
+    return None

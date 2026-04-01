@@ -2,7 +2,7 @@ PYTHON ?= python3
 VENV ?= .venv
 NPM ?= npm
 
-.PHONY: venv operator-deps install test compile smoke compose-config compose-up compose-down seed-admin demo-flow smoke-e2e
+.PHONY: venv operator-deps install test compile smoke compose-config compose-up compose-down seed-admin demo-flow smoke-e2e release-check migration-smoke
 
 venv:
 	$(PYTHON) -m venv $(VENV)
@@ -32,7 +32,7 @@ install: venv
 	pip install -r services/auth-service/requirements.txt && \
 	pip install -r services/llm-gateway/requirements.txt && \
 	pip install -r services/api-gateway/requirements.txt && \
-	pip install pytest requests websocket-client
+	pip install pytest requests websocket-client alembic
 	cd services/frontend && $(NPM) install
 
 test:
@@ -81,3 +81,8 @@ demo-flow: operator-deps
 
 smoke-e2e: operator-deps
 	. $(VENV)/bin/activate && python scripts/smoke_e2e.py
+
+migration-smoke: operator-deps
+	. $(VENV)/bin/activate && python scripts/migration_smoke.py
+
+release-check: compile test compose-config migration-smoke

@@ -11,6 +11,8 @@ import redis.asyncio as aioredis
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
+from shared.runtime import RuntimeDependencyError, strict_runtime_enabled
+
 
 @dataclass
 class SqlStore:
@@ -20,6 +22,8 @@ class SqlStore:
 
     def __post_init__(self) -> None:
         self.engine = create_engine(self.url, future=True, pool_pre_ping=True)
+        if strict_runtime_enabled():
+            self.probe()
 
     @contextmanager
     def connection(self):
@@ -27,14 +31,26 @@ class SqlStore:
         with self.engine.begin() as connection:
             yield connection
 
+    def probe(self) -> None:
+        try:
+            with self.connection() as connection:
+                connection.execute(text("SELECT 1"))
+            self.available = True
+        except Exception as exc:
+            self.available = False
+            if strict_runtime_enabled():
+                raise RuntimeDependencyError(f"sql_unavailable:{self.url}") from exc
+
     def fetch_all(self, query: str, values: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         try:
             with self.connection() as connection:
                 rows = connection.execute(text(query), values or {}).mappings().all()
             self.available = True
             return [dict(row) for row in rows]
-        except Exception:
+        except Exception as exc:
             self.available = False
+            if strict_runtime_enabled():
+                raise RuntimeDependencyError("sql_query_failed") from exc
             return []
 
     def fetch_one(self, query: str, values: dict[str, Any] | None = None) -> dict[str, Any] | None:
@@ -46,8 +62,10 @@ class SqlStore:
             with self.connection() as connection:
                 connection.execute(text(query), values or {})
             self.available = True
-        except Exception:
+        except Exception as exc:
             self.available = False
+            if strict_runtime_enabled():
+                raise RuntimeDependencyError("sql_execute_failed") from exc
 
 
 class RedisStore:
@@ -57,18 +75,32 @@ class RedisStore:
         self._fallback_hashes: dict[str, dict[str, str]] = {}
         self._fallback_sets: dict[str, set[str]] = {}
         self._fallback_lists: dict[str, list[str]] = {}
+        if strict_runtime_enabled():
+            self.require_ping()
+
+    def require_ping(self) -> None:
+        try:
+            if not self._client.ping():
+                raise RuntimeDependencyError("redis_ping_failed")
+        except Exception as exc:
+            if strict_runtime_enabled():
+                raise RuntimeDependencyError("redis_unavailable") from exc
 
     def hset_json(self, key: str, field: str, value: dict[str, Any]) -> None:
         payload = json.dumps(value, default=str)
         try:
             self._client.hset(key, field, payload)
-        except Exception:
+        except Exception as exc:
+            if strict_runtime_enabled():
+                raise RuntimeDependencyError("redis_hset_failed") from exc
             self._fallback_hashes.setdefault(key, {})[field] = payload
 
     def hget_json(self, key: str, field: str) -> dict[str, Any] | None:
         try:
             value = self._client.hget(key, field)
-        except Exception:
+        except Exception as exc:
+            if strict_runtime_enabled():
+                raise RuntimeDependencyError("redis_hget_failed") from exc
             value = self._fallback_hashes.get(key, {}).get(field)
         if value is None:
             return None
@@ -77,13 +109,17 @@ class RedisStore:
     def sadd(self, key: str, value: str) -> None:
         try:
             self._client.sadd(key, value)
-        except Exception:
+        except Exception as exc:
+            if strict_runtime_enabled():
+                raise RuntimeDependencyError("redis_sadd_failed") from exc
             self._fallback_sets.setdefault(key, set()).add(value)
 
     def sismember(self, key: str, value: str) -> bool:
         try:
             return bool(self._client.sismember(key, value))
-        except Exception:
+        except Exception as exc:
+            if strict_runtime_enabled():
+                raise RuntimeDependencyError("redis_sismember_failed") from exc
             return value in self._fallback_sets.get(key, set())
 
     def ping(self) -> bool:
@@ -98,7 +134,9 @@ class RedisStore:
             self._client.lpush(key, payload)
             if max_items is not None:
                 self._client.ltrim(key, 0, max_items - 1)
-        except Exception:
+        except Exception as exc:
+            if strict_runtime_enabled():
+                raise RuntimeDependencyError("redis_lpush_failed") from exc
             items = self._fallback_lists.setdefault(key, [])
             items.insert(0, payload)
             if max_items is not None:
@@ -107,7 +145,9 @@ class RedisStore:
     def lrange_json(self, key: str, start: int, stop: int) -> list[dict[str, Any]]:
         try:
             values = self._client.lrange(key, start, stop)
-        except Exception:
+        except Exception as exc:
+            if strict_runtime_enabled():
+                raise RuntimeDependencyError("redis_lrange_failed") from exc
             items = self._fallback_lists.get(key, [])
             values = items[start : stop + 1 if stop >= 0 else None]
         return [json.loads(value) for value in values]
@@ -116,7 +156,9 @@ class RedisStore:
         payload = json.dumps(value, default=str)
         try:
             self._client.publish(channel, payload)
-        except Exception:
+        except Exception as exc:
+            if strict_runtime_enabled():
+                raise RuntimeDependencyError("redis_publish_failed") from exc
             return
 
     async def close_async(self) -> None:

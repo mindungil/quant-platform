@@ -22,7 +22,7 @@ export default function AdminPage() {
           </Link>
           <Link href="/admin/system" className="panel hover:bg-white/5">
             <h3 className="text-xl font-semibold">System Diagnostics</h3>
-            <p className="mt-2 text-white/70">Inspect service health and replay-buffer events from the gateway.</p>
+            <p className="mt-2 text-white/70">Inspect service health, execution controls, and replay-buffer events.</p>
           </Link>
         </section>
       </main>

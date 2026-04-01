@@ -319,8 +319,8 @@ services:
       retries: 15
   frontend:
     build:
-      context: .
-      dockerfile: services/frontend/Dockerfile
+      context: ./services/frontend
+      dockerfile: Dockerfile
     env_file:
       - .env.example
     ports:

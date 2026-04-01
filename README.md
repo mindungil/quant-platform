@@ -41,6 +41,9 @@ Docker Compose productionization runtime for the startup-club autonomous trading
 - gateway websocket now replays Redis-backed recent events instead of polling dashboard snapshots
 - bootstrap admin, gateway RBAC, and admin operator routes now exist for `user` and `admin`
 - Docker Compose now includes service healthchecks plus operator commands for `seed-admin`, `demo-flow`, and `smoke-e2e`
+- global execution config now exists behind admin-only controls for `live_trading_enabled`, `allowed_exchanges`, `default_shadow_mode`, and `strict_runtime`
+- `risk-service`, `exchange-adapter`, and `orchestrator-agent` now persist durable incidents, audit logs, and coordination snapshots
+- `order-service` now records lifecycle history instead of only a last-state order row
 - `quant-agent-platform` is now archived as legacy reference only; `quant` is the single active repository
 
 ## What Is Not Included Yet
@@ -84,6 +87,7 @@ docker-compose up --build
 make seed-admin
 make demo-flow
 make smoke-e2e
+make release-check
 ```
 
 4. Manual example flow:
@@ -160,12 +164,12 @@ open http://localhost:8018/admin
 ## Notes
 
 - The product UI now lives in `services/frontend` as a Next.js app, while Grafana remains an internal ops concern.
-- Several services still retain in-memory fallback behavior so local development does not hard-fail when Postgres, Timescale, or Redis are absent.
+- Compose is now intended to run with `STRICT_RUNTIME=true`; the critical stateful services should fail fast when backing dependencies are unavailable.
 - `feature-store` owns all indicator computation by design.
 - `signal-service` reads calculated features and composes signal plus external context.
 - Gateway routes expose product-facing REST and websocket surfaces around the service mesh.
 - JetStream is currently rolled out for the market, feature, signal, and crypto-agent path first.
-- Execution-state services now write durable state first and fall back in-memory only when local infra is unavailable.
+- The first crypto release is operator-oriented and Binance-first. Live trading remains admin-gated and off by default.
 - `quant` is now the only live repository. `quant-agent-platform` has been archived under `docs/legacy/`.
 - RBAC is intentionally simple for now: `user` and `admin`.
 - The observability profile is Compose-first: `docker-compose --profile observability up -d prometheus grafana`

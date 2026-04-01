@@ -142,15 +142,15 @@ Scope:
 - observability stack and operator dashboards
 - release automation and smoke seed scenarios
 
-## Current Tranche: Train C
+## Current Tranche: Train D
 
 ### Immediate objectives
 
-1. Collapse the retired `quant-agent-platform` workspace into a legacy archive under `docs/legacy/`.
-2. Add bootstrap admin creation, RBAC, and gateway-protected admin APIs.
-3. Make Docker Compose immediately operator-testable with `make seed-admin`, `make demo-flow`, and `make smoke-e2e`.
-4. Expose admin UI surfaces in Next.js for user management and system diagnostics.
-5. Add a Compose-first observability profile around Prometheus and Grafana.
+1. Enforce strict runtime defaults for Compose and surface execution posture through admin controls.
+2. Persist risk incidents, exchange audit records, order lifecycle transitions, and orchestrator snapshots.
+3. Expose admin execution control APIs and operator UI actions for live-trading gating.
+4. Add release-grade validation with `make release-check` and migration smoke checks.
+5. Expand the crypto-first operator surface before moving to broader multi-asset hardening.
 
 ### Verification standard
 
@@ -162,3 +162,4 @@ Scope:
 - `make seed-admin`
 - `make demo-flow`
 - `make smoke-e2e`
+- `make release-check`

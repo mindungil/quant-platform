@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 
+from app.core.auth import build_internal_admin_headers
 from app.core.config import settings
 from app.models.auth import GatewayPrincipal
 from app.services.gateway_client import GatewayClient
@@ -69,5 +70,33 @@ def build_dashboard_summary(principal: GatewayPrincipal) -> dict:
         summary["orders"] = order_client.get(f"/orders/{principal.user_id}")
     except Exception as exc:
         summary["orders_error"] = str(exc)
+
+    try:
+        credentials: list[dict] = []
+        for exchange in ("binance", "upbit", "alpaca"):
+            try:
+                credentials.append(
+                    credential_client.get(
+                        f"/credentials/{principal.user_id}/{exchange}",
+                        headers=headers,
+                    )
+                )
+            except Exception:
+                continue
+        execution = order_client.get(
+            "/admin/execution/config",
+            headers=build_internal_admin_headers(principal, "/admin/execution/config"),
+        ) if "admin" in principal.roles else {
+            "live_trading_enabled": settings.live_trading_enabled,
+            "default_shadow_mode": settings.default_shadow_mode,
+            "allowed_exchanges": list(settings.allowed_live_exchanges),
+            "strict_runtime": settings.strict_runtime,
+        }
+        summary["settings"] = {
+            "credentials": credentials,
+            "execution": execution,
+        }
+    except Exception as exc:
+        summary["settings_error"] = str(exc)
 
     return summary

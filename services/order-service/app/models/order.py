@@ -18,6 +18,14 @@ class OrderRequest(BaseModel):
     exposure_limit: float = 1.0
     automation_enabled: bool = True
     shadow_mode: bool = False
+    strategy_id: str | None = None
+    strategy_status: str = "ACTIVE"
+    live_trading_requested: bool = False
+    correlation_id: str | None = None
+    api_key: str | None = None
+    api_secret: str | None = None
+    credential_label: str | None = None
+    credential_sandbox: bool = True
 
 
 class CredentialSnapshot(BaseModel):
@@ -68,4 +76,14 @@ class OrderResponse(BaseModel):
     fill: FillSnapshot | None = None
     portfolio: PortfolioSnapshot | None = None
     statistics: StatisticsSnapshot | None = None
+    lifecycle: list[dict] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class ExecutionConfig(BaseModel):
+    live_trading_enabled: bool = False
+    allowed_exchanges: list[str] = Field(default_factory=lambda: ["binance"])
+    default_shadow_mode: bool = True
+    strict_runtime: bool = False
+    updated_by: str | None = None
+    updated_at: datetime | None = None

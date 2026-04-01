@@ -12,11 +12,22 @@ from shared.persistence import RedisStore
 
 
 class EventEnvelope:
-    def __init__(self, *, event_type: str, source: str, data: dict[str, Any], event_id: str | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        event_type: str,
+        source: str,
+        data: dict[str, Any],
+        event_id: str | None = None,
+        correlation_id: str | None = None,
+        user_id: str | None = None,
+    ) -> None:
         self.event_id = event_id or str(uuid4())
         self.event_type = event_type
         self.occurred_at = datetime.now(UTC).isoformat()
         self.source = source
+        self.correlation_id = correlation_id or self.event_id
+        self.user_id = user_id
         self.data = data
 
     def model_dump(self) -> dict[str, Any]:
@@ -25,6 +36,8 @@ class EventEnvelope:
             "event_type": self.event_type,
             "occurred_at": self.occurred_at,
             "source": self.source,
+            "correlation_id": self.correlation_id,
+            "user_id": self.user_id,
             "data": self.data,
         }
 
@@ -90,6 +103,8 @@ class JetStreamBus:
                     EventEnvelope(
                         event_type=f"{payload['event_type']}.dlq",
                         source=durable,
+                        correlation_id=payload.get("correlation_id"),
+                        user_id=payload.get("user_id"),
                         data=payload,
                     ),
                 )

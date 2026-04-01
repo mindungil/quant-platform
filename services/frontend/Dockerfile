@@ -1,8 +1,8 @@
 FROM node:20-alpine
 WORKDIR /app
-COPY services/frontend/package.json ./package.json
-COPY services/frontend/package-lock.json* ./
+COPY package.json ./package.json
+COPY package-lock.json* ./
 RUN npm install
-COPY services/frontend ./
+COPY . ./
 RUN npm run build
 CMD ["npm", "run", "start"]

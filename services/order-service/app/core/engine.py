@@ -18,6 +18,24 @@ realtime_bus = RealtimeBus(RedisStore(settings.redis_url), replay_limit=settings
 
 
 def process_order(payload: OrderRequest) -> OrderResponse:
+    execution_config = order_repository.get_execution_config()
+    payload.shadow_mode = payload.shadow_mode or execution_config.default_shadow_mode
+
+    if payload.strategy_status.upper() != "ACTIVE":
+        response = OrderResponse(
+            user_id=payload.user_id,
+            asset=payload.asset,
+            side=payload.side,
+            quantity=payload.quantity,
+            status="REJECTED",
+            risk_reason="strategy_not_active",
+            exchange=payload.exchange,
+            shadow_mode=payload.shadow_mode,
+            credential=CredentialSnapshot(user_id=payload.user_id, exchange=payload.exchange, loaded=False),
+        )
+        order_repository.save(payload.user_id, response, detail={"stage": "gate", "reason": "strategy_not_active"})
+        return response
+
     approval = risk_client.approve(payload)
     if not approval["approved"]:
         response = OrderResponse(
@@ -35,11 +53,12 @@ def process_order(payload: OrderRequest) -> OrderResponse:
                 loaded=False,
             ),
         )
-        order_repository.save(payload.user_id, response)
+        order_repository.save(payload.user_id, response, detail={"stage": "risk", "approval": approval})
         realtime_bus.publish(
             event_type="risk.triggered",
             source="order-service",
             user_id=payload.user_id,
+            correlation_id=payload.correlation_id,
             data={
                 "asset": payload.asset,
                 "exchange": payload.exchange,
@@ -51,6 +70,90 @@ def process_order(payload: OrderRequest) -> OrderResponse:
         return response
 
     credential = credential_client.get(payload.user_id, payload.exchange)
+    if credential is None:
+        response = OrderResponse(
+            user_id=payload.user_id,
+            asset=payload.asset,
+            side=payload.side,
+            quantity=payload.quantity,
+            status="FAILED",
+            risk_reason="missing_credentials",
+            exchange=payload.exchange,
+            shadow_mode=payload.shadow_mode,
+            credential=CredentialSnapshot(user_id=payload.user_id, exchange=payload.exchange, loaded=False),
+        )
+        order_repository.save(payload.user_id, response, detail={"stage": "credential", "reason": "missing_credentials"})
+        return response
+    if not payload.shadow_mode:
+        if not execution_config.live_trading_enabled:
+            response = OrderResponse(
+                user_id=payload.user_id,
+                asset=payload.asset,
+                side=payload.side,
+                quantity=payload.quantity,
+                status="REJECTED",
+                risk_reason="live_trading_disabled",
+                exchange=payload.exchange,
+                shadow_mode=False,
+                credential=CredentialSnapshot(
+                    user_id=payload.user_id,
+                    exchange=payload.exchange,
+                    loaded=True,
+                    sandbox=credential.get("sandbox", True),
+                    label=credential.get("label"),
+                ),
+            )
+            order_repository.save(payload.user_id, response, detail={"stage": "gate", "reason": "live_trading_disabled"})
+            return response
+        if payload.exchange.lower() not in {item.lower() for item in execution_config.allowed_exchanges}:
+            response = OrderResponse(
+                user_id=payload.user_id,
+                asset=payload.asset,
+                side=payload.side,
+                quantity=payload.quantity,
+                status="REJECTED",
+                risk_reason="exchange_not_allowed",
+                exchange=payload.exchange,
+                shadow_mode=False,
+                credential=CredentialSnapshot(
+                    user_id=payload.user_id,
+                    exchange=payload.exchange,
+                    loaded=True,
+                    sandbox=credential.get("sandbox", True),
+                    label=credential.get("label"),
+                ),
+            )
+            order_repository.save(payload.user_id, response, detail={"stage": "gate", "reason": "exchange_not_allowed"})
+            return response
+        if credential.get("sandbox", True):
+            response = OrderResponse(
+                user_id=payload.user_id,
+                asset=payload.asset,
+                side=payload.side,
+                quantity=payload.quantity,
+                status="REJECTED",
+                risk_reason="sandbox_credentials_for_live_order",
+                exchange=payload.exchange,
+                shadow_mode=False,
+                credential=CredentialSnapshot(
+                    user_id=payload.user_id,
+                    exchange=payload.exchange,
+                    loaded=True,
+                    sandbox=True,
+                    label=credential.get("label"),
+                ),
+            )
+            order_repository.save(
+                payload.user_id,
+                response,
+                detail={"stage": "gate", "reason": "sandbox_credentials_for_live_order"},
+            )
+            return response
+
+    payload.api_key = credential.get("api_key")
+    payload.api_secret = credential.get("api_secret")
+    payload.credential_label = credential.get("label")
+    payload.credential_sandbox = credential.get("sandbox", True)
     exchange_result = exchange_client.place(payload)
     order_id = exchange_result.get("order_id")
     portfolio = portfolio_client.apply_fill(payload, order_id=order_id, status=exchange_result["status"])
@@ -84,11 +187,20 @@ def process_order(payload: OrderRequest) -> OrderResponse:
         portfolio=PortfolioSnapshot.model_validate(portfolio),
         statistics=StatisticsSnapshot.model_validate(statistics),
     )
-    order_repository.save(payload.user_id, response)
+    order_repository.save(
+        payload.user_id,
+        response,
+        detail={
+            "stage": "exchange",
+            "exchange_status": exchange_result["status"],
+            "circuit_state": exchange_result.get("circuit_state"),
+        },
+    )
     realtime_bus.publish(
         event_type="order.filled",
         source="order-service",
         user_id=payload.user_id,
+        correlation_id=payload.correlation_id,
         data=response.model_dump(mode="json"),
     )
     return response

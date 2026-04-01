@@ -19,6 +19,7 @@ class RiskClient:
                 "current_exposure": payload.current_exposure,
                 "exposure_limit": payload.exposure_limit,
                 "automation_enabled": payload.automation_enabled,
+                "correlation_id": payload.correlation_id,
             },
             timeout=5.0,
         )

@@ -27,6 +27,7 @@ What is still materially missing relative to Notion:
 - durable storage migration for the remaining exchange-side and orchestration stateful services
 - deeper RLS-style isolation and signed internal trust expansion beyond the current gateway boundary
 - observability stack and production-grade runtime controls across every service
+- full crypto execution graph rollout beyond the current risk/order/realtime baseline
 
 ## Gap Classification
 
@@ -112,12 +113,16 @@ Tasks:
 - [ ] add exchange adapter interfaces for Binance, Upbit, and Alpaca
 - [x] add rate limiter and circuit breaker behavior
 - [x] enforce risk approval on all non-shadow orders
+- [x] persist risk incidents and query them durably
+- [x] persist exchange audit trail for operator inspection
+- [x] add global admin execution config with live-trading gate defaults
 
 ### Milestone 4: Phase 4 coordination and state
 
 Tasks:
 
 - [ ] expand orchestrator into supervisor and conflict-prevention service
+- [x] persist orchestrator coordination snapshots
 - [ ] complete ETF and stock agent market-hours behavior with exchange calendars
 - [x] persist portfolio state and fill application
 - [x] compute statistics and drift detection against backtest baselines
@@ -165,14 +170,15 @@ Current execution slice:
 
 1. harden operator flows and admin RBAC around the new runtime
 2. expand metrics and logging beyond gateway/auth into the rest of the mesh
-3. add stronger integration coverage for demo and smoke flows
+3. complete the full JetStream-backed downstream crypto execution graph
+4. add stronger integration coverage for demo and smoke flows
 
 The highest-value next implementation slice is:
 
 1. Add integration tests for market -> feature -> signal -> crypto-agent JetStream flow.
-2. Add durable exchange-side event capture and richer realtime fanout coverage.
+2. Push the downstream crypto execution path onto durable event delivery and idempotent consumers.
 3. Expand `/metrics` and structured request logging across the service mesh.
-4. Add stronger release smoke and seeded operator verification under Docker Compose.
+4. Harden `make release-check`, `demo-flow`, and `smoke-e2e` against a fresh Compose boot.
 
 This is the next smallest sequence that closes the remaining gap between the current local-production baseline and the Notion target architecture.
 
