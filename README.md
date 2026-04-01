@@ -50,12 +50,19 @@ Docker Compose productionization runtime for the startup-club autonomous trading
 - core runtime health endpoints now validate backing dependencies instead of returning process-only success
 - Prometheus now scrapes the crypto-critical mesh and Grafana ships with provisioned dashboards
 - `quant-agent-platform` is now archived as legacy reference only; `quant` is the single active repository
+- `crypto-agent` now implements the full 6-phase decision loop (gather/select/retrieve/check/execute/record) with per-phase timing
+- `exchange-adapter` now has an abstract adapter layer with Binance (HMAC, rate limiter), Upbit, and Alpaca stubs
+- `backtest-service` now supports async job execution with polling and completion events
+- ETF and stock agents now have market-hours-guarded decision endpoints with exchange calendars (KR/US holidays)
+- `orchestrator-agent` now performs real downstream health checks and cross-agent conflict detection
+- Full integration test suite covers the market→feature→signal→agent→order chain (12 tests)
 
 ## What Is Not Included Yet
 
-- Full provider-complete live exchange connectivity beyond the current runnable local adapters
-- richer business-level metrics for fills, risk denials, and strategy performance on top of the new shared HTTP observability layer
-- full event-backed replay coverage for every product event type and every non-critical service
+- Full provider-complete live exchange connectivity beyond the current Binance adapter (Upbit and Alpaca are stubs)
+- Richer business-level metrics for fills, risk denials, and strategy performance on top of the shared HTTP observability layer
+- Full event-backed replay coverage for every product event type and every non-critical service
+- Deeper RLS-style row isolation beyond current user-scoped API behavior
 
 ## Services
 
