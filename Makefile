@@ -2,7 +2,7 @@ PYTHON ?= python3
 VENV ?= .venv
 NPM ?= npm
 
-.PHONY: venv operator-deps install test compile smoke compose-config compose-up compose-down seed-admin demo-flow smoke-e2e release-check migration-smoke
+.PHONY: venv operator-deps install test test-integration compile smoke compose-config compose-up compose-down seed-admin demo-flow smoke-e2e release-check migration-smoke
 
 venv:
 	$(PYTHON) -m venv $(VENV)
@@ -58,6 +58,9 @@ test:
 	PYTHONPATH=.:services/llm-gateway pytest services/llm-gateway/tests && \
 	PYTHONPATH=.:services/api-gateway pytest services/api-gateway/tests
 	cd services/frontend && $(NPM) run typecheck && $(NPM) run build
+
+test-integration:
+	. $(VENV)/bin/activate && PYTHONPATH=. pytest tests/integration -v
 
 compile:
 	$(PYTHON) -m compileall shared migrations scripts services
