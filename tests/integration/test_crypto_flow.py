@@ -268,7 +268,7 @@ class TestCryptoAgentDecision:
         assert decision.asset == "BTCUSDT"
         assert decision.action in ("BUY", "SELL", "HOLD")
         assert decision.user_id == "test-user"
-        assert decision.reasoning == "integration reasoning"
+        assert "integration reasoning" in decision.reasoning
 
         if decision.threshold_crossed and decision.action in ("BUY", "SELL"):
             assert len(stub_pub.published) == 1

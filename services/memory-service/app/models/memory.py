@@ -18,6 +18,10 @@ class MemoryRecord(BaseModel):
     reasoning: str
     metadata: dict[str, Any] = Field(default_factory=dict)
     embedding: list[float] = Field(default_factory=list)
+    formula_name: str | None = None
+    regime_label: str | None = None
+    trade_outcome: float | None = None     # realized PnL of the trade
+    outcome_sharpe: float | None = None    # rolling Sharpe after this trade
     links: list[str] = Field(default_factory=list)
     link_weights: dict[str, float] = Field(default_factory=dict)
     last_reinforced_at: datetime | None = None
@@ -38,6 +42,13 @@ class MemorySearchResult(BaseModel):
     record: MemoryRecord
 
 
+class FormulaOutcomeSearchRequest(BaseModel):
+    regime_label: str
+    asset: str | None = None
+    formula_name: str | None = None
+    top_k: int = 10
+
+
 class MemorySearchResponse(BaseModel):
-    query: MemorySearchRequest
+    query: MemorySearchRequest | FormulaOutcomeSearchRequest
     items: list[MemorySearchResult]

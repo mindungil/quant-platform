@@ -16,6 +16,12 @@ from app.services.event_publisher import publisher
 from shared.logging import get_logger
 from shared.persistence import RedisStore
 from shared.realtime import RealtimeBus
+from shared.regime import detect_regime, suggest_formula_type
+from shared.formulas import formula_registry
+import shared.formulas.momentum
+import shared.formulas.reversion
+import shared.formulas.breakout
+import shared.formulas.composite
 
 agent_decisions_total = Counter(
     "agent_decisions_total",
@@ -277,7 +283,7 @@ def _risk_pre_check(
 
 
 # ---------------------------------------------------------------------------
-# 6-phase decision loop
+# 8-phase adaptive decision loop
 # ---------------------------------------------------------------------------
 
 def _phase_gather(
@@ -289,6 +295,104 @@ def _phase_gather(
     _complete_phase(phase, detail=f"signal_score={signal.signal_score:.4f}")
     phases.append(phase)
     return signal
+
+
+def _phase_detect(
+    signal: SignalSnapshot,
+    phases: list[PhaseResult],
+) -> dict:
+    """Phase 2 — Detect: classify market regime from signal features."""
+    phase = _track_phase("detect")
+
+    # Build features dict from signal snapshot
+    features = {}
+    for field_name in ("close", "volume", "rsi_14", "macd", "macd_signal",
+                        "bb_upper", "bb_lower", "ema_9", "ema_21", "ema_50",
+                        "sma_20", "atr_14", "adx_14", "stochastic_k", "stochastic_d", "vwap"):
+        val = getattr(signal, field_name, None)
+        if val is not None:
+            features[field_name] = val
+
+    regime = detect_regime(features)
+    suggested_type = suggest_formula_type(regime)
+
+    _complete_phase(phase, detail=f"regime={regime.label} suggest={suggested_type}")
+    phases.append(phase)
+    return {"regime": regime, "suggested_type": suggested_type, "features": features}
+
+
+def _phase_recall(
+    asset: str,
+    regime_label: str,
+    user_id: str,
+    phases: list[PhaseResult],
+) -> dict:
+    """Phase 3 — Recall: query memory for best formula in this regime."""
+    phase = _track_phase("recall")
+
+    # Query memory for formula outcomes in similar regimes
+    formula_rankings = {}
+    try:
+        import httpx
+        resp = httpx.post(
+            f"{settings.memory_service_base_url}/memory/search/formula-outcomes",
+            json={"regime_label": regime_label, "asset": asset, "top_k": 20},
+            headers={"X-User-ID": user_id},
+            timeout=5.0,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            for item in data.get("items", []):
+                record = item.get("record", {})
+                fname = record.get("formula_name")
+                outcome = record.get("trade_outcome")
+                if fname and outcome is not None:
+                    formula_rankings.setdefault(fname, []).append(outcome)
+    except Exception as exc:
+        logger.warning("formula_recall_failed", extra={"error": str(exc)})
+
+    # Compute average outcome per formula
+    avg_outcomes = {}
+    for fname, outcomes in formula_rankings.items():
+        avg_outcomes[fname] = sum(outcomes) / len(outcomes)
+
+    _complete_phase(phase, detail=f"formulas_found={len(avg_outcomes)}")
+    phases.append(phase)
+    return avg_outcomes
+
+
+def _phase_score(
+    features: dict,
+    formula_outcomes: dict,
+    suggested_type: str,
+    phases: list[PhaseResult],
+) -> tuple:
+    """Phase 5 — Score: select and run the best formula."""
+    phase = _track_phase("score")
+
+    selected_formula = None
+
+    # If we have memory of formula performance, pick the best
+    if formula_outcomes:
+        best_name = max(formula_outcomes, key=formula_outcomes.get)
+        selected_formula = formula_registry.get(best_name)
+        if selected_formula:
+            logger.info("formula_selected_from_memory", extra={"formula": best_name, "avg_outcome": formula_outcomes[best_name]})
+
+    # If no memory or formula not found, use regime-suggested formula
+    if selected_formula is None:
+        candidates = formula_registry.get_for_regime(suggested_type)
+        if candidates:
+            selected_formula = candidates[0]
+        else:
+            selected_formula = formula_registry.get_default()
+
+    # Run the formula
+    result = selected_formula.compute(features)
+
+    _complete_phase(phase, detail=f"formula={selected_formula.name} score={result.score:.4f} conf={result.confidence:.2f}")
+    phases.append(phase)
+    return selected_formula, result
 
 
 def _phase_retrieve(
@@ -466,35 +570,81 @@ def _phase_record(
 # ---------------------------------------------------------------------------
 
 def run_decision_loop(asset: str, *, user_id: str | None = None, correlation_id: str | None = None) -> DecisionRecord:
-    """Execute the full 6-phase decision loop: gather -> select -> retrieve -> check -> execute -> record."""
+    """Execute the full 8-phase adaptive decision loop:
+    gather -> detect -> recall -> select -> score -> retrieve -> check -> execute (+record).
+    """
     _loop_start = time.monotonic()
     phases: list[PhaseResult] = []
 
     # Phase 1 — Gather
     signal = _phase_gather(asset, user_id, phases)
 
-    # Phase 3 — Select (run before retrieve so we have strategy for memory query)
+    # Phase 2 — Detect market regime (NEW)
+    detection = _phase_detect(signal, phases)
+    regime = detection["regime"]
+
+    # Phase 3 — Recall formula performance from memory (NEW)
+    formula_outcomes = _phase_recall(
+        asset, regime.label, user_id or "bootstrap", phases
+    )
+
+    # Phase 4 — Select strategy (existing, renamed from phase 3)
     strategy, effective_user_id, action = _phase_select(asset, signal, user_id, phases)
 
-    # Phase 2 — Retrieve
+    # Phase 5 — Score with adaptive formula (NEW)
+    selected_formula, formula_result = _phase_score(
+        detection["features"], formula_outcomes, detection["suggested_type"], phases
+    )
+
+    # Override signal score with formula result if formula has high confidence
+    if formula_result.confidence >= 0.3:
+        # Use formula score instead of fixed signal score
+        signal_score = formula_result.score
+        # Re-determine action based on formula score
+        pos_threshold = abs(strategy.thresholds.get("entry", 0.6) if isinstance(strategy.thresholds, dict) else 0.6)
+        neg_threshold = pos_threshold
+        if signal_score >= pos_threshold:
+            action = "BUY"
+            threshold_crossed = True
+        elif signal_score <= -neg_threshold:
+            action = "SELL"
+            threshold_crossed = True
+        else:
+            action = "HOLD"
+            threshold_crossed = False
+    else:
+        signal_score = signal.signal_score
+        threshold_crossed = signal.threshold_crossed
+
+    # Phase 6 — Retrieve memory (existing)
     memory_response = _phase_retrieve(effective_user_id, asset, signal, strategy, phases)
 
-    # Phase 4 — Check
+    # Phase 7 — Check (existing)
     _phase_check(strategy, signal, asset, action, phases)
 
-    # Phase 5 — Execute
+    # Phase 8 — Execute (modified to include formula info)
     decision = _phase_execute(
         asset, signal, strategy, memory_response, action,
         effective_user_id, correlation_id, phases,
     )
 
-    # Attach phase tracking to decision before recording
+    # Attach formula metadata to decision
+    decision.signal_score = signal_score
+    decision.threshold_crossed = threshold_crossed
+    # Store formula info as numeric confidence in components, text in reasoning
+    decision.components = decision.components or {}
+    decision.components["formula_confidence"] = round(formula_result.confidence, 4)
+    decision.reasoning = (
+        f"[formula={selected_formula.name} regime={regime.label}] "
+        + (decision.reasoning or "")
+    )
+
     decision.decision_phases = phases
 
-    # Phase 6 — Record
+    # Phase 9 — Record (existing)
     _phase_record(asset, decision, phases)
 
-    # Record business metrics
+    # Record metrics
     agent_decisions_total.labels(
         action=decision.action,
         threshold_crossed=str(decision.threshold_crossed).lower(),
