@@ -64,6 +64,15 @@ class MemorySearchResponse(BaseModel):
     items: list[MemorySearchResult]
 
 
+class PhaseResult(BaseModel):
+    name: str
+    status: str = "pending"  # pending | completed | skipped | failed
+    started_at: datetime | None = None
+    ended_at: datetime | None = None
+    duration_ms: float | None = None
+    detail: str | None = None
+
+
 class DecisionRecord(BaseModel):
     decision_id: str = Field(default_factory=lambda: str(uuid4()))
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -80,6 +89,7 @@ class DecisionRecord(BaseModel):
     components: dict[str, float]
     correlation_id: str | None = None
     reference_price: float | None = None
+    decision_phases: list[PhaseResult] = Field(default_factory=list)
 
     def to_memory_record(self) -> MemoryRecord:
         return MemoryRecord(
