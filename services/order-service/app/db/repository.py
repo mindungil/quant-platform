@@ -1,5 +1,5 @@
 import os
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from app.models.order import ExecutionConfig, OrderResponse
 from shared.persistence import SqlStore, deserialize_json, serialize_json
@@ -29,8 +29,15 @@ class OrderRepository:
                 credential JSONB NOT NULL,
                 fill JSONB,
                 portfolio JSONB,
-                statistics JSONB
+                statistics JSONB,
+                idempotency_key TEXT
             )
+            """
+        )
+        self._store.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_order_events_idempotency_key
+            ON order_events (idempotency_key) WHERE idempotency_key IS NOT NULL
             """
         )
         self._store.execute(
@@ -54,9 +61,17 @@ class OrderRepository:
                 default_shadow_mode BOOLEAN NOT NULL,
                 strict_runtime BOOLEAN NOT NULL,
                 updated_by TEXT,
-                updated_at TIMESTAMPTZ
+                updated_at TIMESTAMPTZ,
+                preflight_passed_at TIMESTAMPTZ
             )
             """
+        )
+        # Safe column migrations for existing tables
+        self._store.execute(
+            "ALTER TABLE order_events ADD COLUMN IF NOT EXISTS idempotency_key TEXT"
+        )
+        self._store.execute(
+            "ALTER TABLE execution_config ADD COLUMN IF NOT EXISTS preflight_passed_at TIMESTAMPTZ"
         )
         defaults = runtime_flags()
         self._store.execute(
@@ -113,7 +128,7 @@ class OrderRepository:
             }
         )
 
-    def save(self, user_id: str, response: OrderResponse, *, detail: dict | None = None) -> None:
+    def save(self, user_id: str, response: OrderResponse, *, detail: dict | None = None, idempotency_key: str | None = None) -> None:
         self._orders.setdefault(user_id, []).append(response)
         if response.order_id is None:
             return
@@ -121,10 +136,11 @@ class OrderRepository:
             """
             INSERT INTO order_events (
                 order_id, user_id, created_at, asset, side, quantity, status, risk_reason, exchange_name,
-                shadow_mode, credential, fill, portfolio, statistics
+                shadow_mode, credential, fill, portfolio, statistics, idempotency_key
             ) VALUES (
                 :order_id, :user_id, :created_at, :asset, :side, :quantity, :status, :risk_reason, :exchange_name,
-                :shadow_mode, CAST(:credential AS JSONB), CAST(:fill AS JSONB), CAST(:portfolio AS JSONB), CAST(:statistics AS JSONB)
+                :shadow_mode, CAST(:credential AS JSONB), CAST(:fill AS JSONB), CAST(:portfolio AS JSONB), CAST(:statistics AS JSONB),
+                :idempotency_key
             )
             ON CONFLICT (order_id) DO UPDATE SET
                 user_id = EXCLUDED.user_id,
@@ -156,6 +172,7 @@ class OrderRepository:
                 "fill": serialize_json(response.fill.model_dump(mode="json")) if response.fill is not None else None,
                 "portfolio": serialize_json(response.portfolio.model_dump(mode="json")) if response.portfolio is not None else None,
                 "statistics": serialize_json(response.statistics.model_dump(mode="json")) if response.statistics is not None else None,
+                "idempotency_key": idempotency_key,
             },
         )
         self.record_lifecycle(response.order_id, user_id, response.status, detail=detail or {})
@@ -188,7 +205,7 @@ class OrderRepository:
                     return order
         return None
 
-    def update_status(self, order_id: str, status: str) -> None:
+    def update_status(self, order_id: str, status: str, *, detail: str | None = None) -> None:
         self._store.execute(
             "UPDATE order_events SET status = :status WHERE order_id = :order_id",
             {"order_id": order_id, "status": status},
@@ -197,6 +214,40 @@ class OrderRepository:
             for order in orders:
                 if order.order_id == order_id:
                     order.status = status
+        if detail:
+            self.record_lifecycle(order_id, "", status, detail={"reason": detail})
+
+    def get_by_idempotency_key(self, key: str) -> OrderResponse | None:
+        row = self._store.fetch_one(
+            "SELECT * FROM order_events WHERE idempotency_key = :key",
+            {"key": key},
+        )
+        if row is not None:
+            return self._hydrate(row)
+        return None
+
+    def find_stuck_orders(self, max_age_seconds: int = 300) -> list[OrderResponse]:
+        cutoff = datetime.now(UTC) - timedelta(seconds=max_age_seconds)
+        rows = self._store.fetch_all(
+            """
+            SELECT * FROM order_events
+            WHERE status IN ('PENDING', 'APPROVED', 'SUBMITTED')
+              AND created_at < :cutoff
+            ORDER BY created_at ASC
+            """,
+            {"cutoff": cutoff},
+        )
+        return [self._hydrate(row) for row in rows]
+
+    def find_active_non_filled_orders(self) -> list[OrderResponse]:
+        rows = self._store.fetch_all(
+            """
+            SELECT * FROM order_events
+            WHERE status IN ('PENDING', 'APPROVED', 'SUBMITTED')
+            ORDER BY created_at ASC
+            """,
+        )
+        return [self._hydrate(row) for row in rows]
 
     def list_for_user(self, user_id: str) -> list[OrderResponse]:
         rows = self._store.fetch_all(
@@ -228,6 +279,7 @@ class OrderRepository:
             strict_runtime=bool(row["strict_runtime"]),
             updated_by=row.get("updated_by"),
             updated_at=row.get("updated_at"),
+            preflight_passed_at=row.get("preflight_passed_at"),
         )
 
     def update_execution_config(
@@ -265,6 +317,16 @@ class OrderRepository:
             },
         )
         return self.get_execution_config()
+
+    def set_preflight_passed(self) -> None:
+        self._store.execute(
+            """
+            UPDATE execution_config
+            SET preflight_passed_at = :ts
+            WHERE scope = 'global'
+            """,
+            {"ts": datetime.now(UTC)},
+        )
 
 
 order_repository = OrderRepository()

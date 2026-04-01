@@ -4,6 +4,7 @@ from uuid import uuid4
 from prometheus_client import Counter, Histogram
 
 from app.core.config import settings
+from app.core.protection import protection_manager
 from app.db.repository import order_repository
 from app.models.order import CredentialSnapshot, FillSnapshot, OrderRequest, OrderResponse, PortfolioSnapshot, StatisticsSnapshot
 from app.services.exchange_client import ExchangeClient
@@ -45,6 +46,23 @@ def _record_order_metrics(status: str, shadow_mode: bool, start: float) -> None:
 
 def process_order(payload: OrderRequest) -> OrderResponse:
     _start = time.monotonic()
+
+    # Idempotency check: return cached result if duplicate
+    if payload.idempotency_key:
+        existing = order_repository.get_by_idempotency_key(payload.idempotency_key)
+        if existing:
+            logger.info(
+                "idempotent_order_returned",
+                extra={
+                    "service": "order-service",
+                    "idempotency_key": payload.idempotency_key,
+                    "order_id": existing.order_id,
+                    "user_id": payload.user_id,
+                    "event_type": "order.idempotent",
+                },
+            )
+            return existing
+
     local_order_id = str(uuid4())
     payload.correlation_id = payload.correlation_id or local_order_id
     execution_config = order_repository.get_execution_config()
@@ -316,5 +334,31 @@ def process_order(payload: OrderRequest) -> OrderResponse:
         },
     )
     publisher.publish_order_filled(payload, response)
+
+    # Create protective orders (stop-loss, take-profit, trailing stop) for filled orders
+    if response.status == "FILLED" and response.fill is not None:
+        try:
+            protections = protection_manager.create_protections(response, payload)
+            if protections:
+                logger.info(
+                    "protective_orders_attached",
+                    extra={
+                        "service": "order-service",
+                        "order_id": response.order_id,
+                        "user_id": response.user_id,
+                        "protection_count": len(protections),
+                        "types": [p.trigger_type for p in protections],
+                    },
+                )
+        except Exception:
+            logger.exception(
+                "protective_orders_creation_failed",
+                extra={
+                    "service": "order-service",
+                    "order_id": response.order_id,
+                    "user_id": response.user_id,
+                },
+            )
+
     _record_order_metrics(response.status, payload.shadow_mode, _start)
     return response

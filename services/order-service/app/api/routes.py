@@ -6,8 +6,9 @@ from fastapi import APIRouter, Header, HTTPException, Request, Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from app.core.engine import process_order, exchange_client
 from app.core.config import settings
+from app.core.protection import protection_manager
 from app.db.repository import order_repository
-from app.models.order import ExecutionConfig, OrderRequest, OrderResponse
+from app.models.order import ExecutionConfig, OrderRequest, OrderResponse, ProtectionCheckRequest, ProtectiveOrder
 from app.services.event_publisher import publisher
 from shared.health import check_redis, check_sql, check_tcp, health_payload
 from shared.logging import get_logger
@@ -116,6 +117,30 @@ def cancel_order(order_id: str) -> OrderResponse:
 @router.get("/orders/{user_id}", response_model=list[OrderResponse])
 def list_orders(user_id: str) -> list[OrderResponse]:
     return order_repository.list_for_user(user_id)
+
+
+@router.post("/orders/check-protections", response_model=list[ProtectiveOrder])
+def check_protections(payload: ProtectionCheckRequest) -> list[ProtectiveOrder]:
+    triggered = protection_manager.check_triggers(payload.asset, payload.current_price)
+    if triggered:
+        for t in triggered:
+            _logger.info(
+                "protection_triggered",
+                extra={
+                    "service": "order-service",
+                    "order_id": t.order_id,
+                    "trigger_type": t.trigger_type,
+                    "trigger_price": t.trigger_price,
+                    "current_price": payload.current_price,
+                    "asset": payload.asset,
+                },
+            )
+    return triggered
+
+
+@router.get("/orders/protections/{order_id}", response_model=list[ProtectiveOrder])
+def get_protections(order_id: str) -> list[ProtectiveOrder]:
+    return protection_manager.get_protections(order_id)
 
 
 @router.get("/admin/execution/config", response_model=ExecutionConfig)

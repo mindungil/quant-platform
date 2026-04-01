@@ -22,10 +22,14 @@ class OrderRequest(BaseModel):
     strategy_status: str = "ACTIVE"
     live_trading_requested: bool = False
     correlation_id: str | None = None
+    idempotency_key: str | None = None  # Client-generated, prevents duplicate orders
     api_key: str | None = None
     api_secret: str | None = None
     credential_label: str | None = None
     credential_sandbox: bool = True
+    stop_loss_pct: float | None = None       # e.g. 0.02 = 2% below entry
+    take_profit_pct: float | None = None     # e.g. 0.05 = 5% above entry
+    trailing_stop_pct: float | None = None   # e.g. 0.03 = 3% trailing
 
 
 class CredentialSnapshot(BaseModel):
@@ -87,3 +91,41 @@ class ExecutionConfig(BaseModel):
     strict_runtime: bool = False
     updated_by: str | None = None
     updated_at: datetime | None = None
+    preflight_passed_at: datetime | None = None
+
+
+class PreFlightCheck(BaseModel):
+    name: str
+    passed: bool
+    detail: str = ""
+
+
+class PreFlightResult(BaseModel):
+    passed: bool
+    checks: list[PreFlightCheck]
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class EmergencyStopResult(BaseModel):
+    stopped: bool
+    cancelled_orders: int = 0
+    detail: str = ""
+
+
+class ProtectiveOrder(BaseModel):
+    order_id: str           # parent order ID
+    user_id: str
+    asset: str
+    side: str               # opposite of parent (SELL for BUY parent)
+    trigger_type: str       # STOP_LOSS | TAKE_PROFIT | TRAILING_STOP
+    trigger_price: float
+    quantity: float
+    status: str = "ACTIVE"  # ACTIVE | TRIGGERED | CANCELLED
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    highest_price: float | None = None  # for trailing stop tracking
+    trailing_stop_pct: float | None = None  # needed for recalculating trailing trigger
+
+
+class ProtectionCheckRequest(BaseModel):
+    asset: str
+    current_price: float
