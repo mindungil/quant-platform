@@ -1,14 +1,26 @@
 import hmac
 import time
+from datetime import UTC, datetime
 from hashlib import sha256
 
+import httpx
 from fastapi import APIRouter, Header, HTTPException, Request, Response
+from pydantic import BaseModel
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from app.core.engine import process_order, exchange_client
 from app.core.config import settings
 from app.core.protection import protection_manager
 from app.db.repository import order_repository
-from app.models.order import ExecutionConfig, OrderRequest, OrderResponse, ProtectionCheckRequest, ProtectiveOrder
+from app.models.order import (
+    EmergencyStopResult,
+    ExecutionConfig,
+    OrderRequest,
+    OrderResponse,
+    PreFlightCheck,
+    PreFlightResult,
+    ProtectionCheckRequest,
+    ProtectiveOrder,
+)
 from app.services.event_publisher import publisher
 from shared.health import check_redis, check_sql, check_tcp, health_payload
 from shared.logging import get_logger
@@ -169,4 +181,232 @@ def update_execution_config(
         default_shadow_mode=payload.default_shadow_mode,
         strict_runtime=payload.strict_runtime,
         updated_by=actor,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Live Trading Gate Flow
+# ---------------------------------------------------------------------------
+
+_PREFLIGHT_TTL_SECONDS = 300  # 5 minutes
+
+
+def _check_credential_store(user_id: str, exchange: str) -> PreFlightCheck:
+    try:
+        resp = httpx.get(
+            f"{settings.credential_store_base_url}/credentials/{user_id}/{exchange}",
+            timeout=5.0,
+        )
+        if resp.status_code == 200:
+            return PreFlightCheck(name="credentials", passed=True, detail=f"Credentials found for {exchange}")
+        return PreFlightCheck(name="credentials", passed=False, detail=f"No credentials for {exchange} (HTTP {resp.status_code})")
+    except Exception as exc:
+        return PreFlightCheck(name="credentials", passed=False, detail=f"credential-store unreachable: {exc}")
+
+
+def _check_exchange_adapter() -> PreFlightCheck:
+    try:
+        resp = httpx.get(
+            f"{settings.exchange_adapter_base_url}/health",
+            timeout=5.0,
+        )
+        if resp.status_code == 200:
+            return PreFlightCheck(name="exchange_adapter", passed=True, detail="Exchange adapter healthy")
+        return PreFlightCheck(name="exchange_adapter", passed=False, detail=f"Exchange adapter unhealthy (HTTP {resp.status_code})")
+    except Exception as exc:
+        return PreFlightCheck(name="exchange_adapter", passed=False, detail=f"exchange-adapter unreachable: {exc}")
+
+
+def _check_risk_service() -> PreFlightCheck:
+    try:
+        resp = httpx.get(
+            f"{settings.risk_service_base_url}/health",
+            timeout=5.0,
+        )
+        if resp.status_code == 200:
+            return PreFlightCheck(name="risk_service", passed=True, detail="Risk service healthy")
+        return PreFlightCheck(name="risk_service", passed=False, detail=f"Risk service unhealthy (HTTP {resp.status_code})")
+    except Exception as exc:
+        return PreFlightCheck(name="risk_service", passed=False, detail=f"risk-service unreachable: {exc}")
+
+
+def _check_active_strategy(user_id: str) -> PreFlightCheck:
+    strategy_base = settings.strategy_registry_base_url
+    try:
+        resp = httpx.get(
+            f"{strategy_base}/strategies",
+            params={"status": "ACTIVE"},
+            headers={"x-user-id": user_id},
+            timeout=5.0,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            strategies = data if isinstance(data, list) else [data]
+            if strategies:
+                return PreFlightCheck(
+                    name="active_strategy",
+                    passed=True,
+                    detail=f"{len(strategies)} active strategy(ies) found",
+                )
+        return PreFlightCheck(name="active_strategy", passed=False, detail="No active strategies found")
+    except Exception as exc:
+        return PreFlightCheck(name="active_strategy", passed=False, detail=f"strategy-registry unreachable: {exc}")
+
+
+class PreFlightRequestBody(BaseModel):
+    user_id: str = "bootstrap"
+    exchange: str = "binance"
+
+
+@router.post("/admin/execution/pre-flight", response_model=PreFlightResult)
+def pre_flight_checks(
+    body: PreFlightRequestBody,
+    request: Request,
+    x_internal_actor_user_id: str | None = Header(default=None),
+    x_internal_admin_timestamp: str | None = Header(default=None),
+    x_internal_admin_signature: str | None = Header(default=None),
+) -> PreFlightResult:
+    actor = _require_internal_admin(request, x_internal_actor_user_id, x_internal_admin_timestamp, x_internal_admin_signature)
+    checks: list[PreFlightCheck] = []
+
+    # 1. Verify credentials
+    checks.append(_check_credential_store(body.user_id, body.exchange))
+
+    # 2. Verify exchange adapter connectivity
+    checks.append(_check_exchange_adapter())
+
+    # 3. Verify risk parameters configured
+    checks.append(_check_risk_service())
+
+    # 4. Verify at least one strategy is ACTIVE
+    checks.append(_check_active_strategy(body.user_id))
+
+    all_passed = all(c.passed for c in checks)
+    result = PreFlightResult(passed=all_passed, checks=checks)
+
+    if all_passed:
+        order_repository.set_preflight_passed()
+        _logger.info(
+            "preflight_passed",
+            extra={"service": "order-service", "actor": actor, "event_type": "admin.preflight.passed"},
+        )
+    else:
+        _logger.warning(
+            "preflight_failed",
+            extra={
+                "service": "order-service",
+                "actor": actor,
+                "failed_checks": [c.name for c in checks if not c.passed],
+                "event_type": "admin.preflight.failed",
+            },
+        )
+
+    return result
+
+
+@router.post("/admin/execution/enable-live", response_model=ExecutionConfig)
+def enable_live_trading(
+    request: Request,
+    x_internal_actor_user_id: str | None = Header(default=None),
+    x_internal_admin_timestamp: str | None = Header(default=None),
+    x_internal_admin_signature: str | None = Header(default=None),
+) -> ExecutionConfig:
+    actor = _require_internal_admin(request, x_internal_actor_user_id, x_internal_admin_timestamp, x_internal_admin_signature)
+
+    # Verify pre-flight was run recently
+    config = order_repository.get_execution_config()
+    if config.preflight_passed_at is None:
+        raise HTTPException(status_code=428, detail="preflight_not_run")
+
+    age = (datetime.now(UTC) - config.preflight_passed_at).total_seconds()
+    if age > _PREFLIGHT_TTL_SECONDS:
+        raise HTTPException(
+            status_code=428,
+            detail=f"preflight_expired:ran_{int(age)}s_ago:max_{_PREFLIGHT_TTL_SECONDS}s",
+        )
+
+    # Enable live trading
+    updated = order_repository.update_execution_config(
+        live_trading_enabled=True,
+        allowed_exchanges=config.allowed_exchanges,
+        default_shadow_mode=False,
+        strict_runtime=config.strict_runtime,
+        updated_by=actor,
+    )
+    _logger.info(
+        "live_trading_enabled",
+        extra={
+            "service": "order-service",
+            "actor": actor,
+            "event_type": "admin.live_trading.enabled",
+        },
+    )
+    return updated
+
+
+@router.post("/admin/execution/emergency-stop", response_model=EmergencyStopResult)
+def emergency_stop(
+    request: Request,
+    x_internal_actor_user_id: str | None = Header(default=None),
+    x_internal_admin_timestamp: str | None = Header(default=None),
+    x_internal_admin_signature: str | None = Header(default=None),
+) -> EmergencyStopResult:
+    actor = _require_internal_admin(request, x_internal_actor_user_id, x_internal_admin_timestamp, x_internal_admin_signature)
+
+    # 1. Disable live trading immediately
+    config = order_repository.get_execution_config()
+    order_repository.update_execution_config(
+        live_trading_enabled=False,
+        allowed_exchanges=config.allowed_exchanges,
+        default_shadow_mode=True,
+        strict_runtime=config.strict_runtime,
+        updated_by=actor,
+    )
+
+    # 2. Cancel all active non-filled orders
+    active_orders = order_repository.find_active_non_filled_orders()
+    cancelled_count = 0
+    for order in active_orders:
+        try:
+            try:
+                exchange_client.cancel(order.order_id, order.user_id, order.exchange)
+            except Exception:
+                _logger.warning(
+                    "emergency_stop_exchange_cancel_failed",
+                    extra={
+                        "service": "order-service",
+                        "order_id": order.order_id,
+                        "event_type": "emergency.stop.cancel_error",
+                    },
+                )
+            order_repository.update_status(order.order_id, "CANCELLED", detail="emergency_stop")
+            publisher.publish_order_cancelled(order.order_id, order.user_id)
+            cancelled_count += 1
+        except Exception:
+            _logger.exception(
+                "emergency_stop_cancel_error",
+                extra={
+                    "service": "order-service",
+                    "order_id": order.order_id,
+                    "event_type": "emergency.stop.error",
+                },
+            )
+
+    # 3. Publish emergency_stop event
+    publisher.publish_emergency_stop(actor, cancelled_count)
+
+    _logger.info(
+        "emergency_stop_executed",
+        extra={
+            "service": "order-service",
+            "actor": actor,
+            "cancelled_orders": cancelled_count,
+            "event_type": "admin.emergency_stop",
+        },
+    )
+
+    return EmergencyStopResult(
+        stopped=True,
+        cancelled_orders=cancelled_count,
+        detail=f"Live trading disabled, {cancelled_count} order(s) cancelled",
     )

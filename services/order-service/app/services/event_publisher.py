@@ -182,5 +182,33 @@ class EventPublisher:
             )
         )
 
+    async def publish_emergency_stop_async(self, actor: str, cancelled_count: int) -> None:
+        body = {"actor": actor, "cancelled_orders": cancelled_count, "action": "emergency_stop"}
+        await self._bus.publish(
+            "risk.triggered",
+            EventEnvelope(
+                event_type="emergency.stop",
+                source="order-service",
+                data=body,
+            ),
+        )
+        self._realtime.publish(
+            event_type="emergency.stop",
+            source="order-service",
+            data=body,
+        )
+        logger.info(
+            "emergency_stop_published",
+            extra={
+                "service": "order-service",
+                "actor": actor,
+                "cancelled_orders": cancelled_count,
+                "event_type": "emergency.stop",
+            },
+        )
+
+    def publish_emergency_stop(self, actor: str, cancelled_count: int) -> None:
+        run_coro(self.publish_emergency_stop_async(actor, cancelled_count))
+
 
 publisher = EventPublisher()

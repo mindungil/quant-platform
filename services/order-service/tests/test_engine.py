@@ -40,8 +40,11 @@ class StubOrderRepository:
     def get_execution_config(self):
         return self.execution_config
 
-    def save(self, user_id, response, *, detail=None):
+    def save(self, user_id, response, *, detail=None, idempotency_key=None):
         self.saved.append((user_id, response, detail))
+
+    def get_by_idempotency_key(self, key):
+        return None
 
     def record_lifecycle(self, order_id, user_id, status, *, detail):
         self.saved.append((user_id, {"order_id": order_id, "status": status}, detail))

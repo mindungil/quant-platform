@@ -82,7 +82,7 @@ def process_order(payload: OrderRequest) -> OrderResponse:
             shadow_mode=payload.shadow_mode,
             credential=CredentialSnapshot(user_id=payload.user_id, exchange=payload.exchange, loaded=False),
         )
-        order_repository.save(payload.user_id, response, detail={"stage": "gate", "reason": "strategy_not_active"})
+        order_repository.save(payload.user_id, response, detail={"stage": "gate", "reason": "strategy_not_active"}, idempotency_key=payload.idempotency_key)
         publisher.publish_risk_triggered(
             payload=payload,
             reason="strategy_not_active",
@@ -110,7 +110,7 @@ def process_order(payload: OrderRequest) -> OrderResponse:
                 loaded=False,
             ),
         )
-        order_repository.save(payload.user_id, response, detail={"stage": "risk", "approval": approval})
+        order_repository.save(payload.user_id, response, detail={"stage": "risk", "approval": approval}, idempotency_key=payload.idempotency_key)
         publisher.publish_risk_triggered(
             payload=payload,
             reason=approval["reason"],
@@ -135,7 +135,7 @@ def process_order(payload: OrderRequest) -> OrderResponse:
             shadow_mode=payload.shadow_mode,
             credential=CredentialSnapshot(user_id=payload.user_id, exchange=payload.exchange, loaded=False),
         )
-        order_repository.save(payload.user_id, response, detail={"stage": "credential", "reason": "missing_credentials"})
+        order_repository.save(payload.user_id, response, detail={"stage": "credential", "reason": "missing_credentials"}, idempotency_key=payload.idempotency_key)
         _record_order_metrics(response.status, payload.shadow_mode, _start)
         return response
     if not payload.shadow_mode:
@@ -158,7 +158,7 @@ def process_order(payload: OrderRequest) -> OrderResponse:
                     label=credential.get("label"),
                 ),
             )
-            order_repository.save(payload.user_id, response, detail={"stage": "gate", "reason": "live_trading_disabled"})
+            order_repository.save(payload.user_id, response, detail={"stage": "gate", "reason": "live_trading_disabled"}, idempotency_key=payload.idempotency_key)
             publisher.publish_risk_triggered(
                 payload=payload,
                 reason="live_trading_disabled",
@@ -186,7 +186,7 @@ def process_order(payload: OrderRequest) -> OrderResponse:
                     label=credential.get("label"),
                 ),
             )
-            order_repository.save(payload.user_id, response, detail={"stage": "gate", "reason": "exchange_not_allowed"})
+            order_repository.save(payload.user_id, response, detail={"stage": "gate", "reason": "exchange_not_allowed"}, idempotency_key=payload.idempotency_key)
             publisher.publish_risk_triggered(
                 payload=payload,
                 reason="exchange_not_allowed",
@@ -218,6 +218,7 @@ def process_order(payload: OrderRequest) -> OrderResponse:
                 payload.user_id,
                 response,
                 detail={"stage": "gate", "reason": "sandbox_credentials_for_live_order"},
+                idempotency_key=payload.idempotency_key,
             )
             publisher.publish_risk_triggered(
                 payload=payload,
@@ -332,6 +333,7 @@ def process_order(payload: OrderRequest) -> OrderResponse:
             "portfolio_recorded": portfolio is not None,
             "statistics_recorded": statistics is not None,
         },
+        idempotency_key=payload.idempotency_key,
     )
     publisher.publish_order_filled(payload, response)
 
