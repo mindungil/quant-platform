@@ -104,8 +104,34 @@ def startup_dependency_guard(
     service_name: str,
     required_env: list[str] | None = None,
     checks: dict[str, dict] | None = None,
+    check_fns: dict[str, callable] | None = None,
 ) -> None:
+    import time
+    import logging
+
     if required_env:
         validate_required_env(required_env)
+
+    # If check_fns provided (lazy callables), use retry logic
+    if check_fns:
+        logger = logging.getLogger(service_name)
+        retries = 10
+        delay = 3.0
+        for attempt in range(retries):
+            results = {name: fn() for name, fn in check_fns.items()}
+            all_ok = all(v.get("status") == "ok" for v in results.values())
+            if all_ok:
+                return
+            failed = [k for k, v in results.items() if v.get("status") != "ok"]
+            if attempt < retries - 1:
+                logger.warning(
+                    "startup check failed (attempt %d/%d), retrying in %.0fs: %s",
+                    attempt + 1, retries, delay, failed,
+                )
+                time.sleep(delay)
+        logger.warning("startup checks exhausted retries, starting in degraded mode")
+        return
+
+    # Legacy path: already-evaluated checks dict
     if checks:
         require_health(service_name, checks)

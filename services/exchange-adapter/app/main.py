@@ -13,7 +13,7 @@ app.include_router(router)
 def startup_checks() -> None:
     startup_dependency_guard(
         service_name="exchange-adapter",
-        checks={
-            "postgres": check_sql("postgres", settings.postgres_url),
+        check_fns={
+            "postgres": lambda: check_sql("postgres", settings.postgres_url),
         },
     )

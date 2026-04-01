@@ -13,9 +13,9 @@ app.include_router(router)
 def startup_checks() -> None:
     startup_dependency_guard(
         service_name="risk-service",
-        checks={
-            "postgres": check_sql("postgres", settings.postgres_url),
-            "redis": check_redis("redis", settings.redis_url),
-            "nats": check_tcp("nats", settings.nats_url, default_port=4222),
+        check_fns={
+            "postgres": lambda: check_sql("postgres", settings.postgres_url),
+            "redis": lambda: check_redis("redis", settings.redis_url),
+            "nats": lambda: check_tcp("nats", settings.nats_url, default_port=4222),
         },
     )

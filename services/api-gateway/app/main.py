@@ -13,8 +13,8 @@ app.include_router(router)
 def startup_checks() -> None:
     startup_dependency_guard(
         service_name="api-gateway",
-        checks={
-            "redis": check_redis("redis", settings.redis_url),
-            "auth-service": check_tcp("auth-service", settings.auth_service_base_url, default_port=8000),
+        check_fns={
+            "redis": lambda: check_redis("redis", settings.redis_url),
+            "auth-service": lambda: check_tcp("auth-service", settings.auth_service_base_url, default_port=8000),
         },
     )

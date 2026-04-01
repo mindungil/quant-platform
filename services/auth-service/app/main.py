@@ -15,8 +15,8 @@ app.include_router(router)
 def bootstrap_defaults() -> None:
     startup_dependency_guard(
         service_name="auth-service",
-        checks={
-            "postgres": check_sql("postgres", settings.postgres_url),
+        check_fns={
+            "postgres": lambda: check_sql("postgres", settings.postgres_url),
         },
     )
     auth_repository.bootstrap_admin()

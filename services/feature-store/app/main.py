@@ -14,10 +14,10 @@ from shared.observability import install_http_observability, startup_dependency_
 async def lifespan(_: FastAPI):
     startup_dependency_guard(
         service_name="feature-store",
-        checks={
-            "timescaledb": check_sql("timescaledb", settings.timescale_url),
-            "redis": check_redis("redis", settings.redis_url),
-            "nats": check_tcp("nats", settings.nats_url, default_port=4222),
+        check_fns={
+            "timescaledb": lambda: check_sql("timescaledb", settings.timescale_url),
+            "redis": lambda: check_redis("redis", settings.redis_url),
+            "nats": lambda: check_tcp("nats", settings.nats_url, default_port=4222),
         },
     )
     await publisher.connect()
