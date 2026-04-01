@@ -21,6 +21,13 @@ class Settings:
     default_current_drawdown: float = float(os.getenv("DEFAULT_AGENT_CURRENT_DRAWDOWN", "0.01"))
     default_current_exposure: float = float(os.getenv("DEFAULT_AGENT_CURRENT_EXPOSURE", "0"))
     default_automation_enabled: bool = os.getenv("DEFAULT_AGENT_AUTOMATION_ENABLED", "true").lower() == "true"
+    portfolio_service_base_url: str = os.getenv("PORTFOLIO_SERVICE_BASE_URL", "http://localhost:8007")
+    max_position_pct: float = float(os.getenv("MAX_POSITION_PCT", "0.05"))
+    kelly_factor: float = float(os.getenv("KELLY_FACTOR", "0.25"))
+    min_order_notional: float = float(os.getenv("MIN_ORDER_NOTIONAL", "10.0"))
+    default_stop_loss_pct: float = float(os.getenv("DEFAULT_AGENT_STOP_LOSS_PCT", "0.02"))
+    default_take_profit_pct: float = float(os.getenv("DEFAULT_AGENT_TAKE_PROFIT_PCT", "0.05"))
+    default_trailing_stop_pct: float = float(os.getenv("DEFAULT_AGENT_TRAILING_STOP_PCT", "0.03"))
 
 
 settings = Settings()

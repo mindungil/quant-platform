@@ -7,6 +7,7 @@ class BacktestRequest(BaseModel):
     strategy_id: str
     weights: dict[str, float]
     sample_size: int = 365
+    asset: str = "BTCUSDT"
 
 
 class BacktestResult(BaseModel):
@@ -15,6 +16,9 @@ class BacktestResult(BaseModel):
     sortino_ratio: float
     max_drawdown: float
     win_rate: float
+    total_return: float = 0.0
+    trade_count: int = 0
+    avg_trade_pnl: float = 0.0
     status: str
 
 

@@ -65,6 +65,14 @@ def get_latest_candle(asset: str) -> CandlePayload:
     return candle
 
 
+@router.get("/candles/{asset}/history", response_model=list[CandlePayload])
+def get_candle_history(asset: str, limit: int = 500) -> list[CandlePayload]:
+    candles = market_data_repository.get_history(asset, limit=limit)
+    if not candles:
+        raise HTTPException(status_code=404, detail="no_candles_found")
+    return candles
+
+
 @router.get("/candles/{asset}/gaps")
 def get_candle_gaps(asset: str, interval_minutes: int = 60) -> dict:
     candles = market_data_repository.get_history(asset)

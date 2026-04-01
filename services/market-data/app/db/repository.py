@@ -82,16 +82,30 @@ class MarketDataRepository:
                 },
             )
 
-    def get_history(self, asset: str) -> list[CandlePayload]:
-        rows = self._store.fetch_all(
-            """
-            SELECT timestamp, open, high, low, close, volume
-            FROM market_candles
-            WHERE asset = :asset
-            ORDER BY timestamp ASC
-            """,
-            {"asset": asset},
-        )
+    def get_history(self, asset: str, *, limit: int | None = None) -> list[CandlePayload]:
+        if limit is not None:
+            rows = self._store.fetch_all(
+                """
+                SELECT timestamp, open, high, low, close, volume
+                FROM market_candles
+                WHERE asset = :asset
+                ORDER BY timestamp DESC
+                LIMIT :limit
+                """,
+                {"asset": asset, "limit": limit},
+            )
+            # Reverse to return in ascending order
+            rows = list(reversed(rows))
+        else:
+            rows = self._store.fetch_all(
+                """
+                SELECT timestamp, open, high, low, close, volume
+                FROM market_candles
+                WHERE asset = :asset
+                ORDER BY timestamp ASC
+                """,
+                {"asset": asset},
+            )
         return [CandlePayload(**row) for row in rows]
 
     def get_latest(self, asset: str) -> CandlePayload | None:

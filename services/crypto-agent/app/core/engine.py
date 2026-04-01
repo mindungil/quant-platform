@@ -98,9 +98,58 @@ def _fallback_reasoning(
     )
 
 
-def _build_order_request(decision: DecisionRecord) -> dict:
+def _fetch_portfolio_balance(user_id: str) -> float:
+    """Fetch total exposure (balance proxy) from portfolio-service. Falls back to default."""
+    try:
+        import httpx
+
+        url = f"{settings.portfolio_service_base_url}/portfolio/{user_id}"
+        resp = httpx.get(url, timeout=5.0)
+        resp.raise_for_status()
+        data = resp.json()
+        total_exposure = float(data.get("total_exposure", 0.0))
+        if total_exposure > 0:
+            return total_exposure
+    except Exception as exc:
+        logger.warning("portfolio_balance_fetch_failed", extra={"error": str(exc), "user_id": user_id})
+    # Fallback: use default_max_notional as a rough capital estimate
+    return settings.default_max_notional
+
+
+def _calculate_position_size(signal_score: float, portfolio_balance: float) -> float:
+    """Kelly-fraction position sizing capped at max_position_pct of portfolio."""
+    # Kelly simplified: risk_fraction = |signal_score| * kelly_factor
+    risk_fraction = abs(signal_score) * settings.kelly_factor
+    # Cap at max_position_pct
+    risk_fraction = min(risk_fraction, settings.max_position_pct)
+    notional = portfolio_balance * risk_fraction
+    return notional
+
+
+def _build_order_request(decision: DecisionRecord) -> dict | None:
+    """Build order request with Kelly-fraction position sizing.
+
+    Returns None if the calculated notional is below min_order_notional.
+    """
     reference_price = decision.reference_price or 0.0
-    requested_notional = settings.default_requested_notional
+    portfolio_balance = _fetch_portfolio_balance(decision.user_id)
+    requested_notional = _calculate_position_size(decision.signal_score, portfolio_balance)
+
+    # Skip if below minimum
+    if requested_notional < settings.min_order_notional:
+        logger.info(
+            "order_below_minimum",
+            extra={
+                "requested_notional": requested_notional,
+                "min_order_notional": settings.min_order_notional,
+                "asset": decision.asset,
+            },
+        )
+        return None
+
+    # Cap at max_notional hard limit
+    requested_notional = min(requested_notional, settings.default_max_notional)
+
     quantity = round(requested_notional / reference_price, 6) if reference_price > 0 else 0.01
     return {
         "user_id": decision.user_id,
@@ -109,7 +158,7 @@ def _build_order_request(decision: DecisionRecord) -> dict:
         "side": decision.action,
         "quantity": quantity,
         "price": reference_price,
-        "requested_notional": requested_notional,
+        "requested_notional": round(requested_notional, 2),
         "max_notional": settings.default_max_notional,
         "current_drawdown": settings.default_current_drawdown,
         "current_exposure": settings.default_current_exposure,
@@ -119,6 +168,9 @@ def _build_order_request(decision: DecisionRecord) -> dict:
         "strategy_id": decision.strategy_id,
         "strategy_status": "ACTIVE",
         "correlation_id": decision.correlation_id,
+        "stop_loss_pct": settings.default_stop_loss_pct,
+        "take_profit_pct": settings.default_take_profit_pct,
+        "trailing_stop_pct": settings.default_trailing_stop_pct,
     }
 
 
@@ -302,7 +354,9 @@ def _phase_execute(
 
     # Publish execution action if threshold crossed
     if decision.threshold_crossed and decision.action in {"BUY", "SELL"}:
-        publisher.publish_agent_action(decision, _build_order_request(decision))
+        order_request = _build_order_request(decision)
+        if order_request is not None:
+            publisher.publish_agent_action(decision, order_request)
 
     _complete_phase(phase, detail=f"reasoning_len={len(reasoning)}")
     phases.append(phase)
