@@ -46,6 +46,12 @@ def record_trade(payload: StatisticsInput) -> StatisticsSnapshot:
     )
 
 
+@router.post("/statistics/strategy/{strategy_id}")
+def compute_strategy_stats(strategy_id: str, payload: StatisticsInput) -> StatisticsSnapshot:
+    payload.strategy_id = strategy_id
+    return compute_statistics(payload)
+
+
 @router.get("/statistics/{user_id}", response_model=StatisticsSnapshot)
 def get_statistics(user_id: str) -> StatisticsSnapshot:
     return statistics_repository.get(user_id)

@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 class BacktestRequest(BaseModel):
     strategy_id: str
     weights: dict[str, float]
-    sample_size: int = 365
+    sample_size: int = 500
     asset: str = "BTCUSDT"
 
 
@@ -19,6 +19,13 @@ class BacktestResult(BaseModel):
     total_return: float = 0.0
     trade_count: int = 0
     avg_trade_pnl: float = 0.0
+    profit_factor: float = 0.0
+    calmar_ratio: float = 0.0
+    avg_win: float = 0.0
+    avg_loss: float = 0.0
+    payoff_ratio: float = 0.0
+    total_commission: float = 0.0
+    out_of_sample_sharpe: float = 0.0
     status: str
 
 

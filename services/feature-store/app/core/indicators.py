@@ -81,6 +81,29 @@ def calculate_features(asset: str, candles: list[CandlePayload]) -> FeatureRespo
     typical_price = (high + low + close) / 3
     vwap = (typical_price * volume).cumsum() / volume.cumsum()
 
+    prev_close = close.shift(1)
+    tr = pd.concat([
+        high - low,
+        (high - prev_close).abs(),
+        (low - prev_close).abs(),
+    ], axis=1).max(axis=1)
+    atr_14 = tr.ewm(span=14, min_periods=14).mean()
+
+    plus_dm = high.diff().clip(lower=0)
+    minus_dm = (-low.diff()).clip(lower=0)
+    # When +DM > -DM, keep +DM, else 0 (and vice versa)
+    plus_dm = plus_dm.where(plus_dm > minus_dm, 0.0)
+    minus_dm = minus_dm.where(minus_dm > plus_dm, 0.0)
+    plus_di = 100 * plus_dm.ewm(span=14, min_periods=14).mean() / atr_14.replace(0, pd.NA)
+    minus_di = 100 * minus_dm.ewm(span=14, min_periods=14).mean() / atr_14.replace(0, pd.NA)
+    dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, pd.NA)
+    adx_14 = dx.ewm(span=14, min_periods=14).mean()
+
+    obv_direction = pd.Series(0, index=df.index, dtype=float)
+    obv_direction[close > close.shift(1)] = 1.0
+    obv_direction[close < close.shift(1)] = -1.0
+    obv = (volume * obv_direction).cumsum()
+
     return FeatureResponse(
         asset=asset,
         timestamp=df["timestamp"].iloc[-1],
@@ -100,4 +123,7 @@ def calculate_features(asset: str, candles: list[CandlePayload]) -> FeatureRespo
         stochastic_k=_safe_float(stochastic_k.iloc[-1]),
         stochastic_d=_safe_float(stochastic_d.iloc[-1]),
         vwap=_safe_float(vwap.iloc[-1]),
+        atr_14=_safe_float(atr_14.iloc[-1]),
+        adx_14=_safe_float(adx_14.iloc[-1]),
+        obv=_safe_float(obv.iloc[-1]),
     )

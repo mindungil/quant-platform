@@ -23,7 +23,9 @@ class Settings:
     default_automation_enabled: bool = os.getenv("DEFAULT_AGENT_AUTOMATION_ENABLED", "true").lower() == "true"
     portfolio_service_base_url: str = os.getenv("PORTFOLIO_SERVICE_BASE_URL", "http://localhost:8007")
     max_position_pct: float = float(os.getenv("MAX_POSITION_PCT", "0.05"))
-    kelly_factor: float = float(os.getenv("KELLY_FACTOR", "0.25"))
+    kelly_factor: float = float(os.getenv("KELLY_FACTOR", "0.5"))
+    kelly_fraction: float = float(os.getenv("KELLY_FRACTION", "0.5"))
+    target_vol: float = float(os.getenv("TARGET_VOLATILITY", "0.15"))
     min_order_notional: float = float(os.getenv("MIN_ORDER_NOTIONAL", "10.0"))
     default_stop_loss_pct: float = float(os.getenv("DEFAULT_AGENT_STOP_LOSS_PCT", "0.02"))
     default_take_profit_pct: float = float(os.getenv("DEFAULT_AGENT_TAKE_PROFIT_PCT", "0.05"))

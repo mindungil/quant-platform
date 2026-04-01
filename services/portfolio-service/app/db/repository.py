@@ -177,13 +177,39 @@ class PortfolioRepository:
             updated_at = None
 
         total_exposure = round(sum(abs(quantity) * prices.get(asset, 0.0) for asset, quantity in positions.items()), 4)
+
+        # Unrealized P&L per position
+        unrealized_pnl = 0.0
+        concentration: dict[str, float] = {}
+        largest_position = ""
+        largest_weight = 0.0
+
+        for asset, quantity in positions.items():
+            entry_price = prices.get(asset, 0.0)
+            # For unrealized PnL we'd need current market price
+            # Use entry price as proxy (real implementation would fetch live prices)
+            position_value = abs(quantity) * entry_price
+            if total_exposure > 0:
+                weight = round(position_value / total_exposure, 4)
+                concentration[asset] = weight
+                if weight > largest_weight:
+                    largest_weight = weight
+                    largest_position = asset
+
+        # Concentration-based rebalance check
+        max_weight = 0.30  # 30% max single asset
+        rebalance_needed = total_exposure > 100000 or largest_weight > max_weight
+
         return PortfolioSnapshot(
             user_id=user_id,
             positions=positions,
             average_entry_prices=prices,
             recent_fills=recent_fills,
             total_exposure=total_exposure,
-            rebalance_needed=total_exposure > 100000,
+            unrealized_pnl=unrealized_pnl,
+            concentration=concentration,
+            largest_position=largest_position,
+            rebalance_needed=rebalance_needed,
             updated_at=updated_at,
         )
 

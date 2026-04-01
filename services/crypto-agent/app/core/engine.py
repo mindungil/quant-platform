@@ -116,12 +116,47 @@ def _fetch_portfolio_balance(user_id: str) -> float:
     return settings.default_max_notional
 
 
-def _calculate_position_size(signal_score: float, portfolio_balance: float) -> float:
-    """Kelly-fraction position sizing capped at max_position_pct of portfolio."""
-    # Kelly simplified: risk_fraction = |signal_score| * kelly_factor
-    risk_fraction = abs(signal_score) * settings.kelly_factor
+def _calculate_position_size(
+    signal_score: float,
+    portfolio_balance: float,
+    win_rate: float = 0.55,
+    payoff_ratio: float = 1.5,
+    realized_vol: float = 0.0,
+) -> float:
+    """Full Kelly Criterion with fractional Kelly and volatility adjustment.
+
+    Kelly formula: f* = (p * b - q) / b
+    where p = win probability, q = 1-p, b = payoff ratio (avg_win/avg_loss)
+
+    We use half-Kelly (kelly_fraction=0.5) for reduced variance,
+    then scale inversely with volatility.
+    """
+    # Kelly optimal fraction
+    p = max(0.01, min(0.99, win_rate))
+    q = 1 - p
+    b = max(0.01, payoff_ratio)
+    kelly_optimal = (p * b - q) / b
+
+    # If Kelly is negative, no position (edge is negative)
+    if kelly_optimal <= 0:
+        return 0.0
+
+    # Fractional Kelly for safety
+    risk_fraction = kelly_optimal * settings.kelly_fraction
+
+    # Scale by signal strength (stronger signal = closer to full fraction)
+    signal_multiplier = min(abs(signal_score) / 0.6, 1.0)  # normalize: score of 0.6 = full size
+    risk_fraction *= signal_multiplier
+
+    # Volatility adjustment: reduce position when vol is high
+    if realized_vol > 0 and settings.target_vol > 0:
+        vol_scalar = settings.target_vol / max(realized_vol, 0.01)
+        vol_scalar = min(vol_scalar, 1.5)  # cap upside scaling
+        risk_fraction *= vol_scalar
+
     # Cap at max_position_pct
     risk_fraction = min(risk_fraction, settings.max_position_pct)
+
     notional = portfolio_balance * risk_fraction
     return notional
 
@@ -133,7 +168,27 @@ def _build_order_request(decision: DecisionRecord) -> dict | None:
     """
     reference_price = decision.reference_price or 0.0
     portfolio_balance = _fetch_portfolio_balance(decision.user_id)
-    requested_notional = _calculate_position_size(decision.signal_score, portfolio_balance)
+
+    # Fetch per-strategy stats for Kelly inputs
+    win_rate = 0.55  # default
+    payoff_ratio = 1.5  # default
+    realized_vol = 0.0
+    try:
+        import httpx
+        stats_url = f"http://localhost:8013/statistics/{decision.user_id}"
+        resp = httpx.get(stats_url, timeout=3.0)
+        if resp.status_code == 200:
+            stats = resp.json()
+            if stats.get("win_rate", 0) > 0 and stats.get("trade_count", 0) >= 30:
+                win_rate = stats["win_rate"]
+            if stats.get("payoff_ratio", 0) > 0 and stats.get("trade_count", 0) >= 30:
+                payoff_ratio = stats["payoff_ratio"]
+    except Exception:
+        pass
+
+    requested_notional = _calculate_position_size(
+        decision.signal_score, portfolio_balance, win_rate, payoff_ratio, realized_vol
+    )
 
     # Skip if below minimum
     if requested_notional < settings.min_order_notional:

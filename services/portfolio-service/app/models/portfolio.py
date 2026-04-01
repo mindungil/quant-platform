@@ -20,5 +20,11 @@ class PortfolioSnapshot(BaseModel):
     average_entry_prices: dict[str, float] = Field(default_factory=dict)
     recent_fills: list[PositionUpdate] = Field(default_factory=list)
     total_exposure: float = 0.0
+    unrealized_pnl: float = 0.0
+    realized_pnl: float = 0.0
+    total_pnl: float = 0.0
+    concentration: dict[str, float] = Field(default_factory=dict)
+    largest_position: str = ""
+    daily_return_pct: float = 0.0
     rebalance_needed: bool = False
     updated_at: datetime | None = Field(default_factory=lambda: datetime.now(UTC))

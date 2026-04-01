@@ -3,7 +3,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from app.core.engine import approve_order
 from app.core.config import settings
 from app.db.repository import risk_repository
-from app.models.risk import RiskApprovalRequest, RiskApprovalResponse, RiskIncident
+from app.models.risk import RiskApprovalRequest, RiskApprovalResponse, RiskIncident, RiskSettings
 from shared.health import check_redis, check_sql, check_tcp, health_payload
 
 router = APIRouter()
@@ -33,13 +33,13 @@ def approve(payload: RiskApprovalRequest) -> RiskApprovalResponse:
 
 @router.get("/risk/settings/{user_id}")
 def risk_settings(user_id: str) -> dict:
-    return {
-        "max_notional": 10000,
-        "exposure_limit": 50000,
-        "max_drawdown": 0.10,
-        "warning_drawdown": 0.05,
-        "automation_enabled": True,
-    }
+    return RiskSettings(user_id=user_id).model_dump(mode="json")
+
+
+@router.put("/risk/settings/{user_id}")
+def update_risk_settings(user_id: str, payload: dict) -> dict:
+    settings = RiskSettings(user_id=user_id, **payload)
+    return settings.model_dump(mode="json")
 
 
 @router.get("/risk/incidents/{user_id}", response_model=list[RiskIncident])

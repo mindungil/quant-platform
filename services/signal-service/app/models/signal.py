@@ -22,6 +22,9 @@ class FeatureSnapshot(BaseModel):
     stochastic_k: float | None = None
     stochastic_d: float | None = None
     vwap: float | None = None
+    atr_14: float | None = None
+    adx_14: float | None = None
+    obv: float | None = None
 
 
 class ExternalContextSnapshot(BaseModel):

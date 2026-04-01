@@ -96,119 +96,252 @@ def _fetch_candles(asset: str, limit: int) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 
+def _simulate_trades(
+    closes: pd.Series,
+    score: pd.Series,
+    start: int,
+    end: int,
+    entry_threshold: float,
+    exit_threshold: float,
+    stop_loss_pct: float,
+    take_profit_pct: float,
+    trailing_stop_pct: float,
+    cost_per_trade: float,
+) -> tuple[list[dict], float]:
+    """Run trade simulation on a slice. Returns (trades, total_commission)."""
+    trades = []
+    total_commission = 0.0
+    position = None
+
+    for i in range(max(start, 1), end):
+        price = closes.iloc[i]
+        s = score.iloc[i]
+
+        if position is None:
+            if s > entry_threshold:
+                effective_entry = price * (1 + cost_per_trade)
+                total_commission += price * cost_per_trade
+                position = {"side": "BUY", "entry_price": effective_entry, "highest": price, "entry_idx": i}
+            elif s < -entry_threshold:
+                effective_entry = price * (1 - cost_per_trade)
+                total_commission += price * cost_per_trade
+                position = {"side": "SELL", "entry_price": effective_entry, "lowest": price, "entry_idx": i}
+        else:
+            entry_price = position["entry_price"]
+
+            if position["side"] == "BUY":
+                position["highest"] = max(position.get("highest", price), price)
+                effective_exit = price * (1 - cost_per_trade)
+                pnl_pct = (effective_exit - entry_price) / entry_price
+
+                should_exit = False
+                exit_reason = ""
+                if pnl_pct >= take_profit_pct:
+                    should_exit, exit_reason = True, "take_profit"
+                elif pnl_pct <= -stop_loss_pct:
+                    should_exit, exit_reason = True, "stop_loss"
+                elif trailing_stop_pct > 0 and price <= position["highest"] * (1 - trailing_stop_pct):
+                    should_exit, exit_reason = True, "trailing_stop"
+                elif s < -exit_threshold:
+                    should_exit, exit_reason = True, "signal_reversal"
+
+                if should_exit:
+                    total_commission += price * cost_per_trade
+                    trades.append({"entry_price": entry_price, "exit_price": effective_exit, "pnl_pct": pnl_pct, "side": "BUY", "reason": exit_reason})
+                    position = None
+
+            else:  # SELL (short)
+                position["lowest"] = min(position.get("lowest", price), price)
+                effective_exit = price * (1 + cost_per_trade)
+                pnl_pct = (entry_price - effective_exit) / entry_price
+
+                should_exit = False
+                exit_reason = ""
+                if pnl_pct >= take_profit_pct:
+                    should_exit, exit_reason = True, "take_profit"
+                elif pnl_pct <= -stop_loss_pct:
+                    should_exit, exit_reason = True, "stop_loss"
+                elif trailing_stop_pct > 0 and price >= position["lowest"] * (1 + trailing_stop_pct):
+                    should_exit, exit_reason = True, "trailing_stop"
+                elif s > exit_threshold:
+                    should_exit, exit_reason = True, "signal_reversal"
+
+                if should_exit:
+                    total_commission += price * cost_per_trade
+                    trades.append({"entry_price": entry_price, "exit_price": effective_exit, "pnl_pct": pnl_pct, "side": "SELL", "reason": exit_reason})
+                    position = None
+
+    # Close open position at end
+    if position is not None:
+        price = closes.iloc[end - 1]
+        entry_price = position["entry_price"]
+        cost = price * cost_per_trade
+        total_commission += cost
+        if position["side"] == "BUY":
+            effective_exit = price * (1 - cost_per_trade)
+            pnl_pct = (effective_exit - entry_price) / entry_price
+        else:
+            effective_exit = price * (1 + cost_per_trade)
+            pnl_pct = (entry_price - effective_exit) / entry_price
+        trades.append({"entry_price": entry_price, "exit_price": effective_exit, "pnl_pct": pnl_pct, "side": position["side"], "reason": "end_of_data"})
+
+    return trades, total_commission
+
+
+def _calc_metrics(trades: list[dict], risk_free_daily: float) -> dict:
+    """Calculate all performance metrics from a list of trades."""
+    if not trades:
+        return {"sharpe": 0.0, "sortino": 0.0, "max_dd": 0.0, "win_rate": 0.0,
+                "total_return": 0.0, "profit_factor": 0.0, "calmar": 0.0,
+                "avg_win": 0.0, "avg_loss": 0.0, "payoff_ratio": 0.0, "mean_pnl": 0.0}
+
+    returns = np.array([t["pnl_pct"] for t in trades])
+    n = len(returns)
+    wins = returns[returns > 0]
+    losses = returns[returns < 0]
+
+    win_rate = float(len(wins) / n)
+    mean_ret = float(np.mean(returns))
+
+    # Sharpe (annualized, excess returns, sample std)
+    excess = returns - risk_free_daily
+    mean_excess = float(np.mean(excess))
+    std_excess = float(np.std(excess, ddof=1)) if n > 1 else 1e-9
+    sharpe = mean_excess / max(std_excess, 1e-9) * math.sqrt(252)
+
+    # Sortino (requires at least 2 downside observations for meaningful std)
+    downside = excess[excess < 0]
+    if len(downside) > 1:
+        downside_std = float(np.std(downside, ddof=1))
+        sortino = mean_excess / max(downside_std, 1e-9) * math.sqrt(252)
+    else:
+        sortino = sharpe  # fallback to Sharpe when insufficient downside data
+
+    # Max drawdown from equity curve
+    equity = np.cumprod(1 + returns)
+    running_max = np.maximum.accumulate(equity)
+    drawdowns = (running_max - equity) / running_max
+    max_dd = float(np.max(drawdowns))
+
+    # Profit factor
+    gross_profit = float(np.sum(wins)) if len(wins) > 0 else 0.0
+    gross_loss = float(np.abs(np.sum(losses))) if len(losses) > 0 else 0.0
+    profit_factor = gross_profit / gross_loss if gross_loss > 0 else 999.0
+
+    # Calmar
+    ann_return = mean_ret * 252
+    calmar = ann_return / max_dd if max_dd > 0 else 0.0
+
+    # Win/loss averages
+    avg_win = float(np.mean(wins)) if len(wins) > 0 else 0.0
+    avg_loss = float(np.mean(losses)) if len(losses) > 0 else 0.0
+    payoff_ratio = avg_win / abs(avg_loss) if avg_loss != 0 else 999.0
+
+    total_return = float(equity[-1] - 1)
+
+    # Clamp ratios to prevent extreme values from tiny samples
+    sharpe = max(-10.0, min(10.0, sharpe))
+    sortino = max(-10.0, min(10.0, sortino))
+    calmar = max(-100.0, min(100.0, calmar))
+
+    return {
+        "sharpe": round(sharpe, 4), "sortino": round(sortino, 4),
+        "max_dd": round(max_dd, 4), "win_rate": round(win_rate, 4),
+        "total_return": round(total_return, 4), "profit_factor": round(profit_factor, 4),
+        "calmar": round(calmar, 4), "avg_win": round(avg_win, 6),
+        "avg_loss": round(avg_loss, 6), "payoff_ratio": round(payoff_ratio, 4),
+        "mean_pnl": round(mean_ret, 6),
+    }
+
+
 def evaluate_strategy(payload: BacktestRequest) -> BacktestResult:
-    """Run a real backtest: fetch candles, compute indicators, simulate trades, report metrics."""
+    """Run backtest with transaction costs and walk-forward validation."""
     df = _fetch_candles(payload.asset, payload.sample_size)
     closes = df["close"]
 
-    # --- Compute indicators and weighted signal score ---
+    # Compute indicators and weighted signal score
     indicators: dict[str, pd.Series] = {}
-    weight_keys = {k.lower() for k in payload.weights}
-
-    # Always compute RSI and MACD; additional indicators map to RSI by default
-    indicators["rsi"] = (_calc_rsi(closes) - 50) / 50  # normalise to ~[-1, 1]
+    indicators["rsi"] = (_calc_rsi(closes) - 50) / 50
     indicators["macd"] = _calc_macd(closes)
 
-    # Build per-bar score = sum(indicator * weight)
     score = pd.Series(0.0, index=df.index)
     for name, weight in payload.weights.items():
         key = name.lower()
         if key in indicators:
             score += indicators[key] * weight
         else:
-            # Unknown indicator — use RSI as proxy
             score += indicators["rsi"] * weight
 
-    # --- Simulate trades ---
-    entry_threshold = settings.entry_threshold
-    exit_threshold = settings.exit_threshold
-    stop_loss_pct = settings.stop_loss_pct
+    cost_per_trade = (settings.slippage_bps + settings.commission_bps) / 10000
+    risk_free_daily = (1 + settings.risk_free_rate_annual) ** (1/252) - 1
 
-    trades: list[dict] = []  # each: {entry_price, exit_price, pnl_pct, side}
-    position: dict | None = None  # None = flat
+    # --- Full-period simulation ---
+    trades, total_commission = _simulate_trades(
+        closes, score, 0, len(df),
+        settings.entry_threshold, settings.exit_threshold,
+        settings.stop_loss_pct, settings.take_profit_pct, settings.trailing_stop_pct,
+        cost_per_trade,
+    )
 
-    for i in range(1, len(df)):
-        price = closes.iloc[i]
-        s = score.iloc[i]
-
-        if position is None:
-            # Enter long
-            if s > entry_threshold:
-                position = {"side": "BUY", "entry_price": price, "entry_idx": i}
-            # Enter short
-            elif s < -entry_threshold:
-                position = {"side": "SELL", "entry_price": price, "entry_idx": i}
-        else:
-            entry_price = position["entry_price"]
-            if position["side"] == "BUY":
-                pnl_pct = (price - entry_price) / entry_price
-                # Exit on opposite signal or stop-loss
-                if s < -exit_threshold or pnl_pct <= -stop_loss_pct:
-                    trades.append({"entry_price": entry_price, "exit_price": price, "pnl_pct": pnl_pct, "side": "BUY"})
-                    position = None
-            else:  # SELL (short)
-                pnl_pct = (entry_price - price) / entry_price
-                if s > exit_threshold or pnl_pct <= -stop_loss_pct:
-                    trades.append({"entry_price": entry_price, "exit_price": price, "pnl_pct": pnl_pct, "side": "SELL"})
-                    position = None
-
-    # Close any open position at last price
-    if position is not None:
-        price = closes.iloc[-1]
-        entry_price = position["entry_price"]
-        if position["side"] == "BUY":
-            pnl_pct = (price - entry_price) / entry_price
-        else:
-            pnl_pct = (entry_price - price) / entry_price
-        trades.append({"entry_price": entry_price, "exit_price": price, "pnl_pct": pnl_pct, "side": position["side"]})
-
-    # --- Calculate metrics ---
     trade_count = len(trades)
     if trade_count == 0:
         return BacktestResult(
-            strategy_id=payload.strategy_id,
-            sharpe_ratio=0.0,
-            sortino_ratio=0.0,
-            max_drawdown=0.0,
-            win_rate=0.0,
-            total_return=0.0,
-            trade_count=0,
-            avg_trade_pnl=0.0,
-            status="FAILED",
+            strategy_id=payload.strategy_id, sharpe_ratio=0.0, sortino_ratio=0.0,
+            max_drawdown=0.0, win_rate=0.0, total_return=0.0, trade_count=0,
+            avg_trade_pnl=0.0, status="FAILED",
         )
 
-    returns = np.array([t["pnl_pct"] for t in trades])
-    wins = np.sum(returns > 0)
-    win_rate = round(float(wins / trade_count), 4)
+    m = _calc_metrics(trades, risk_free_daily)
 
-    mean_ret = float(np.mean(returns))
-    std_ret = float(np.std(returns, ddof=1)) if trade_count > 1 else 1e-9
-    downside = returns[returns < 0]
-    downside_std = float(np.std(downside, ddof=1)) if len(downside) > 1 else 1e-9
+    # --- Walk-forward out-of-sample validation ---
+    n = len(df)
+    n_windows = settings.walk_forward_windows
+    window_size = n // n_windows if n_windows > 0 else n
+    oos_sharpes = []
+    for w in range(n_windows):
+        w_start = w * window_size
+        w_end = min((w + 1) * window_size, n)
+        split = int(w_start + (w_end - w_start) * settings.train_ratio)
+        if split >= w_end - 5:
+            continue
+        oos_trades, _ = _simulate_trades(
+            closes, score, split, w_end,
+            settings.entry_threshold, settings.exit_threshold,
+            settings.stop_loss_pct, settings.take_profit_pct, settings.trailing_stop_pct,
+            cost_per_trade,
+        )
+        if len(oos_trades) >= 3:  # need minimum trades for meaningful Sharpe
+            oos_m = _calc_metrics(oos_trades, risk_free_daily)
+            # Clamp to reasonable range to avoid extreme values from tiny samples
+            clamped = max(-10.0, min(10.0, oos_m["sharpe"]))
+            oos_sharpes.append(clamped)
+    oos_sharpe = round(sum(oos_sharpes) / len(oos_sharpes), 4) if oos_sharpes else 0.0
 
-    sharpe = round(mean_ret / max(std_ret, 1e-9) * math.sqrt(252), 4)
-    sortino = round(mean_ret / max(downside_std, 1e-9) * math.sqrt(252), 4)
-
-    # Compounded equity curve for max drawdown
-    equity = np.cumprod(1 + returns)
-    running_max = np.maximum.accumulate(equity)
-    drawdowns = (running_max - equity) / running_max
-    max_drawdown = round(float(np.max(drawdowns)), 4)
-
-    total_return = round(float(equity[-1] - 1), 4)
-    avg_trade_pnl = round(float(mean_ret), 6)
-
-    status = "PASSED" if sharpe >= 1.1 and max_drawdown <= 0.15 and win_rate >= 0.52 else "FAILED"
+    # Pass/fail with realistic criteria (post-cost)
+    status = "PASSED" if (
+        m["sharpe"] >= 0.8
+        and m["max_dd"] <= 0.20
+        and m["win_rate"] >= 0.45
+        and trade_count >= 10
+        and m["profit_factor"] >= 1.2
+    ) else "FAILED"
 
     return BacktestResult(
         strategy_id=payload.strategy_id,
-        sharpe_ratio=sharpe,
-        sortino_ratio=sortino,
-        max_drawdown=max_drawdown,
-        win_rate=win_rate,
-        total_return=total_return,
+        sharpe_ratio=m["sharpe"],
+        sortino_ratio=m["sortino"],
+        max_drawdown=m["max_dd"],
+        win_rate=m["win_rate"],
+        total_return=m["total_return"],
         trade_count=trade_count,
-        avg_trade_pnl=avg_trade_pnl,
+        avg_trade_pnl=m["mean_pnl"],
+        profit_factor=m["profit_factor"],
+        calmar_ratio=m["calmar"],
+        avg_win=m["avg_win"],
+        avg_loss=m["avg_loss"],
+        payoff_ratio=m["payoff_ratio"],
+        total_commission=round(total_commission, 2),
+        out_of_sample_sharpe=oos_sharpe,
         status=status,
     )
 
