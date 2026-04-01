@@ -4,6 +4,13 @@ import { useEffect, useState } from "react";
 
 import { AdminGuard } from "../../../components/admin-guard";
 import { gatewayFetch } from "../../../lib/api";
+import {
+  PageTransition,
+  StaggerContainer,
+  StaggerItem,
+  AnimatedNumber,
+  motion,
+} from "../../../components/motion";
 
 type UserProfile = {
   user_id: string;
@@ -50,87 +57,109 @@ export default function AdminUsersPage() {
 
   return (
     <AdminGuard>
-      <main className="grid gap-6">
-        {/* Header */}
-        <section className="card">
-          <h2 className="text-3xl font-semibold text-neutral-900">User Management</h2>
-          <p className="mt-2 text-neutral-500">
-            Manage user accounts, review plans, and assign roles.
-          </p>
-          {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
-        </section>
+      <PageTransition>
+        <main className="grid gap-6">
+          {/* Header */}
+          <section className="card">
+            <h2 className="text-3xl font-semibold text-neutral-900">User Management</h2>
+            <p className="mt-2 text-neutral-500">
+              Manage user accounts, review plans, and assign roles.
+            </p>
+            {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+          </section>
 
-        {/* Stats */}
-        <div className="grid gap-4 sm:grid-cols-3">
-          <div className="card text-center">
-            <p className="text-sm text-neutral-500">Total Users</p>
-            <p className="mt-1 text-3xl font-bold text-neutral-900">{users.length}</p>
-          </div>
-          <div className="card text-center">
-            <p className="text-sm text-neutral-500">Admins</p>
-            <p className="mt-1 text-3xl font-bold text-neutral-900">{adminCount}</p>
-          </div>
-          <div className="card text-center">
-            <p className="text-sm text-neutral-500">Regular Users</p>
-            <p className="mt-1 text-3xl font-bold text-neutral-900">{users.length - adminCount}</p>
-          </div>
-        </div>
+          {/* Stats */}
+          <StaggerContainer className="grid gap-4 sm:grid-cols-3">
+            <StaggerItem>
+              <div className="card text-center">
+                <p className="text-sm text-neutral-500">Total Users</p>
+                <p className="mt-1 text-3xl font-bold text-neutral-900">
+                  <AnimatedNumber value={users.length} />
+                </p>
+              </div>
+            </StaggerItem>
+            <StaggerItem>
+              <div className="card text-center">
+                <p className="text-sm text-neutral-500">Admins</p>
+                <p className="mt-1 text-3xl font-bold text-neutral-900">
+                  <AnimatedNumber value={adminCount} />
+                </p>
+              </div>
+            </StaggerItem>
+            <StaggerItem>
+              <div className="card text-center">
+                <p className="text-sm text-neutral-500">Regular Users</p>
+                <p className="mt-1 text-3xl font-bold text-neutral-900">
+                  <AnimatedNumber value={users.length - adminCount} />
+                </p>
+              </div>
+            </StaggerItem>
+          </StaggerContainer>
 
-        {/* User Table */}
-        <section className="card overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-neutral-200 text-xs font-medium uppercase tracking-wider text-neutral-400">
-                <th className="pb-3 pr-4">User</th>
-                <th className="pb-3 pr-4">Plan</th>
-                <th className="pb-3 pr-4">Role</th>
-                <th className="pb-3 pr-4">Created</th>
-                <th className="pb-3">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((user) => (
-                <tr key={user.user_id} className="border-b border-neutral-100">
-                  <td className="py-3 pr-4">
-                    <p className="font-semibold text-neutral-900">{user.display_name}</p>
-                    <p className="text-xs text-neutral-400">{user.email}</p>
-                  </td>
-                  <td className="py-3 pr-4">
-                    <span className="badge bg-neutral-100 text-neutral-600">
-                      {user.plan}
-                    </span>
-                  </td>
-                  <td className="py-3 pr-4">
-                    <select
-                      value={user.roles.includes("admin") ? "admin" : "user"}
-                      onChange={(e) => updateRole(user, e.target.value)}
-                      className="rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-xs text-neutral-900 outline-none focus:border-neutral-900"
+          {/* User Table */}
+          <section className="card overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-neutral-200 text-xs font-medium uppercase tracking-wider text-neutral-400">
+                  <th className="pb-3 pr-4">User</th>
+                  <th className="pb-3 pr-4">Plan</th>
+                  <th className="pb-3 pr-4">Role</th>
+                  <th className="pb-3 pr-4">Created</th>
+                  <th className="pb-3">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.length > 0 ? (
+                  users.map((user, index) => (
+                    <motion.tr
+                      key={user.user_id}
+                      className="border-b border-neutral-100"
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.25, delay: index * 0.04, ease: "easeOut" }}
                     >
-                      <option value="user">user</option>
-                      <option value="admin">admin</option>
-                    </select>
-                  </td>
-                  <td className="py-3 pr-4 text-xs text-neutral-400">
-                    {user.created_at ? new Date(user.created_at).toLocaleDateString() : "--"}
-                  </td>
-                  <td className="py-3">
-                    <span className="text-xs text-neutral-400">
-                      {user.roles.join(", ")}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-              {users.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="py-8 text-center text-neutral-400">
-                    No users found.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </section>
-      </main>
+                      <td className="py-3 pr-4">
+                        <p className="font-semibold text-neutral-900">{user.display_name}</p>
+                        <p className="text-xs text-neutral-400">{user.email}</p>
+                      </td>
+                      <td className="py-3 pr-4">
+                        <span className="badge bg-neutral-100 text-neutral-600">
+                          {user.plan}
+                        </span>
+                      </td>
+                      <td className="py-3 pr-4">
+                        <motion.select
+                          value={user.roles.includes("admin") ? "admin" : "user"}
+                          onChange={(e) => updateRole(user, e.target.value)}
+                          className="rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-xs text-neutral-900 outline-none focus:border-neutral-900 transition-colors duration-200"
+                          whileFocus={{ scale: 1.02 }}
+                        >
+                          <option value="user">user</option>
+                          <option value="admin">admin</option>
+                        </motion.select>
+                      </td>
+                      <td className="py-3 pr-4 text-xs text-neutral-400">
+                        {user.created_at ? new Date(user.created_at).toLocaleDateString() : "--"}
+                      </td>
+                      <td className="py-3">
+                        <span className="text-xs text-neutral-400">
+                          {user.roles.join(", ")}
+                        </span>
+                      </td>
+                    </motion.tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center text-neutral-400">
+                      No users found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </section>
+        </main>
+      </PageTransition>
     </AdminGuard>
   );
 }
