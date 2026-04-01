@@ -1,4 +1,6 @@
-from app.models.strategy import Strategy, StrategyCreate
+from datetime import UTC, datetime
+
+from app.models.strategy import Strategy, StrategyCreate, VALID_STATUS_TRANSITIONS
 import os
 from shared.persistence import SqlStore, deserialize_json, serialize_json
 
@@ -20,6 +22,7 @@ class StrategyRepository:
                 id TEXT PRIMARY KEY,
                 user_id TEXT NOT NULL,
                 created_at TIMESTAMPTZ NOT NULL,
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                 name TEXT NOT NULL,
                 asset_type TEXT NOT NULL,
                 indicators JSONB NOT NULL,
@@ -33,13 +36,18 @@ class StrategyRepository:
         """
         for table_name in self._table_names():
             self._store.execute(schema.format(table_name=table_name))
+        # Add updated_at column if missing (migration for existing tables)
+        for table_name in self._table_names():
+            self._store.execute(
+                f"ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
+            )
         self._store.execute(
             """
             INSERT INTO strategy_records (
-                id, user_id, created_at, name, asset_type, indicators, weights, thresholds, version, status, backtest_results, shadow_metrics
+                id, user_id, created_at, updated_at, name, asset_type, indicators, weights, thresholds, version, status, backtest_results, shadow_metrics
             )
             SELECT
-                id, user_id, created_at, name, asset_type, indicators, weights, thresholds, version, status, backtest_results, shadow_metrics
+                id, user_id, created_at, COALESCE(updated_at, created_at), name, asset_type, indicators, weights, thresholds, version, status, backtest_results, shadow_metrics
             FROM strategies
             ON CONFLICT (id) DO NOTHING
             """
@@ -93,14 +101,15 @@ class StrategyRepository:
         }
         query = """
             INSERT INTO {table_name} (
-                id, user_id, created_at, name, asset_type, indicators, weights, thresholds, version, status, backtest_results, shadow_metrics
+                id, user_id, created_at, updated_at, name, asset_type, indicators, weights, thresholds, version, status, backtest_results, shadow_metrics
             ) VALUES (
-                :id, :user_id, :created_at, :name, :asset_type, CAST(:indicators AS JSONB), CAST(:weights AS JSONB),
+                :id, :user_id, :created_at, :updated_at, :name, :asset_type, CAST(:indicators AS JSONB), CAST(:weights AS JSONB),
                 CAST(:thresholds AS JSONB), :version, :status, CAST(:backtest_results AS JSONB), CAST(:shadow_metrics AS JSONB)
             )
             ON CONFLICT (id) DO UPDATE SET
                 user_id = EXCLUDED.user_id,
                 created_at = EXCLUDED.created_at,
+                updated_at = EXCLUDED.updated_at,
                 name = EXCLUDED.name,
                 asset_type = EXCLUDED.asset_type,
                 indicators = EXCLUDED.indicators,
@@ -183,6 +192,34 @@ class StrategyRepository:
             return self._hydrate(row)
         return self._get_bootstrap_active(asset_type)
 
+    def list_strategies(
+        self,
+        asset_type: str | None = None,
+        status: str | None = None,
+        user_id: str | None = None,
+    ) -> list[Strategy]:
+        conditions: list[str] = ["status != 'ARCHIVED'"]
+        params: dict[str, str] = {}
+        if asset_type is not None:
+            conditions.append("asset_type = :asset_type")
+            params["asset_type"] = asset_type
+        if status is not None:
+            conditions.append("status = :status")
+            params["status"] = status
+        if user_id is not None:
+            conditions.append("user_id = :user_id")
+            params["user_id"] = user_id
+        where = " AND ".join(conditions)
+        rows = self._store.fetch_all(
+            f"SELECT * FROM strategy_records WHERE {where} ORDER BY created_at DESC",
+            params,
+        )
+        return [self._hydrate(row) for row in rows]
+
+    def validate_transition(self, current_status: str, new_status: str) -> bool:
+        allowed = VALID_STATUS_TRANSITIONS.get(current_status, set())
+        return new_status in allowed
+
     def update_status(self, strategy_id: str, status: str) -> Strategy | None:
         strategy = self._items.get(strategy_id) or self.get(strategy_id)
         if strategy is None:
@@ -214,6 +251,7 @@ class StrategyRepository:
                     item.status = "DEPRECATED"
                     self._persist(item)
         strategy.status = status
+        strategy.updated_at = datetime.now(UTC)
         self._items[strategy.id] = strategy
         self._persist(strategy)
         return strategy
