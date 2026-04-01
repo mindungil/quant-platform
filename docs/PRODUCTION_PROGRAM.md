@@ -142,7 +142,7 @@ Scope:
 - observability stack and operator dashboards
 - release automation and smoke seed scenarios
 
-## Current Tranche: Train D
+## Current Tranche: Train D+
 
 ### Immediate objectives
 
@@ -151,6 +151,9 @@ Scope:
 3. Expose admin execution control APIs and operator UI actions for live-trading gating.
 4. Add release-grade validation with `make release-check` and migration smoke checks.
 5. Expand the crypto-first operator surface before moving to broader multi-asset hardening.
+6. Complete the downstream crypto execution graph with correlated agent, order, portfolio, and statistics events.
+7. Harden Compose boot with dependency-aware health endpoints and request correlation propagation.
+8. Standardize shared request metrics, inflight gauges, and JSON request logging across the crypto-critical mesh.
 
 ### Verification standard
 
@@ -163,3 +166,10 @@ Scope:
 - `make demo-flow`
 - `make smoke-e2e`
 - `make release-check`
+
+## Remaining Gaps After Train D+
+
+- richer business metrics and dashboards beyond the shared HTTP request and correlation layer
+- broader live-mode verification across admin toggle, credentials, and allowed exchange policy
+- deeper execution-path integration coverage and duplicate-delivery idempotency tests
+- full multi-asset completion for ETF and stock release quality

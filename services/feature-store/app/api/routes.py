@@ -1,18 +1,33 @@
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
+from app.core.config import settings
 from app.core.indicators import calculate_features
 from app.db.repository import candle_repository, feature_repository
 from app.models.feature import CandlePayload, FeatureResponse
 from app.services.event_publisher import publisher
+from shared.health import check_redis, check_sql, check_tcp, health_payload
 
 router = APIRouter()
 
 
 @router.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+def health() -> dict:
+    return health_payload(
+        "feature-store",
+        {
+            "timescaledb": check_sql("timescaledb", settings.timescale_url),
+            "redis": check_redis("redis", settings.redis_url),
+            "nats": check_tcp("nats", settings.nats_url, default_port=4222),
+        },
+    )
+
+
+@router.get("/metrics")
+def metrics() -> Response:
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @router.post("/events/candles/{asset}", response_model=FeatureResponse)

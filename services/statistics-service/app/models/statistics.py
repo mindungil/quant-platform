@@ -7,6 +7,7 @@ class StatisticsInput(BaseModel):
     user_id: str | None = None
     order_id: str | None = None
     asset: str | None = None
+    correlation_id: str | None = None
     trade_pnls: list[float]
     expected_return: float = 0.0
 

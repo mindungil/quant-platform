@@ -1,15 +1,26 @@
 import os
 from datetime import UTC, datetime
 
+from app.core.config import settings
 from app.models.risk import RiskApprovalRequest, RiskApprovalResponse, RiskIncident
+from shared.asyncio_utils import run_coro
+from shared.events import EventEnvelope, JetStreamBus
+from shared.logging import get_logger
 from shared.persistence import RedisStore, SqlStore, deserialize_json, serialize_json
 from shared.realtime import RealtimeBus
+
+logger = get_logger("risk-service")
 
 
 class RiskRepository:
     def __init__(self) -> None:
         self._store = SqlStore(os.getenv("POSTGRES_URL", "postgresql+psycopg://postgres:postgres@localhost:5432/platform"))
         self._realtime = RealtimeBus(RedisStore(os.getenv("REDIS_URL", "redis://localhost:6379/0")))
+        self._bus = JetStreamBus(
+            nats_url=settings.nats_url,
+            redis_store=RedisStore(settings.redis_url),
+            enabled=settings.enable_nats,
+        )
         self._ensure_schema()
 
     def _ensure_schema(self) -> None:
@@ -71,7 +82,36 @@ class RiskRepository:
                 correlation_id=payload.correlation_id,
                 data=incident.model_dump(mode="json"),
             )
+            run_coro(
+                self._publish_risk_event(
+                    incident=incident,
+                    correlation_id=payload.correlation_id,
+                )
+            )
         return incident
+
+    async def _publish_risk_event(self, *, incident: RiskIncident, correlation_id: str | None) -> None:
+        await self._bus.connect()
+        await self._bus.ensure_stream(settings.execution_jetstream_stream, ["risk.triggered", "risk.triggered.dlq"])
+        await self._bus.publish(
+            "risk.triggered",
+            EventEnvelope(
+                event_type="risk.triggered",
+                source="risk-service",
+                correlation_id=correlation_id,
+                user_id=incident.user_id,
+                data=incident.model_dump(mode="json"),
+            ),
+        )
+        logger.info(
+            "risk_incident_recorded",
+            extra={
+                "service": "risk-service",
+                "correlation_id": correlation_id,
+                "user_id": incident.user_id,
+                "event_type": "risk.triggered",
+            },
+        )
 
     def list_for_user(self, user_id: str, *, limit: int = 50) -> list[RiskIncident]:
         rows = self._store.fetch_all(

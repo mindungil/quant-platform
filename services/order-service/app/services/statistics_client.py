@@ -1,6 +1,7 @@
 import httpx
 
 from app.models.order import OrderRequest
+from shared.request_context import current_request_headers
 
 
 class StatisticsClient:
@@ -12,10 +13,12 @@ class StatisticsClient:
         pnl = 0.0 if order_status.startswith("REJECTED") else round(signed * 0.01, 4)
         response = httpx.post(
             f"{self._base_url}/statistics/record",
+            headers=current_request_headers(),
             json={
                 "user_id": payload.user_id,
                 "order_id": order_id,
                 "asset": payload.asset,
+                "correlation_id": payload.correlation_id,
                 "trade_pnls": [pnl],
                 "expected_return": 0.02,
             },

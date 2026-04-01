@@ -27,6 +27,17 @@ class MarketDataRepository:
             )
             """
         )
+        self._store.execute(
+            """
+            CREATE TABLE IF NOT EXISTS market_anomalies (
+                id BIGSERIAL PRIMARY KEY,
+                asset TEXT NOT NULL,
+                timestamp TIMESTAMPTZ NOT NULL,
+                anomaly_detected BOOLEAN NOT NULL,
+                metadata JSONB NOT NULL DEFAULT '{}'::jsonb
+            )
+            """
+        )
 
     def save(self, asset: str, candle: CandlePayload, *, anomaly_detected: bool) -> None:
         self._store.execute(
@@ -57,6 +68,19 @@ class MarketDataRepository:
                 "metadata": serialize_json({"source": "rest"}),
             },
         )
+        if anomaly_detected:
+            self._store.execute(
+                """
+                INSERT INTO market_anomalies (asset, timestamp, anomaly_detected, metadata)
+                VALUES (:asset, :timestamp, :anomaly_detected, CAST(:metadata AS JSONB))
+                """,
+                {
+                    "asset": asset,
+                    "timestamp": candle.timestamp,
+                    "anomaly_detected": anomaly_detected,
+                    "metadata": serialize_json({"source": "rest"}),
+                },
+            )
 
     def get_latest(self, asset: str) -> CandlePayload | None:
         row = self._store.fetch_one(

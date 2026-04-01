@@ -39,6 +39,7 @@ class SignalEvaluationResponse(BaseModel):
     asset: str
     asset_type: str = "crypto"
     strategy_id: str | None = None
+    strategy_user_id: str | None = None
     signal_score: float
     threshold: float
     threshold_crossed: bool
@@ -46,6 +47,7 @@ class SignalEvaluationResponse(BaseModel):
     components: dict[str, float]
     feature_timestamp: datetime
     external_timestamp: datetime | None = None
+    reference_price: float | None = None
 
 
 class SignalThresholdEvent(BaseModel):

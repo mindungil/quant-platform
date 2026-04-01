@@ -1,5 +1,6 @@
 from app.core.config import settings
 from app.models.candle import CandleUpdatedEvent
+from shared.asyncio_utils import run_coro
 from shared.events import EventEnvelope, JetStreamBus
 from shared.persistence import RedisStore
 
@@ -39,14 +40,7 @@ class EventPublisher:
             )
 
     def publish_market_candle(self, asset: str, event: CandleUpdatedEvent) -> None:
-        # API routes can call this without caring whether NATS is enabled.
-        import asyncio
-
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            return
-        loop.create_task(self.publish_market_candle_async(asset=asset, event=event))
+        run_coro(self.publish_market_candle_async(asset=asset, event=event))
 
 
 publisher = EventPublisher()

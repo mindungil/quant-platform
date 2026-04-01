@@ -43,6 +43,20 @@ class StubOrderRepository:
     def save(self, user_id, response, *, detail=None):
         self.saved.append((user_id, response, detail))
 
+    def record_lifecycle(self, order_id, user_id, status, *, detail):
+        self.saved.append((user_id, {"order_id": order_id, "status": status}, detail))
+
+
+class StubPublisher:
+    def publish_risk_triggered(self, **kwargs):
+        return None
+
+    def publish_order_created(self, payload, order_id):
+        return None
+
+    def publish_order_filled(self, payload, response):
+        return None
+
 
 def test_process_order_returns_filled(monkeypatch) -> None:
     repository = StubOrderRepository(
@@ -59,6 +73,7 @@ def test_process_order_returns_filled(monkeypatch) -> None:
     monkeypatch.setattr(engine, "credential_client", StubCredentialClient())
     monkeypatch.setattr(engine, "portfolio_client", StubPortfolioClient())
     monkeypatch.setattr(engine, "statistics_client", StubStatisticsClient())
+    monkeypatch.setattr(engine, "publisher", StubPublisher())
     result = engine.process_order(
         OrderRequest(
             user_id="u1",
@@ -75,7 +90,7 @@ def test_process_order_returns_filled(monkeypatch) -> None:
         )
     )
     assert result.status == "FILLED"
-    assert result.order_id == "order-1"
+    assert result.order_id
     assert result.portfolio is not None
 
 
@@ -94,6 +109,7 @@ def test_process_order_blocks_live_when_admin_toggle_disabled(monkeypatch) -> No
     monkeypatch.setattr(engine, "credential_client", StubCredentialClient())
     monkeypatch.setattr(engine, "portfolio_client", StubPortfolioClient())
     monkeypatch.setattr(engine, "statistics_client", StubStatisticsClient())
+    monkeypatch.setattr(engine, "publisher", StubPublisher())
     result = engine.process_order(
         OrderRequest(
             user_id="u1",

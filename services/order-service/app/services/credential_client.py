@@ -1,4 +1,5 @@
 import httpx
+from shared.request_context import current_request_headers
 
 
 class CredentialClient:
@@ -6,7 +7,11 @@ class CredentialClient:
         self._base_url = base_url.rstrip("/")
 
     def get(self, user_id: str, exchange: str) -> dict | None:
-        response = httpx.get(f"{self._base_url}/credentials/{user_id}/{exchange}/reveal", timeout=5.0)
+        response = httpx.get(
+            f"{self._base_url}/credentials/{user_id}/{exchange}/reveal",
+            headers=current_request_headers(),
+            timeout=5.0,
+        )
         if response.status_code == 404:
             return None
         response.raise_for_status()

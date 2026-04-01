@@ -12,6 +12,7 @@ from app.core.dashboard import build_dashboard_summary
 from app.core.summary import gateway_summary
 from app.models.auth import GatewayPrincipal
 from app.services.gateway_client import GatewayClient
+from shared.health import check_redis, check_tcp, health_payload
 from shared.persistence import RedisStore
 from shared.realtime import RealtimeBus
 
@@ -26,6 +27,14 @@ risk_client = GatewayClient(settings.risk_service_base_url)
 realtime_bus = RealtimeBus(RedisStore(settings.redis_url), replay_limit=settings.realtime_replay_limit)
 
 
+def _proxy_json(response: httpx.Response) -> JSONResponse:
+    try:
+        payload = response.json() if response.text else {}
+    except ValueError:
+        payload = {"detail": response.text}
+    return JSONResponse(payload, status_code=response.status_code)
+
+
 def _probe_service(name: str, base_url: str) -> dict[str, str]:
     try:
         response = httpx.get(f"{base_url.rstrip('/')}/health", timeout=3.0)
@@ -37,8 +46,14 @@ def _probe_service(name: str, base_url: str) -> dict[str, str]:
 
 
 @router.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+def health() -> dict:
+    return health_payload(
+        "api-gateway",
+        {
+            "redis": check_redis("redis", settings.redis_url),
+            "auth-service": check_tcp("auth-service", settings.auth_service_base_url, default_port=8000),
+        },
+    )
 
 
 @router.get("/metrics")
@@ -63,17 +78,17 @@ def current_user_public(principal: GatewayPrincipal = Depends(require_principal)
 
 @router.post("/auth/register")
 def gateway_register(payload: dict) -> JSONResponse:
-    return JSONResponse(auth_client.post("/auth/register", json=payload))
+    return _proxy_json(auth_client.request("POST", "/auth/register", json=payload))
 
 
 @router.post("/auth/login")
 def gateway_login(payload: dict) -> JSONResponse:
-    return JSONResponse(auth_client.post("/auth/login", json=payload))
+    return _proxy_json(auth_client.request("POST", "/auth/login", json=payload))
 
 
 @router.post("/auth/refresh")
 def gateway_refresh(payload: dict) -> JSONResponse:
-    return JSONResponse(auth_client.post("/auth/refresh", json=payload))
+    return _proxy_json(auth_client.request("POST", "/auth/refresh", json=payload))
 
 
 @router.get("/gateway/dashboard")
@@ -88,7 +103,7 @@ def dashboard_public(principal: GatewayPrincipal = Depends(require_principal)) -
 
 @router.get("/gateway/signals")
 def gateway_signals(principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
-    return JSONResponse(signal_client.get("/signals"))
+    return JSONResponse(signal_client.get("/signals", headers=principal.forwarded_headers))
 
 
 @router.get("/signals")
@@ -208,22 +223,23 @@ def gateway_settings_public(principal: GatewayPrincipal = Depends(require_princi
 
 @router.post("/gateway/settings/credentials")
 def gateway_store_credentials(payload: dict, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
-    result = credential_client.post("/credentials", headers=principal.forwarded_headers, json=payload)
-    return JSONResponse(result)
+    merged = {"user_id": principal.user_id, **payload}
+    response = credential_client.request("POST", "/credentials", headers=principal.forwarded_headers, json=merged)
+    return _proxy_json(response)
 
 
 @router.post("/gateway/settings/risk")
 def gateway_risk_check(payload: dict, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
     merged = {"user_id": principal.user_id, **payload}
-    result = risk_client.post("/risk/approve", json=merged)
-    return JSONResponse(result)
+    response = risk_client.request("POST", "/risk/approve", json=merged)
+    return _proxy_json(response)
 
 
 @router.post("/gateway/orders")
 def gateway_create_order(payload: dict, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
     merged = {"user_id": principal.user_id, **payload}
-    result = order_client.post("/orders", json=merged)
-    return JSONResponse(result)
+    response = order_client.request("POST", "/orders", json=merged)
+    return _proxy_json(response)
 
 
 @router.post("/orders")

@@ -20,6 +20,7 @@ from app.models.auth import (
     UserProfile,
     UserRegistrationRequest,
 )
+from shared.health import check_sql, health_payload
 
 router = APIRouter()
 
@@ -59,8 +60,13 @@ def _require_internal_admin(
 
 
 @router.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+def health() -> dict:
+    return health_payload(
+        "auth-service",
+        {
+            "postgres": check_sql("postgres", settings.postgres_url),
+        },
+    )
 
 
 @router.get("/metrics")

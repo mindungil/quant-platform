@@ -1,13 +1,24 @@
+import os
+
 from fastapi import APIRouter, Header, HTTPException
 from app.db.repository import credential_repository
 from app.models.credential import CredentialCreate, CredentialMaskedResponse, CredentialResponse
+from shared.health import check_sql, health_payload
 
 router = APIRouter()
 
 
 @router.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+def health() -> dict:
+    return health_payload(
+        "credential-store",
+        {
+            "postgres": check_sql(
+                "postgres",
+                os.getenv("POSTGRES_URL", "postgresql+psycopg://postgres:postgres@localhost:5432/platform"),
+            )
+        },
+    )
 
 
 @router.post("/credentials", response_model=CredentialMaskedResponse)

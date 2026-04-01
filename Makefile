@@ -8,7 +8,7 @@ venv:
 	$(PYTHON) -m venv $(VENV)
 
 operator-deps: venv
-	. $(VENV)/bin/activate && pip install --upgrade pip && pip install requests websocket-client
+	. $(VENV)/bin/activate && pip install --upgrade pip && pip install requests aiohttp
 
 install: venv
 	. $(VENV)/bin/activate && pip install --upgrade pip && \
@@ -32,7 +32,7 @@ install: venv
 	pip install -r services/auth-service/requirements.txt && \
 	pip install -r services/llm-gateway/requirements.txt && \
 	pip install -r services/api-gateway/requirements.txt && \
-	pip install pytest requests websocket-client alembic
+	pip install pytest requests aiohttp alembic
 	cd services/frontend && $(NPM) install
 
 test:
@@ -60,15 +60,16 @@ test:
 	cd services/frontend && $(NPM) run typecheck && $(NPM) run build
 
 compile:
-	$(PYTHON) -m compileall .
+	$(PYTHON) -m compileall shared migrations scripts services
 
 compose-config:
 	docker-compose -f docker-compose.yml config
 
 smoke: compose-config compile
 
-compose-up:
+compose-up: operator-deps
 	docker-compose up -d --build
+	. $(VENV)/bin/activate && python scripts/compose_wait.py
 
 compose-down:
 	docker-compose down --remove-orphans

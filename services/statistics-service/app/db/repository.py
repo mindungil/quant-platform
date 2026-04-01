@@ -1,9 +1,15 @@
 import os
 
+from app.core.config import settings
 from app.core.engine import compute_statistics
 from app.models.statistics import StatisticsInput, StatisticsSnapshot
+from shared.asyncio_utils import run_coro
+from shared.events import EventEnvelope, JetStreamBus
+from shared.logging import get_logger
 from shared.persistence import RedisStore, SqlStore
 from shared.realtime import RealtimeBus
+
+logger = get_logger("statistics-service")
 
 
 class StatisticsRepository:
@@ -12,6 +18,11 @@ class StatisticsRepository:
         self._expected_returns: dict[str, float] = {}
         self._store = SqlStore(os.getenv("POSTGRES_URL", "postgresql+psycopg://postgres:postgres@localhost:5432/platform"))
         self._realtime = RealtimeBus(RedisStore(os.getenv("REDIS_URL", "redis://localhost:6379/0")))
+        self._bus = JetStreamBus(
+            nats_url=settings.nats_url,
+            redis_store=RedisStore(settings.redis_url),
+            enabled=settings.enable_nats,
+        )
         self._ensure_schema()
 
     def _ensure_schema(self) -> None:
@@ -37,6 +48,7 @@ class StatisticsRepository:
         *,
         order_id: str | None = None,
         asset: str | None = None,
+        correlation_id: str | None = None,
     ) -> StatisticsSnapshot:
         self._trade_pnls.setdefault(user_id, []).append(pnl)
         self._expected_returns[user_id] = expected_return
@@ -60,7 +72,43 @@ class StatisticsRepository:
             user_id=user_id,
             data=snapshot.model_dump(mode="json"),
         )
+        run_coro(
+            self._publish_statistics_event(
+                user_id=user_id,
+                correlation_id=correlation_id or order_id,
+                snapshot=snapshot,
+            )
+        )
         return snapshot
+
+    async def _publish_statistics_event(
+        self,
+        *,
+        user_id: str,
+        correlation_id: str | None,
+        snapshot: StatisticsSnapshot,
+    ) -> None:
+        await self._bus.connect()
+        await self._bus.ensure_stream(settings.execution_jetstream_stream, ["statistics.updated", "statistics.updated.dlq"])
+        await self._bus.publish(
+            "statistics.updated",
+            EventEnvelope(
+                event_type="statistics.updated",
+                source="statistics-service",
+                correlation_id=correlation_id,
+                user_id=user_id,
+                data=snapshot.model_dump(mode="json"),
+            ),
+        )
+        logger.info(
+            "statistics_updated",
+            extra={
+                "service": "statistics-service",
+                "correlation_id": correlation_id,
+                "user_id": user_id,
+                "event_type": "statistics.updated",
+            },
+        )
 
     def get(self, user_id: str) -> StatisticsSnapshot:
         rows = self._store.fetch_all(

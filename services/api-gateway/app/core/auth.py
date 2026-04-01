@@ -7,6 +7,7 @@ import jwt
 
 from app.core.config import settings
 from app.models.auth import GatewayPrincipal
+from shared.request_context import current_request_headers
 
 
 def require_principal(authorization: str | None = Header(default=None)) -> GatewayPrincipal:
@@ -28,7 +29,7 @@ def require_principal(authorization: str | None = Header(default=None)) -> Gatew
         user_id=payload["sub"],
         email=payload.get("email"),
         roles=payload.get("roles", []),
-        forwarded_headers={"X-User-ID": payload["sub"]},
+        forwarded_headers={"X-User-ID": payload["sub"], **current_request_headers()},
     )
 
 
@@ -51,6 +52,7 @@ def build_internal_admin_headers(principal: GatewayPrincipal, path: str) -> dict
         sha256,
     ).hexdigest()
     return {
+        **current_request_headers(),
         **principal.forwarded_headers,
         "X-Internal-Actor-User-ID": principal.user_id,
         "X-Internal-Admin-Timestamp": timestamp,

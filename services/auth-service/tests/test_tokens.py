@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 from app.core.tokens import issue_access_token, issue_for_profile, refresh_access_token, verify_access_token
 from app.db.repository import AuthRepository, auth_repository
 from app.models.auth import RefreshTokenRequest, TokenIssueRequest, UserRegistrationRequest
@@ -21,7 +23,7 @@ def test_refresh_token_issues_new_access_token(monkeypatch) -> None:
     monkeypatch.setattr("app.core.tokens.auth_repository", repo)
     profile = repo.register(
         UserRegistrationRequest(
-            email="refresh@example.com",
+            email=f"refresh-{uuid4().hex}@example.com",
             password="password123",
             display_name="Refresh User",
             plan="premium",

@@ -1,4 +1,5 @@
 import httpx
+from shared.request_context import current_request_headers
 
 
 class LlmGatewayClient:
@@ -16,6 +17,7 @@ class LlmGatewayClient:
     ) -> str:
         response = httpx.post(
             f"{self._base_url}/reasoning/generate",
+            headers=current_request_headers(),
             json={
                 "asset": asset,
                 "signal_score": signal_score,

@@ -1,7 +1,6 @@
-import asyncio
-
 from app.core.config import settings
 from app.models.feature import FeatureResponse, FeatureUpdatedEvent
+from shared.asyncio_utils import run_coro
 from shared.events import EventEnvelope, JetStreamBus
 from shared.persistence import RedisStore
 from shared.realtime import RealtimeBus
@@ -44,11 +43,7 @@ class EventPublisher:
         )
 
     def publish_feature(self, asset: str, feature: FeatureResponse) -> None:
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            return
-        loop.create_task(self.publish_feature_async(asset=asset, feature=feature))
+        run_coro(self.publish_feature_async(asset=asset, feature=feature))
 
 
 publisher = EventPublisher()

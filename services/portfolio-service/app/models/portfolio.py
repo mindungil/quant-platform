@@ -11,6 +11,7 @@ class PositionUpdate(BaseModel):
     price: float = 0.0
     notional: float = 0.0
     order_id: str | None = None
+    correlation_id: str | None = None
 
 
 class PortfolioSnapshot(BaseModel):

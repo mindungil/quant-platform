@@ -158,16 +158,19 @@ class OrderRepository:
                 "statistics": serialize_json(response.statistics.model_dump(mode="json")) if response.statistics is not None else None,
             },
         )
+        self.record_lifecycle(response.order_id, user_id, response.status, detail=detail or {})
+
+    def record_lifecycle(self, order_id: str, user_id: str, status: str, *, detail: dict) -> None:
         self._store.execute(
             """
             INSERT INTO order_lifecycle_events (order_id, user_id, status, detail, created_at)
             VALUES (:order_id, :user_id, :status, CAST(:detail AS JSONB), :created_at)
             """,
             {
-                "order_id": response.order_id,
+                "order_id": order_id,
                 "user_id": user_id,
-                "status": response.status,
-                "detail": serialize_json(detail or {}),
+                "status": status,
+                "detail": serialize_json(detail),
                 "created_at": datetime.now(UTC),
             },
         )

@@ -45,6 +45,7 @@ class SignalConsumer:
             threshold=settings.signal_threshold,
             asset_type=asset_type,
             strategy_id=None if strategy is None else strategy.get("id"),
+            strategy_user_id=None if strategy is None else strategy.get("user_id"),
         )
         signal_repository.save(asset=asset, evaluation=evaluation)
         if evaluation.threshold_crossed:

@@ -75,38 +75,39 @@ class MemoryRepository:
         row = self._store.fetch_one("SELECT * FROM memory_records WHERE id = :memory_id", {"memory_id": memory_id})
         if row is None:
             return None
-        return MemoryRecord(
-            **row,
-            metadata=deserialize_json(row["metadata"]) or {},
-            embedding=deserialize_json(row["embedding"]) or [],
-            links=deserialize_json(row["links"]) or [],
-            link_weights=deserialize_json(row["link_weights"]) or {},
-        )
+        return self._hydrate(row)
 
     def list_all(self, user_id: str | None = None) -> list[MemoryRecord]:
-        rows = self._store.fetch_all(
-            """
-            SELECT * FROM memory_records
-            WHERE (:user_id IS NULL OR user_id = :user_id)
-            ORDER BY timestamp DESC
-            """,
-            {"user_id": user_id},
-        )
+        if user_id is None:
+            rows = self._store.fetch_all(
+                """
+                SELECT * FROM memory_records
+                ORDER BY timestamp DESC
+                """
+            )
+        else:
+            rows = self._store.fetch_all(
+                """
+                SELECT * FROM memory_records
+                WHERE user_id = :user_id
+                ORDER BY timestamp DESC
+                """,
+                {"user_id": user_id},
+            )
         if rows:
-            return [
-                MemoryRecord(
-                    **row,
-                    metadata=deserialize_json(row["metadata"]) or {},
-                    embedding=deserialize_json(row["embedding"]) or [],
-                    links=deserialize_json(row["links"]) or [],
-                    link_weights=deserialize_json(row["link_weights"]) or {},
-                )
-                for row in rows
-            ]
+            return [self._hydrate(row) for row in rows]
         items = list(self._items.values())
         if user_id is None:
             return items
         return [item for item in items if item.user_id == user_id]
+
+    def _hydrate(self, row: dict) -> MemoryRecord:
+        payload = dict(row)
+        payload["metadata"] = deserialize_json(row["metadata"]) or {}
+        payload["embedding"] = deserialize_json(row["embedding"]) or []
+        payload["links"] = deserialize_json(row["links"]) or []
+        payload["link_weights"] = deserialize_json(row["link_weights"]) or {}
+        return MemoryRecord(**payload)
 
 
 memory_repository = MemoryRepository()

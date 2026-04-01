@@ -28,7 +28,12 @@ class CryptoAgentConsumer:
         await self._bus.close()
 
     async def _handle(self, payload: dict) -> None:
-        run_decision_loop(payload["data"]["asset"])
+        event_data = payload["data"]
+        run_decision_loop(
+            event_data["asset"],
+            user_id=event_data.get("strategy_user_id"),
+            correlation_id=payload.get("correlation_id"),
+        )
 
 
 consumer = CryptoAgentConsumer()

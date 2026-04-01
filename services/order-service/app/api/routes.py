@@ -8,6 +8,7 @@ from app.core.engine import process_order
 from app.core.config import settings
 from app.db.repository import order_repository
 from app.models.order import ExecutionConfig, OrderRequest, OrderResponse
+from shared.health import check_redis, check_sql, check_tcp, health_payload
 
 router = APIRouter()
 
@@ -34,8 +35,15 @@ def _require_internal_admin(
 
 
 @router.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+def health() -> dict:
+    return health_payload(
+        "order-service",
+        {
+            "postgres": check_sql("postgres", settings.postgres_url),
+            "redis": check_redis("redis", settings.redis_url),
+            "nats": check_tcp("nats", settings.nats_url, default_port=4222),
+        },
+    )
 
 
 @router.get("/metrics")

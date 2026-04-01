@@ -1,14 +1,21 @@
 from fastapi import APIRouter, Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from app.core.config import settings
 from app.db.repository import exchange_repository
 from app.models.exchange import ExchangeAuditRecord, ExchangeOrderRequest, ExchangeOrderResponse
+from shared.health import check_sql, health_payload
 
 router = APIRouter()
 
 
 @router.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+def health() -> dict:
+    return health_payload(
+        "exchange-adapter",
+        {
+            "postgres": check_sql("postgres", settings.postgres_url),
+        },
+    )
 
 
 @router.get("/metrics")

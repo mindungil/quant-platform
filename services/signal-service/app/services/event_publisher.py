@@ -1,7 +1,6 @@
-import asyncio
-
 from app.core.config import settings
 from app.models.signal import SignalEvaluationResponse, SignalThresholdEvent
+from shared.asyncio_utils import run_coro
 from shared.events import EventEnvelope, JetStreamBus
 from shared.persistence import RedisStore
 from shared.realtime import RealtimeBus
@@ -37,6 +36,7 @@ class EventPublisher:
             EventEnvelope(
                 event_type="signal.threshold.crossed",
                 source="signal-service",
+                user_id=evaluation.strategy_user_id,
                 data=event.model_dump(mode="json"),
             ),
         )
@@ -46,21 +46,19 @@ class EventPublisher:
             data={
                 "asset": asset,
                 "asset_type": asset_type,
+                "strategy_user_id": evaluation.strategy_user_id,
                 "signal_score": evaluation.signal_score,
                 "threshold": evaluation.threshold,
                 "threshold_crossed": evaluation.threshold_crossed,
                 "direction": evaluation.direction,
                 "strategy_id": evaluation.strategy_id,
                 "feature_timestamp": evaluation.feature_timestamp.isoformat(),
+                "reference_price": evaluation.reference_price,
             },
         )
 
     def publish_threshold(self, asset: str, asset_type: str, evaluation: SignalEvaluationResponse) -> None:
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            return
-        loop.create_task(self.publish_threshold_async(asset=asset, asset_type=asset_type, evaluation=evaluation))
+        run_coro(self.publish_threshold_async(asset=asset, asset_type=asset_type, evaluation=evaluation))
 
 
 publisher = EventPublisher()

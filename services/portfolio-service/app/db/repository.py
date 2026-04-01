@@ -1,8 +1,14 @@
 import os
 
+from app.core.config import settings
 from app.models.portfolio import PortfolioSnapshot, PositionUpdate
+from shared.asyncio_utils import run_coro
+from shared.events import EventEnvelope, JetStreamBus
+from shared.logging import get_logger
 from shared.persistence import RedisStore, SqlStore
 from shared.realtime import RealtimeBus
+
+logger = get_logger("portfolio-service")
 
 
 class PortfolioRepository:
@@ -12,6 +18,11 @@ class PortfolioRepository:
         self._fills: dict[str, list[PositionUpdate]] = {}
         self._store = SqlStore(os.getenv("POSTGRES_URL", "postgresql+psycopg://postgres:postgres@localhost:5432/platform"))
         self._realtime = RealtimeBus(RedisStore(os.getenv("REDIS_URL", "redis://localhost:6379/0")))
+        self._bus = JetStreamBus(
+            nats_url=settings.nats_url,
+            redis_store=RedisStore(settings.redis_url),
+            enabled=settings.enable_nats,
+        )
         self._ensure_schema()
 
     def _ensure_schema(self) -> None:
@@ -86,7 +97,43 @@ class PortfolioRepository:
             user_id=payload.user_id,
             data=snapshot.model_dump(mode="json"),
         )
+        run_coro(
+            self._publish_portfolio_event(
+                user_id=payload.user_id,
+                correlation_id=payload.correlation_id or payload.order_id,
+                snapshot=snapshot,
+            )
+        )
         return snapshot
+
+    async def _publish_portfolio_event(
+        self,
+        *,
+        user_id: str,
+        correlation_id: str | None,
+        snapshot: PortfolioSnapshot,
+    ) -> None:
+        await self._bus.connect()
+        await self._bus.ensure_stream(settings.execution_jetstream_stream, ["portfolio.updated", "portfolio.updated.dlq"])
+        await self._bus.publish(
+            "portfolio.updated",
+            EventEnvelope(
+                event_type="portfolio.updated",
+                source="portfolio-service",
+                correlation_id=correlation_id,
+                user_id=user_id,
+                data=snapshot.model_dump(mode="json"),
+            ),
+        )
+        logger.info(
+            "portfolio_updated",
+            extra={
+                "service": "portfolio-service",
+                "correlation_id": correlation_id,
+                "user_id": user_id,
+                "event_type": "portfolio.updated",
+            },
+        )
 
     def get(self, user_id: str) -> PortfolioSnapshot:
         position_rows = self._store.fetch_all(

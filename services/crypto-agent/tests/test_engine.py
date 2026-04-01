@@ -5,7 +5,7 @@ from app.models.agent import MemoryRecord, MemorySearchResponse, SignalSnapshot,
 
 
 class StubSignalClient:
-    def get_latest_signal(self, asset: str) -> SignalSnapshot:
+    def get_latest_signal(self, asset: str, *, user_id: str | None = None) -> SignalSnapshot:
         return SignalSnapshot(
             asset=asset,
             signal_score=0.81,
@@ -18,9 +18,10 @@ class StubSignalClient:
 
 
 class StubStrategyClient:
-    def get_active_strategy(self, asset_type: str) -> StrategySnapshot:
+    def get_active_strategy(self, asset_type: str, *, user_id: str | None = None) -> StrategySnapshot:
         return StrategySnapshot(
             id="strategy-1",
+            user_id=user_id or "bootstrap",
             name="Momentum",
             asset_type=asset_type,
             indicators=["rsi_14", "macd"],
@@ -64,16 +65,23 @@ class StubLlmGatewayClient:
         return "LLM reasoning"
 
 
+class StubPublisher:
+    def publish_agent_action(self, decision, order_request) -> None:
+        return None
+
+
 def test_run_decision_loop_records_decision(monkeypatch) -> None:
     stub_memory = StubMemoryClient()
     monkeypatch.setattr(engine, "signal_client", StubSignalClient())
     monkeypatch.setattr(engine, "strategy_client", StubStrategyClient())
     monkeypatch.setattr(engine, "memory_client", stub_memory)
     monkeypatch.setattr(engine, "llm_gateway_client", StubLlmGatewayClient())
+    monkeypatch.setattr(engine, "publisher", StubPublisher())
 
     decision = engine.run_decision_loop("BTCUSDT")
 
     assert decision.asset == "BTCUSDT"
     assert decision.action == "BUY"
     assert decision.reasoning == "LLM reasoning"
+    assert decision.user_id
     assert stub_memory.recorded

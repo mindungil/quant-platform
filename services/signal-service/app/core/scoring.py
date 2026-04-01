@@ -13,8 +13,11 @@ def build_signal_response(
     asset: str,
     features: FeatureSnapshot,
     threshold: float,
+    entry_threshold: float | None = None,
+    exit_threshold: float | None = None,
     asset_type: str = "crypto",
     strategy_id: str | None = None,
+    strategy_user_id: str | None = None,
     external_context: ExternalContextSnapshot | None = None,
     external_signal_weight: float = 0.0,
 ) -> SignalEvaluationResponse:
@@ -64,18 +67,23 @@ def build_signal_response(
         else:
             total_score = technical_score
 
-    threshold_crossed = abs(total_score) >= threshold
-    direction = "BUY" if total_score >= threshold else "SELL" if total_score <= -threshold else "HOLD"
+    positive_threshold = abs(entry_threshold if entry_threshold is not None else threshold)
+    negative_threshold = abs(exit_threshold if exit_threshold is not None else threshold)
+    threshold_crossed = total_score >= positive_threshold or total_score <= -negative_threshold
+    direction = "BUY" if total_score >= positive_threshold else "SELL" if total_score <= -negative_threshold else "HOLD"
+    effective_threshold = positive_threshold if total_score >= 0 else negative_threshold
 
     return SignalEvaluationResponse(
         asset=asset,
         asset_type=asset_type,
         strategy_id=strategy_id,
+        strategy_user_id=strategy_user_id,
         signal_score=round(total_score, 4),
-        threshold=threshold,
+        threshold=effective_threshold,
         threshold_crossed=threshold_crossed,
         direction=direction,
         components=score_components,
         feature_timestamp=features.timestamp,
         external_timestamp=external_context.timestamp if external_context is not None else None,
+        reference_price=features.close,
     )

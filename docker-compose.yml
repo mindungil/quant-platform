@@ -142,7 +142,8 @@ services:
       retries: 12
   exchange-adapter:
     build:
-      context: ./services/exchange-adapter
+      context: .
+      dockerfile: services/exchange-adapter/Dockerfile
     env_file:
       - .env.example
     ports:
@@ -154,7 +155,8 @@ services:
       retries: 12
   risk-service:
     build:
-      context: ./services/risk-service
+      context: .
+      dockerfile: services/risk-service/Dockerfile
     env_file:
       - .env.example
     ports:
@@ -166,11 +168,15 @@ services:
       retries: 12
   credential-store:
     build:
-      context: ./services/credential-store
+      context: .
+      dockerfile: services/credential-store/Dockerfile
     env_file:
       - .env.example
     ports:
       - "8010:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
       interval: 10s
@@ -217,6 +223,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      nats:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
       interval: 10s
@@ -235,6 +243,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      nats:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
       interval: 10s
@@ -242,7 +252,8 @@ services:
       retries: 12
   orchestrator-agent:
     build:
-      context: ./services/orchestrator-agent
+      context: .
+      dockerfile: services/orchestrator-agent/Dockerfile
     env_file:
       - .env.example
     ports:
@@ -379,6 +390,7 @@ services:
 
   nats:
     image: nats:2.11-alpine
+    command: ["-js", "-m", "8222"]
     ports:
       - "4222:4222"
     healthcheck:
@@ -443,6 +455,9 @@ services:
   grafana:
     image: grafana/grafana:11.6.0
     profiles: ["observability"]
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
     ports:
       - "3001:3000"
     depends_on:

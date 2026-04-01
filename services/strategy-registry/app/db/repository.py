@@ -10,10 +10,13 @@ class StrategyRepository:
         self._ensure_schema()
         self._seed_default()
 
+    @staticmethod
+    def _table_names() -> tuple[str, str]:
+        return ("strategy_records", "strategies")
+
     def _ensure_schema(self) -> None:
-        self._store.execute(
-            """
-            CREATE TABLE IF NOT EXISTS strategies (
+        schema = """
+            CREATE TABLE IF NOT EXISTS {table_name} (
                 id TEXT PRIMARY KEY,
                 user_id TEXT NOT NULL,
                 created_at TIMESTAMPTZ NOT NULL,
@@ -24,14 +27,46 @@ class StrategyRepository:
                 thresholds JSONB NOT NULL,
                 version TEXT NOT NULL,
                 status TEXT NOT NULL,
-                backtest_results JSONB NOT NULL DEFAULT '{}'::jsonb,
-                shadow_metrics JSONB NOT NULL DEFAULT '{}'::jsonb
+                backtest_results JSONB NOT NULL DEFAULT '{{}}'::jsonb,
+                shadow_metrics JSONB NOT NULL DEFAULT '{{}}'::jsonb
             )
+        """
+        for table_name in self._table_names():
+            self._store.execute(schema.format(table_name=table_name))
+        self._store.execute(
+            """
+            INSERT INTO strategy_records (
+                id, user_id, created_at, name, asset_type, indicators, weights, thresholds, version, status, backtest_results, shadow_metrics
+            )
+            SELECT
+                id, user_id, created_at, name, asset_type, indicators, weights, thresholds, version, status, backtest_results, shadow_metrics
+            FROM strategies
+            ON CONFLICT (id) DO NOTHING
             """
         )
 
     def _seed_default(self) -> None:
-        if self._store.fetch_one("SELECT id FROM strategies WHERE user_id = 'bootstrap' LIMIT 1") is not None:
+        active_bootstrap = self._store.fetch_one(
+            """
+            SELECT * FROM strategy_records
+            WHERE user_id = 'bootstrap' AND asset_type = 'crypto' AND status = 'ACTIVE'
+            ORDER BY created_at DESC LIMIT 1
+            """
+        )
+        if active_bootstrap is not None:
+            return
+        bootstrap_row = self._store.fetch_one(
+            """
+            SELECT * FROM strategy_records
+            WHERE user_id = 'bootstrap' AND asset_type = 'crypto'
+            ORDER BY created_at DESC LIMIT 1
+            """
+        )
+        if bootstrap_row is not None:
+            strategy = self._hydrate(bootstrap_row)
+            strategy.status = "ACTIVE"
+            self._items[strategy.id] = strategy
+            self._persist(strategy)
             return
         strategy = Strategy(
             user_id="bootstrap",
@@ -48,9 +83,16 @@ class StrategyRepository:
         self._persist(strategy)
 
     def _persist(self, strategy: Strategy) -> None:
-        self._store.execute(
-            """
-            INSERT INTO strategies (
+        values = {
+            **strategy.model_dump(mode="json"),
+            "indicators": serialize_json(strategy.indicators),
+            "weights": serialize_json(strategy.weights),
+            "thresholds": serialize_json(strategy.thresholds),
+            "backtest_results": serialize_json(strategy.backtest_results),
+            "shadow_metrics": serialize_json(strategy.shadow_metrics),
+        }
+        query = """
+            INSERT INTO {table_name} (
                 id, user_id, created_at, name, asset_type, indicators, weights, thresholds, version, status, backtest_results, shadow_metrics
             ) VALUES (
                 :id, :user_id, :created_at, :name, :asset_type, CAST(:indicators AS JSONB), CAST(:weights AS JSONB),
@@ -68,26 +110,18 @@ class StrategyRepository:
                 status = EXCLUDED.status,
                 backtest_results = EXCLUDED.backtest_results,
                 shadow_metrics = EXCLUDED.shadow_metrics
-            """,
-            {
-                **strategy.model_dump(mode="json"),
-                "indicators": serialize_json(strategy.indicators),
-                "weights": serialize_json(strategy.weights),
-                "thresholds": serialize_json(strategy.thresholds),
-                "backtest_results": serialize_json(strategy.backtest_results),
-                "shadow_metrics": serialize_json(strategy.shadow_metrics),
-            },
-        )
+        """
+        for table_name in self._table_names():
+            self._store.execute(query.format(table_name=table_name), values)
 
     def _hydrate(self, row: dict) -> Strategy:
-        return Strategy(
-            **row,
-            indicators=deserialize_json(row["indicators"]) or [],
-            weights=deserialize_json(row["weights"]) or {},
-            thresholds=deserialize_json(row["thresholds"]) or {},
-            backtest_results=deserialize_json(row["backtest_results"]) or {},
-            shadow_metrics=deserialize_json(row["shadow_metrics"]) or {},
-        )
+        payload = dict(row)
+        payload["indicators"] = deserialize_json(row["indicators"]) or []
+        payload["weights"] = deserialize_json(row["weights"]) or {}
+        payload["thresholds"] = deserialize_json(row["thresholds"]) or {}
+        payload["backtest_results"] = deserialize_json(row["backtest_results"]) or {}
+        payload["shadow_metrics"] = deserialize_json(row["shadow_metrics"]) or {}
+        return Strategy(**payload)
 
     def _get_bootstrap_active(self, asset_type: str) -> Strategy | None:
         row = self._store.fetch_one(
@@ -112,7 +146,9 @@ class StrategyRepository:
         item = self._items.get(strategy_id)
         if item is not None:
             return item
-        row = self._store.fetch_one("SELECT * FROM strategies WHERE id = :strategy_id", {"strategy_id": strategy_id})
+        row = self._store.fetch_one("SELECT * FROM strategy_records WHERE id = :strategy_id", {"strategy_id": strategy_id})
+        if row is None:
+            row = self._store.fetch_one("SELECT * FROM strategies WHERE id = :strategy_id", {"strategy_id": strategy_id})
         if row is None:
             return None
         return self._hydrate(row)
@@ -123,7 +159,7 @@ class StrategyRepository:
             return sorted(active_items, key=lambda item: item.created_at, reverse=True)[0]
         row = self._store.fetch_one(
             """
-            SELECT * FROM strategies
+            SELECT * FROM strategy_records
             WHERE asset_type = :asset_type AND status = 'ACTIVE'
             ORDER BY CASE WHEN user_id = 'bootstrap' THEN 1 ELSE 0 END, created_at DESC
             LIMIT 1
@@ -137,7 +173,7 @@ class StrategyRepository:
     def get_active_for_user(self, asset_type: str, user_id: str) -> Strategy | None:
         row = self._store.fetch_one(
             """
-            SELECT * FROM strategies
+            SELECT * FROM strategy_records
             WHERE user_id = :user_id AND asset_type = :asset_type AND status = 'ACTIVE'
             ORDER BY created_at DESC LIMIT 1
             """,
@@ -154,14 +190,27 @@ class StrategyRepository:
         if status == "ACTIVE":
             self._store.execute(
                 """
+                UPDATE strategy_records
+                SET status = 'DEPRECATED'
+                WHERE user_id = :user_id AND asset_type = :asset_type AND id != :strategy_id AND status = 'ACTIVE'
+                """,
+                {"user_id": strategy.user_id, "asset_type": strategy.asset_type, "strategy_id": strategy.id},
+            )
+            self._store.execute(
+                """
                 UPDATE strategies
                 SET status = 'DEPRECATED'
-                WHERE asset_type = :asset_type AND id != :strategy_id AND status = 'ACTIVE'
+                WHERE user_id = :user_id AND asset_type = :asset_type AND id != :strategy_id AND status = 'ACTIVE'
                 """,
-                {"asset_type": strategy.asset_type, "strategy_id": strategy.id},
+                {"user_id": strategy.user_id, "asset_type": strategy.asset_type, "strategy_id": strategy.id},
             )
             for item in self._items.values():
-                if item.asset_type == strategy.asset_type and item.id != strategy.id and item.status == "ACTIVE":
+                if (
+                    item.user_id == strategy.user_id
+                    and item.asset_type == strategy.asset_type
+                    and item.id != strategy.id
+                    and item.status == "ACTIVE"
+                ):
                     item.status = "DEPRECATED"
                     self._persist(item)
         strategy.status = status

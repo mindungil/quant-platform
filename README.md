@@ -44,14 +44,18 @@ Docker Compose productionization runtime for the startup-club autonomous trading
 - global execution config now exists behind admin-only controls for `live_trading_enabled`, `allowed_exchanges`, `default_shadow_mode`, and `strict_runtime`
 - `risk-service`, `exchange-adapter`, and `orchestrator-agent` now persist durable incidents, audit logs, and coordination snapshots
 - `order-service` now records lifecycle history instead of only a last-state order row
+- the crypto path now emits downstream execution events for `agent.crypto.action`, `order.created`, `order.filled`, `risk.triggered`, `portfolio.updated`, and `statistics.updated`
+- gateway now propagates request and correlation IDs downstream
+- crypto-critical services now expose shared request counters, latency histograms, inflight gauges, and JSON request logs with propagated correlation IDs
+- core runtime health endpoints now validate backing dependencies instead of returning process-only success
+- Prometheus now scrapes the crypto-critical mesh and Grafana ships with provisioned dashboards
 - `quant-agent-platform` is now archived as legacy reference only; `quant` is the single active repository
 
 ## What Is Not Included Yet
 
-- JetStream rollout for the full downstream execution and fill graph
 - Full provider-complete live exchange connectivity beyond the current runnable local adapters
-- Prometheus/Grafana-grade metrics across every service
-- full event-backed replay coverage for every product event type and every service
+- richer business-level metrics for fills, risk denials, and strategy performance on top of the new shared HTTP observability layer
+- full event-backed replay coverage for every product event type and every non-critical service
 
 ## Services
 
@@ -78,12 +82,13 @@ services/
 2. Start the stack:
 
 ```bash
-docker-compose up --build
+docker-compose up -d --build
 ```
 
 3. Bootstrap the admin and run a seeded operator flow:
 
 ```bash
+make compose-up
 make seed-admin
 make demo-flow
 make smoke-e2e
@@ -94,19 +99,6 @@ make release-check
 
 ```bash
 curl -X POST http://localhost:8001/candles/BTCUSDT \
-  -H "Content-Type: application/json" \
-  -d '{
-    "timestamp": "2026-03-30T00:00:00Z",
-    "open": 82000,
-    "high": 82300,
-    "low": 81800,
-    "close": 82150,
-    "volume": 1200
-  }'
-```
-
-```bash
-curl -X POST http://localhost:8002/events/candles/BTCUSDT \
   -H "Content-Type: application/json" \
   -d '{
     "timestamp": "2026-03-30T00:00:00Z",
@@ -168,7 +160,7 @@ open http://localhost:8018/admin
 - `feature-store` owns all indicator computation by design.
 - `signal-service` reads calculated features and composes signal plus external context.
 - Gateway routes expose product-facing REST and websocket surfaces around the service mesh.
-- JetStream is currently rolled out for the market, feature, signal, and crypto-agent path first.
+- JetStream now spans the crypto-first graph from signal thresholding through agent action and downstream order/portfolio/statistics events.
 - The first crypto release is operator-oriented and Binance-first. Live trading remains admin-gated and off by default.
 - `quant` is now the only live repository. `quant-agent-platform` has been archived under `docs/legacy/`.
 - RBAC is intentionally simple for now: `user` and `admin`.

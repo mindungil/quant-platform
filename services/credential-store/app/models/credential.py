@@ -2,7 +2,7 @@ from pydantic import BaseModel
 
 
 class CredentialCreate(BaseModel):
-    user_id: str
+    user_id: str = "anonymous"
     exchange: str
     api_key: str
     api_secret: str
