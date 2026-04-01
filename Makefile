@@ -72,10 +72,12 @@ smoke: compose-config compile
 
 compose-up: operator-deps
 	docker-compose up -d --build
-	. $(VENV)/bin/activate && python scripts/compose_wait.py
+	@echo "Waiting for backend to become healthy..."
+	@timeout 120 bash -c 'until docker-compose exec -T backend python -c "import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8017/health\").read()" 2>/dev/null; do sleep 3; done' || true
+	@echo "Stack is up. Gateway: http://localhost:8017  UI: http://localhost:8018"
 
 compose-down:
-	docker-compose down --remove-orphans
+	docker-compose down --remove-orphans -v
 
 seed-admin: operator-deps
 	. $(VENV)/bin/activate && python scripts/seed_admin.py
