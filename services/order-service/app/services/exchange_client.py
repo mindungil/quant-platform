@@ -8,6 +8,16 @@ class ExchangeClient:
     def __init__(self, base_url: str) -> None:
         self._base_url = base_url.rstrip("/")
 
+    def cancel(self, order_id: str, user_id: str, exchange: str) -> dict:
+        response = httpx.delete(
+            f"{self._base_url}/exchange/orders/{order_id}",
+            headers=current_request_headers(),
+            params={"user_id": user_id, "exchange": exchange},
+            timeout=5.0,
+        )
+        response.raise_for_status()
+        return response.json()
+
     def place(self, payload: OrderRequest) -> dict:
         response = httpx.post(
             f"{self._base_url}/exchange/orders",

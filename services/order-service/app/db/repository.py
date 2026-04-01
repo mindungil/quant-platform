@@ -175,6 +175,29 @@ class OrderRepository:
             },
         )
 
+    def get_by_id(self, order_id: str) -> OrderResponse | None:
+        row = self._store.fetch_one(
+            "SELECT * FROM order_events WHERE order_id = :order_id",
+            {"order_id": order_id},
+        )
+        if row is not None:
+            return self._hydrate(row)
+        for orders in self._orders.values():
+            for order in orders:
+                if order.order_id == order_id:
+                    return order
+        return None
+
+    def update_status(self, order_id: str, status: str) -> None:
+        self._store.execute(
+            "UPDATE order_events SET status = :status WHERE order_id = :order_id",
+            {"order_id": order_id, "status": status},
+        )
+        for orders in self._orders.values():
+            for order in orders:
+                if order.order_id == order_id:
+                    order.status = status
+
     def list_for_user(self, user_id: str) -> list[OrderResponse]:
         rows = self._store.fetch_all(
             """

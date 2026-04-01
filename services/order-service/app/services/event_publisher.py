@@ -31,6 +31,8 @@ class EventPublisher:
                 "order.created.dlq",
                 "order.filled",
                 "order.filled.dlq",
+                "order.cancelled",
+                "order.cancelled.dlq",
                 "portfolio.updated",
                 "statistics.updated",
             ],
@@ -137,6 +139,38 @@ class EventPublisher:
             correlation_id=payload.correlation_id,
             data=body,
         )
+
+    async def publish_order_cancelled_async(self, order_id: str, user_id: str, correlation_id: str | None = None) -> None:
+        body = {"order_id": order_id, "user_id": user_id, "status": "CANCELLED"}
+        await self._bus.publish(
+            "order.cancelled",
+            EventEnvelope(
+                event_type="order.cancelled",
+                source="order-service",
+                correlation_id=correlation_id,
+                user_id=user_id,
+                data=body,
+            ),
+        )
+        self._realtime.publish(
+            event_type="order.cancelled",
+            source="order-service",
+            user_id=user_id,
+            correlation_id=correlation_id,
+            data=body,
+        )
+        logger.info(
+            "order_cancelled",
+            extra={
+                "service": "order-service",
+                "correlation_id": correlation_id,
+                "user_id": user_id,
+                "event_type": "order.cancelled",
+            },
+        )
+
+    def publish_order_cancelled(self, order_id: str, user_id: str, correlation_id: str | None = None) -> None:
+        run_coro(self.publish_order_cancelled_async(order_id, user_id, correlation_id))
 
     def publish_risk_triggered(self, *, payload: OrderRequest, reason: str, level: str, requested_notional: float) -> None:
         run_coro(

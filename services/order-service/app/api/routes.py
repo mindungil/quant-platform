@@ -4,11 +4,15 @@ from hashlib import sha256
 
 from fastapi import APIRouter, Header, HTTPException, Request, Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
-from app.core.engine import process_order
+from app.core.engine import process_order, exchange_client
 from app.core.config import settings
 from app.db.repository import order_repository
 from app.models.order import ExecutionConfig, OrderRequest, OrderResponse
+from app.services.event_publisher import publisher
 from shared.health import check_redis, check_sql, check_tcp, health_payload
+from shared.logging import get_logger
+
+_logger = get_logger("order-service")
 
 router = APIRouter()
 
@@ -54,6 +58,59 @@ def metrics() -> Response:
 @router.post("/orders", response_model=OrderResponse)
 def create_order(payload: OrderRequest) -> OrderResponse:
     return process_order(payload)
+
+
+@router.get("/orders/detail/{order_id}", response_model=OrderResponse)
+def get_order(order_id: str) -> OrderResponse:
+    order = order_repository.get_by_id(order_id)
+    if order is None:
+        raise HTTPException(status_code=404, detail="order_not_found")
+    return order
+
+
+@router.delete("/orders/{order_id}", response_model=OrderResponse)
+def cancel_order(order_id: str) -> OrderResponse:
+    order = order_repository.get_by_id(order_id)
+    if order is None:
+        raise HTTPException(status_code=404, detail="order_not_found")
+    if order.status in ("CANCELLED", "FILLED", "REJECTED", "FAILED"):
+        raise HTTPException(status_code=409, detail=f"order_already_{order.status.lower()}")
+
+    # Attempt exchange cancellation for submitted orders
+    exchange_cancel_result = None
+    if order.status in ("SUBMITTED", "APPROVED", "PENDING"):
+        try:
+            exchange_cancel_result = exchange_client.cancel(order.order_id, order.user_id, order.exchange)
+        except Exception:
+            _logger.exception(
+                "exchange_cancel_failed",
+                extra={
+                    "service": "order-service",
+                    "order_id": order.order_id,
+                    "user_id": order.user_id,
+                    "event_type": "order.cancel.exchange_error",
+                },
+            )
+
+    # Update status
+    order_repository.update_status(order.order_id, "CANCELLED")
+    order.status = "CANCELLED"
+
+    # Record lifecycle event
+    order_repository.record_lifecycle(
+        order.order_id,
+        order.user_id,
+        "CANCELLED",
+        detail={
+            "stage": "cancellation",
+            "exchange_cancel_result": exchange_cancel_result,
+        },
+    )
+
+    # Publish order.cancelled event
+    publisher.publish_order_cancelled(order.order_id, order.user_id)
+
+    return order
 
 
 @router.get("/orders/{user_id}", response_model=list[OrderResponse])
