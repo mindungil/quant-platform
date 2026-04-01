@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { gatewayFetch } from "../../lib/api";
 import { ChartPlaceholder } from "../../components/chart-placeholder";
 import { LiveFeed } from "../../components/live-feed";
+import { AuthGuard } from "../../components/auth-guard";
+import { connectGatewaySocket } from "../../lib/socket";
 
 interface PortfolioPosition {
   asset: string;
@@ -84,7 +86,48 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
   );
 }
 
-export default function DashboardPage() {
+function WsIndicator() {
+  const [connected, setConnected] = useState(false);
+  const [msgCount, setMsgCount] = useState(0);
+
+  useEffect(() => {
+    let alive = true;
+    const disconnect = connectGatewaySocket((payload) => {
+      if (alive) {
+        setConnected(true);
+        setMsgCount((c) => c + 1);
+      }
+      void payload;
+    });
+
+    // Assume connected after short delay if no error
+    const timer = window.setTimeout(() => {
+      if (alive) setConnected(true);
+    }, 3000);
+
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+      disconnect();
+      setConnected(false);
+    };
+  }, []);
+
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <span
+        className={`inline-block h-2 w-2 rounded-full ${
+          connected ? "bg-green-400 shadow-[0_0_6px_rgba(74,222,128,0.6)]" : "bg-red-400 animate-pulse"
+        }`}
+      />
+      <span className="text-white/50">
+        {connected ? `Live feed connected (${msgCount} msgs)` : "Connecting..."}
+      </span>
+    </div>
+  );
+}
+
+function DashboardContent() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -137,6 +180,11 @@ export default function DashboardPage() {
 
   return (
     <main className="grid gap-6">
+      {/* WebSocket connection indicator */}
+      <div className="flex items-center justify-end">
+        <WsIndicator />
+      </div>
+
       {/* Row 1: Chart + Portfolio summary */}
       <section className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
         <div className="panel">
@@ -311,5 +359,13 @@ export default function DashboardPage() {
         <LiveFeed />
       </section>
     </main>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <AuthGuard>
+      <DashboardContent />
+    </AuthGuard>
   );
 }

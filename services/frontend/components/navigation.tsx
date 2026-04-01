@@ -7,9 +7,10 @@ import { clearToken, hasRole } from "../lib/api";
 const baseLinks = [
   ["/dashboard", "Dashboard"],
   ["/signals", "Signals"],
-  ["/feed", "Feed"],
   ["/strategies", "Strategies"],
-  ["/settings", "Settings"]
+  ["/orders", "Orders"],
+  ["/feed", "Feed"],
+  ["/settings", "Settings"],
 ];
 
 export function Navigation() {
