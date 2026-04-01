@@ -86,6 +86,17 @@ def update_status(
     return strategy
 
 
+@router.patch("/strategies/{strategy_id}/backtest", response_model=Strategy)
+def attach_backtest(strategy_id: str, payload: dict, x_user_id: str | None = Header(default=None)) -> Strategy:
+    """Attach backtest results to a strategy so it can be activated."""
+    strategy = strategy_repository.get(strategy_id)
+    if strategy is None or (x_user_id is not None and strategy.user_id not in {x_user_id, "bootstrap"}):
+        raise HTTPException(status_code=404, detail="strategy_not_found")
+    strategy.backtest_results = payload
+    strategy_repository._persist(strategy)
+    return strategy
+
+
 @router.delete("/strategies/{strategy_id}", response_model=Strategy)
 def delete_strategy(strategy_id: str, x_user_id: str | None = Header(default=None)) -> Strategy:
     strategy = strategy_repository.get(strategy_id)
