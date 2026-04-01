@@ -1,6 +1,6 @@
 import json
 
-from fastapi import APIRouter, Depends, Response, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 import httpx
 import jwt
@@ -24,6 +24,10 @@ signal_client = GatewayClient(settings.signal_service_base_url)
 order_client = GatewayClient(settings.order_service_base_url)
 credential_client = GatewayClient(settings.credential_store_base_url)
 risk_client = GatewayClient(settings.risk_service_base_url)
+backtest_client = GatewayClient(settings.backtest_service_base_url)
+agent_client = GatewayClient(settings.crypto_agent_base_url)
+portfolio_client = GatewayClient(settings.portfolio_service_base_url)
+statistics_client = GatewayClient(settings.statistics_service_base_url)
 realtime_bus = RealtimeBus(RedisStore(settings.redis_url), replay_limit=settings.realtime_replay_limit)
 
 
@@ -156,10 +160,48 @@ def gateway_active_strategy(asset_type: str, principal: GatewayPrincipal = Depen
 
 
 @router.get("/strategies")
-def gateway_active_strategy_public(
-    asset_type: str = "crypto", principal: GatewayPrincipal = Depends(require_principal)
+def list_strategies(request: Request, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    params = dict(request.query_params)
+    result = strategy_client.get("/strategies", headers=principal.forwarded_headers, params=params)
+    return JSONResponse(result)
+
+
+@router.get("/strategies/{strategy_id}")
+def get_strategy(strategy_id: str, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    result = strategy_client.get(f"/strategies/{strategy_id}", headers=principal.forwarded_headers)
+    return JSONResponse(result)
+
+
+@router.post("/strategies")
+def create_strategy(payload: dict, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    result = strategy_client.post("/strategies", headers=principal.forwarded_headers, json=payload)
+    return JSONResponse(result)
+
+
+@router.patch("/strategies/{strategy_id}/backtest")
+def update_strategy_backtest(
+    strategy_id: str, payload: dict, principal: GatewayPrincipal = Depends(require_principal)
 ) -> JSONResponse:
-    return gateway_active_strategy(asset_type=asset_type, principal=principal)
+    result = strategy_client.patch(
+        f"/strategies/{strategy_id}/backtest", headers=principal.forwarded_headers, json=payload
+    )
+    return JSONResponse(result)
+
+
+@router.patch("/strategies/{strategy_id}/status")
+def update_strategy_status(
+    strategy_id: str, payload: dict, principal: GatewayPrincipal = Depends(require_principal)
+) -> JSONResponse:
+    result = strategy_client.patch(
+        f"/strategies/{strategy_id}/status", headers=principal.forwarded_headers, json=payload
+    )
+    return JSONResponse(result)
+
+
+@router.delete("/strategies/{strategy_id}")
+def delete_strategy(strategy_id: str, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    response = strategy_client.request("DELETE", f"/strategies/{strategy_id}", headers=principal.forwarded_headers)
+    return _proxy_json(response)
 
 
 @router.post("/gateway/strategies")
@@ -245,6 +287,155 @@ def gateway_create_order(payload: dict, principal: GatewayPrincipal = Depends(re
 @router.post("/orders")
 def gateway_create_order_public(payload: dict, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
     return gateway_create_order(payload=payload, principal=principal)
+
+
+# ── Order Management (proxy to order-service) ──────────────────────────
+
+
+@router.get("/orders")
+def list_orders(principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    result = order_client.get(f"/orders/{principal.user_id}", headers=principal.forwarded_headers)
+    return JSONResponse(result)
+
+
+@router.get("/orders/{order_id}")
+def get_order(order_id: str, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    result = order_client.get(f"/orders/detail/{order_id}", headers=principal.forwarded_headers)
+    return JSONResponse(result)
+
+
+@router.delete("/orders/{order_id}")
+def cancel_order(order_id: str, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    response = order_client.request("DELETE", f"/orders/{order_id}", headers=principal.forwarded_headers)
+    return _proxy_json(response)
+
+
+@router.get("/orders/{order_id}/protections")
+def get_order_protections(order_id: str, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    result = order_client.get(f"/orders/protections/{order_id}", headers=principal.forwarded_headers)
+    return JSONResponse(result)
+
+
+# ── Backtest (proxy to backtest-service) ────────────────────────────────
+
+
+@router.post("/backtests")
+def run_backtest(payload: dict, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    response = backtest_client.request("POST", "/backtests/run", headers=principal.forwarded_headers, json=payload)
+    return _proxy_json(response)
+
+
+@router.get("/backtests/{job_id}")
+def get_backtest(job_id: str, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    result = backtest_client.get(f"/backtests/{job_id}", headers=principal.forwarded_headers)
+    return JSONResponse(result)
+
+
+# ── Credential Management (proxy to credential-store) ──────────────────
+
+
+@router.post("/settings/credentials")
+def store_credentials(payload: dict, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    merged = {"user_id": principal.user_id, **payload}
+    response = credential_client.request("POST", "/credentials", headers=principal.forwarded_headers, json=merged)
+    return _proxy_json(response)
+
+
+@router.get("/settings/credentials")
+def list_credentials(principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    result = credential_client.get(f"/credentials/{principal.user_id}", headers=principal.forwarded_headers)
+    return JSONResponse(result)
+
+
+@router.delete("/settings/credentials/{exchange}")
+def delete_credentials(exchange: str, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    response = credential_client.request(
+        "DELETE", f"/credentials/{principal.user_id}/{exchange}", headers=principal.forwarded_headers
+    )
+    return _proxy_json(response)
+
+
+# ── Portfolio (proxy to portfolio-service) ──────────────────────────────
+
+
+@router.get("/portfolio")
+def get_portfolio(principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    result = portfolio_client.get(f"/portfolio/{principal.user_id}", headers=principal.forwarded_headers)
+    return JSONResponse(result)
+
+
+# ── Statistics (proxy to statistics-service) ────────────────────────────
+
+
+@router.get("/statistics")
+def get_statistics(principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    result = statistics_client.get(f"/statistics/{principal.user_id}", headers=principal.forwarded_headers)
+    return JSONResponse(result)
+
+
+# ── Agent Decisions (proxy to crypto-agent) ─────────────────────────────
+
+
+@router.post("/decisions/run/{asset}")
+def run_decision(asset: str, payload: dict, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    response = agent_client.request(
+        "POST", f"/decisions/run/{asset}", headers=principal.forwarded_headers, json=payload
+    )
+    return _proxy_json(response)
+
+
+@router.get("/decisions/latest/{asset}")
+def get_latest_decision(asset: str, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    result = agent_client.get(f"/decisions/latest/{asset}", headers=principal.forwarded_headers)
+    return JSONResponse(result)
+
+
+@router.get("/decisions/history/{asset}")
+def get_decision_history(asset: str, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    result = agent_client.get(f"/decisions/history/{asset}", headers=principal.forwarded_headers)
+    return JSONResponse(result)
+
+
+# ── Admin: Live Trading Gate (proxy to order-service) ──────────────────
+
+
+@router.post("/admin/execution/pre-flight")
+def admin_pre_flight(
+    payload: dict, principal: GatewayPrincipal = Depends(require_role("admin"))
+) -> JSONResponse:
+    response = order_client.request(
+        "POST",
+        "/admin/execution/pre-flight",
+        headers=build_internal_admin_headers(principal, "/admin/execution/pre-flight"),
+        json=payload,
+    )
+    return _proxy_json(response)
+
+
+@router.post("/admin/execution/enable-live")
+def admin_enable_live(
+    payload: dict, principal: GatewayPrincipal = Depends(require_role("admin"))
+) -> JSONResponse:
+    response = order_client.request(
+        "POST",
+        "/admin/execution/enable-live",
+        headers=build_internal_admin_headers(principal, "/admin/execution/enable-live"),
+        json=payload,
+    )
+    return _proxy_json(response)
+
+
+@router.post("/admin/execution/emergency-stop")
+def admin_emergency_stop(
+    payload: dict, principal: GatewayPrincipal = Depends(require_role("admin"))
+) -> JSONResponse:
+    response = order_client.request(
+        "POST",
+        "/admin/execution/emergency-stop",
+        headers=build_internal_admin_headers(principal, "/admin/execution/emergency-stop"),
+        json=payload,
+    )
+    return _proxy_json(response)
 
 
 @router.get("/admin/users")

@@ -13,6 +13,7 @@ class Settings:
     memory_service_base_url: str = os.getenv("MEMORY_SERVICE_BASE_URL", "http://localhost:8004")
     strategy_registry_base_url: str = os.getenv("STRATEGY_REGISTRY_BASE_URL", "http://localhost:8005")
     crypto_agent_base_url: str = os.getenv("CRYPTO_AGENT_BASE_URL", "http://localhost:8006")
+    backtest_service_base_url: str = os.getenv("BACKTEST_SERVICE_BASE_URL", "http://localhost:8007")
     order_service_base_url: str = os.getenv("ORDER_SERVICE_BASE_URL", "http://localhost:8011")
     credential_store_base_url: str = os.getenv("CREDENTIAL_STORE_BASE_URL", "http://localhost:8010")
     risk_service_base_url: str = os.getenv("RISK_SERVICE_BASE_URL", "http://localhost:8009")
