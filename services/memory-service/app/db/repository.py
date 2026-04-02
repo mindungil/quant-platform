@@ -1,6 +1,15 @@
-from app.models.memory import MemoryRecord
+from __future__ import annotations
+
+import hashlib
+import logging
 import os
+
+import numpy as np
+
+from app.models.memory import MemoryRecord
 from shared.persistence import SqlStore, deserialize_json, serialize_json
+
+logger = logging.getLogger("memory-service")
 
 
 class MemoryRepository:
@@ -10,6 +19,12 @@ class MemoryRepository:
         self._ensure_schema()
 
     def _ensure_schema(self) -> None:
+        # Enable pgvector extension for semantic search
+        try:
+            self._store.execute("CREATE EXTENSION IF NOT EXISTS vector")
+        except Exception:
+            logger.warning("pgvector extension not available, semantic search disabled")
+
         self._store.execute(
             """
             CREATE TABLE IF NOT EXISTS memory_records (
@@ -35,6 +50,36 @@ class MemoryRepository:
             )
             """
         )
+
+        # Add pgvector column for semantic similarity search
+        try:
+            self._store.execute(
+                "ALTER TABLE memory_records ADD COLUMN IF NOT EXISTS embedding_vec vector(384)"
+            )
+        except Exception:
+            pass  # column may already exist or vector extension not available
+
+    def _compute_embedding(self, record_data: dict) -> list[float]:
+        """Compute a simple feature-based embedding for similarity search.
+
+        Uses a deterministic hash of key fields to create a 384-dim vector.
+        In production, replace with a real embedding model (e.g., sentence-transformers).
+        """
+        key_parts = [
+            str(record_data.get("asset", "")),
+            str(record_data.get("action", "")),
+            str(record_data.get("signal_score", 0)),
+            str(record_data.get("formula_name", "")),
+            str(record_data.get("regime_label", "")),
+        ]
+        seed = hashlib.sha256("|".join(key_parts).encode()).digest()
+
+        rng = np.random.RandomState(int.from_bytes(seed[:4], "big"))
+        vec = rng.randn(384).astype(np.float32)
+        norm = np.linalg.norm(vec)
+        if norm > 0:
+            vec = vec / norm
+        return vec.tolist()
 
     def save(self, record: MemoryRecord) -> None:
         self._items[record.id] = record
@@ -77,6 +122,16 @@ class MemoryRepository:
                 "link_weights": serialize_json(record.link_weights),
             },
         )
+
+        # Compute and store pgvector embedding for semantic search
+        embedding = self._compute_embedding(record.model_dump(mode="json"))
+        try:
+            self._store.execute(
+                "UPDATE memory_records SET embedding_vec = :vec::vector WHERE id = :id",
+                {"vec": str(embedding), "id": record.id},
+            )
+        except Exception:
+            pass  # vector extension may not be available
 
     def get(self, memory_id: str) -> MemoryRecord | None:
         item = self._items.get(memory_id)
@@ -136,8 +191,35 @@ class MemoryRepository:
             self._items[memory_id].outcome_sharpe = outcome_sharpe
             self._items[memory_id].last_reinforced_at = now
 
+    def search_similar(self, query_embedding: list[float], user_id: str | None = None, top_k: int = 10) -> list:
+        """Search for similar memories using pgvector cosine similarity."""
+        where_clause = "WHERE 1=1"
+        params: dict = {"vec": str(query_embedding), "top_k": top_k}
+        if user_id:
+            where_clause += " AND user_id = :user_id"
+            params["user_id"] = user_id
+
+        try:
+            rows = self._store.fetch_all(
+                f"""
+                SELECT *, 1 - (embedding_vec <=> :vec::vector) as similarity
+                FROM memory_records
+                {where_clause}
+                AND embedding_vec IS NOT NULL
+                ORDER BY embedding_vec <=> :vec::vector
+                LIMIT :top_k
+                """,
+                params,
+            )
+            return [self._hydrate(row) for row in rows]
+        except Exception:
+            return []
+
     def _hydrate(self, row: dict) -> MemoryRecord:
         payload = dict(row)
+        # Remove pgvector column that is not part of the Pydantic model
+        payload.pop("embedding_vec", None)
+        payload.pop("similarity", None)
         payload["metadata"] = deserialize_json(row["metadata"]) or {}
         payload["embedding"] = deserialize_json(row["embedding"]) or []
         payload["links"] = deserialize_json(row["links"]) or []

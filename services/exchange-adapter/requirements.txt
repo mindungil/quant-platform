@@ -4,3 +4,4 @@ prometheus_client==0.23.1
 psycopg[binary]==3.2.10
 sqlalchemy==2.0.43
 uvicorn==0.34.0
+ccxt==4.5.46

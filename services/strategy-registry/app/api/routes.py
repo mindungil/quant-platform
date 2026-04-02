@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 
 from fastapi import APIRouter, Header, HTTPException, Query
@@ -113,3 +115,55 @@ def delete_strategy(strategy_id: str, x_user_id: str | None = Header(default=Non
     if strategy is None:
         raise HTTPException(status_code=404, detail="strategy_not_found")
     return strategy
+
+
+# ---------------------------------------------------------------------------
+# Quant Model Registry endpoints
+# ---------------------------------------------------------------------------
+
+@router.post("/models")
+def register_model(payload: dict) -> dict:
+    from app.core.model_registry import model_registry
+    return model_registry.register(payload)
+
+
+@router.get("/models")
+def list_models(asset_type: str | None = None) -> list:
+    from app.core.model_registry import model_registry
+    return model_registry.list_models(asset_type)
+
+
+@router.get("/models/{model_id}")
+def get_model(model_id: str) -> dict:
+    from app.core.model_registry import model_registry
+    model = model_registry.get(model_id)
+    if model is None:
+        raise HTTPException(status_code=404, detail="model_not_found")
+    return model
+
+
+@router.patch("/models/{model_id}/backtest")
+def update_model_backtest(model_id: str, payload: dict) -> dict:
+    from app.core.model_registry import model_registry
+    result = model_registry.update_backtest_results(model_id, payload)
+    if result is None:
+        raise HTTPException(status_code=404, detail="model_not_found")
+    return result
+
+
+@router.post("/models/{model_id}/promote")
+def promote_model(model_id: str) -> dict:
+    from app.core.model_registry import model_registry
+    result = model_registry.promote(model_id)
+    if result is None:
+        raise HTTPException(status_code=409, detail="cannot_promote")
+    return result
+
+
+@router.post("/models/{name}/rollback")
+def rollback_model(name: str) -> dict:
+    from app.core.model_registry import model_registry
+    result = model_registry.rollback(name)
+    if result is None:
+        raise HTTPException(status_code=404, detail="no_previous_version")
+    return result
