@@ -192,10 +192,10 @@ def update_strategy_backtest(
 def update_strategy_status(
     strategy_id: str, payload: dict, principal: GatewayPrincipal = Depends(require_principal)
 ) -> JSONResponse:
-    result = strategy_client.patch(
-        f"/strategies/{strategy_id}/status", headers=principal.forwarded_headers, json=payload
+    response = strategy_client.request(
+        "PATCH", f"/strategies/{strategy_id}/status", headers=principal.forwarded_headers, json=payload
     )
-    return JSONResponse(result)
+    return _proxy_json(response)
 
 
 @router.delete("/strategies/{strategy_id}")
