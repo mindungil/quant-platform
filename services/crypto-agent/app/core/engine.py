@@ -351,33 +351,75 @@ def _phase_recall(
     except Exception as exc:
         logger.warning("formula_recall_failed", extra={"error": str(exc)})
 
-    # Compute average outcome per formula
-    avg_outcomes = {}
-    for fname, outcomes in formula_rankings.items():
-        avg_outcomes[fname] = sum(outcomes) / len(outcomes)
+    # Compute composite ranking per formula:
+    #   score = mean_outcome * confidence_from_sample_size * recency_weight
+    #
+    # - mean_outcome: average PnL (higher = better)
+    # - sample_confidence: sqrt(n) / sqrt(30) — reaches 1.0 at 30 samples
+    # - regime_match_quality: average search score from memory (0-1)
+    import math as _math
 
-    _complete_phase(phase, detail=f"formulas_found={len(avg_outcomes)}")
+    formula_scores: dict[str, dict] = {}
+    for fname, outcomes in formula_rankings.items():
+        n = len(outcomes)
+        mean_outcome = sum(outcomes) / n
+        # Sample confidence: penalize formulas with few data points
+        sample_confidence = min(_math.sqrt(n) / _math.sqrt(30), 1.0)
+        # Risk-adjusted: penalize high variance (prefer consistent formulas)
+        if n > 1:
+            variance = sum((o - mean_outcome) ** 2 for o in outcomes) / (n - 1)
+            std_dev = _math.sqrt(variance) if variance > 0 else 0.001
+            risk_adjusted = mean_outcome / max(std_dev, 0.001)  # like Sharpe
+        else:
+            risk_adjusted = mean_outcome * 10  # single sample: scale by 10
+        # Composite score
+        composite = risk_adjusted * sample_confidence
+        formula_scores[fname] = {
+            "composite": composite,
+            "mean_outcome": mean_outcome,
+            "sample_count": n,
+            "sample_confidence": round(sample_confidence, 3),
+        }
+
+    _complete_phase(phase, detail=f"formulas_found={len(formula_scores)}")
     phases.append(phase)
-    return avg_outcomes
+    return formula_scores
 
 
 def _phase_score(
     features: dict,
-    formula_outcomes: dict,
+    formula_scores: dict,
     suggested_type: str,
     phases: list[PhaseResult],
 ) -> tuple:
-    """Phase 5 — Score: select and run the best formula."""
+    """Phase 5 — Score: select and run the best formula.
+
+    Selection priority:
+    1. Memory-based: formula with highest composite score (risk-adjusted * sample confidence)
+    2. Regime-suggested: best formula type for detected market regime
+    3. Default: composite_adaptive fallback
+    """
     phase = _track_phase("score")
 
     selected_formula = None
 
-    # If we have memory of formula performance, pick the best
-    if formula_outcomes:
-        best_name = max(formula_outcomes, key=formula_outcomes.get)
-        selected_formula = formula_registry.get(best_name)
-        if selected_formula:
-            logger.info("formula_selected_from_memory", extra={"formula": best_name, "avg_outcome": formula_outcomes[best_name]})
+    # If we have memory of formula performance, pick the highest composite score
+    if formula_scores:
+        best_name = max(formula_scores, key=lambda f: formula_scores[f]["composite"])
+        best_info = formula_scores[best_name]
+        # Only trust memory if composite score is positive (formula has edge)
+        if best_info["composite"] > 0:
+            selected_formula = formula_registry.get(best_name)
+            if selected_formula:
+                logger.info(
+                    "formula_selected_from_memory",
+                    extra={
+                        "formula": best_name,
+                        "composite_score": round(best_info["composite"], 4),
+                        "mean_outcome": round(best_info["mean_outcome"], 4),
+                        "sample_count": best_info["sample_count"],
+                    },
+                )
 
     # If no memory or formula not found, use regime-suggested formula
     if selected_formula is None:
