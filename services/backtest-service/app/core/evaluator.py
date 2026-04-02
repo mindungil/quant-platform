@@ -6,6 +6,11 @@ from uuid import uuid4
 
 import httpx
 import numpy as np
+# Patch numpy for empyrical compatibility with NumPy 2.x
+if not hasattr(np, "NINF"):
+    np.NINF = -np.inf  # type: ignore[attr-defined]
+if not hasattr(np, "PINF"):
+    np.PINF = np.inf  # type: ignore[attr-defined]
 import pandas as pd
 import empyrical as ep
 

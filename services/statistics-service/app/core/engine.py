@@ -1,5 +1,10 @@
 import math
 import numpy as np
+# Patch numpy for empyrical compatibility with NumPy 2.x
+if not hasattr(np, "NINF"):
+    np.NINF = -np.inf  # type: ignore[attr-defined]
+if not hasattr(np, "PINF"):
+    np.PINF = np.inf  # type: ignore[attr-defined]
 import empyrical as ep
 
 from app.models.statistics import StatisticsInput, StatisticsSnapshot

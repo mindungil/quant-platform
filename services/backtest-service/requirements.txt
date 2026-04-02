@@ -1,5 +1,6 @@
+backtrader==1.9.78.123
+empyrical-reloaded==0.5.10
 fastapi==0.116.1
 pydantic==2.11.3
-uvicorn==0.34.0
-empyrical-reloaded==0.5.10
 pytz==2024.2
+uvicorn==0.34.0

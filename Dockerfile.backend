@@ -17,8 +17,15 @@ COPY services/portfolio-service/requirements.txt  /tmp/reqs/portfolio-service.tx
 COPY services/statistics-service/requirements.txt /tmp/reqs/statistics-service.txt
 COPY services/auth-service/requirements.txt       /tmp/reqs/auth-service.txt
 COPY services/api-gateway/requirements.txt        /tmp/reqs/api-gateway.txt
+COPY services/backtest-service/requirements.txt   /tmp/reqs/backtest-service.txt
+COPY services/etf-agent/requirements.txt          /tmp/reqs/etf-agent.txt
+COPY services/external-data-service/requirements.txt /tmp/reqs/external-data-service.txt
+COPY services/llm-gateway/requirements.txt        /tmp/reqs/llm-gateway.txt
+COPY services/orchestrator-agent/requirements.txt /tmp/reqs/orchestrator-agent.txt
+COPY services/stock-agent/requirements.txt        /tmp/reqs/stock-agent.txt
 
 # Merge, deduplicate, and install all deps
+# v3: backtrader, pyportfolioopt, empyrical, scipy, scikit-learn
 RUN cat /tmp/reqs/*.txt \
     | sed 's/_/-/g' \
     | sort -t= -k1,1 -u \

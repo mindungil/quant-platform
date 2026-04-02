@@ -23,3 +23,50 @@ def get_backtest(job_id: str) -> BacktestJob:
     if job is None:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
     return job
+
+
+@router.post("/backtests/backtrader")
+def run_backtrader(payload: dict) -> dict:
+    """Run a backtest using the Backtrader engine."""
+    from app.core.bt_engine import run_backtrader_backtest, BACKTRADER_AVAILABLE
+
+    if not BACKTRADER_AVAILABLE:
+        raise HTTPException(status_code=503, detail="backtrader not available")
+
+    from app.core.evaluator import _fetch_candles, _calc_rsi, _calc_macd
+
+    import numpy as np
+    import pandas as pd
+
+    asset = payload.get("asset", "BTCUSDT")
+    sample_size = payload.get("sample_size", 200)
+    weights = payload.get("weights", {"RSI": 1.0})
+
+    df = _fetch_candles(asset, sample_size)
+    closes = df["close"]
+
+    indicators = {}
+    indicators["rsi"] = (_calc_rsi(closes) - 50) / 50
+    indicators["macd"] = _calc_macd(closes)
+
+    score = pd.Series(0.0, index=df.index)
+    for name, weight in weights.items():
+        key = name.lower()
+        if key in indicators:
+            score += indicators[key] * weight
+        else:
+            score += indicators["rsi"] * weight
+
+    from app.core.config import settings
+
+    result = run_backtrader_backtest(
+        df=df,
+        scores=np.array(score),
+        commission_pct=(settings.slippage_bps + settings.commission_bps) / 10000,
+        entry_threshold=settings.entry_threshold,
+        exit_threshold=settings.exit_threshold,
+        stop_loss_pct=settings.stop_loss_pct,
+        take_profit_pct=settings.take_profit_pct,
+        trailing_stop_pct=settings.trailing_stop_pct,
+    )
+    return result

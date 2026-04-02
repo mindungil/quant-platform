@@ -34,3 +34,19 @@ def apply_fill(payload: PositionUpdate) -> PortfolioSnapshot:
 @router.get("/portfolio/{user_id}", response_model=PortfolioSnapshot)
 def get_portfolio(user_id: str) -> PortfolioSnapshot:
     return portfolio_repository.get(user_id)
+
+
+@router.post("/portfolio/{user_id}/optimize")
+def optimize_portfolio(user_id: str, payload: dict = {}) -> dict:
+    from app.core.optimizer import optimize_weights
+
+    snapshot = portfolio_repository.get(user_id)
+    if not snapshot.concentration:
+        return {"error": "no_positions", "detail": "No positions to optimize"}
+    method = payload.get("method", "max_sharpe")
+    result = optimize_weights(
+        positions=snapshot.concentration,
+        method=method,
+    )
+    result["current_weights"] = snapshot.concentration
+    return result
