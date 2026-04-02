@@ -38,28 +38,41 @@ def _record_metrics(result: RiskApprovalResponse, start: float) -> None:
 def _calculate_var_cvar(
     daily_returns: list[float], portfolio_value: float
 ) -> tuple[float, float, float]:
-    """Calculate parametric VaR(95%), CVaR(95%), and realized volatility.
+    """Calculate VaR(95%), CVaR(95%), and realized volatility using scipy.
 
-    Returns (var_95, cvar_95, realized_vol_annualized).
+    Uses t-distribution fitting for heavy tails (more realistic than normal).
     """
     if len(daily_returns) < 5:
         return 0.0, 0.0, LONG_TERM_VOL
 
-    n = len(daily_returns)
-    mu = sum(daily_returns) / n
-    variance = sum((r - mu) ** 2 for r in daily_returns) / (n - 1)
-    sigma = math.sqrt(variance) if variance > 0 else 1e-9
+    import numpy as np
+    from scipy import stats
 
-    # Parametric VaR (95%): worst daily loss at 95% confidence
-    var_95 = portfolio_value * (mu - Z_95 * sigma)
-    var_95 = abs(min(var_95, 0.0))  # VaR is positive number representing loss
+    returns = np.array(daily_returns)
+    n = len(returns)
+    mu = float(np.mean(returns))
+    sigma = float(np.std(returns, ddof=1))
 
-    # CVaR (Expected Shortfall): expected loss beyond VaR
-    # For normal distribution: CVaR = mu - sigma * phi(z) / (1 - alpha)
-    # phi(1.6449) ≈ 0.1031
-    phi_z95 = math.exp(-0.5 * Z_95 ** 2) / math.sqrt(2 * math.pi)
-    cvar_95 = portfolio_value * abs(mu - sigma * phi_z95 / 0.05)
-    cvar_95 = max(cvar_95, var_95)  # CVaR >= VaR always
+    # Fit Student-t distribution (captures heavy tails better than normal)
+    try:
+        df_t, loc_t, scale_t = stats.t.fit(returns)
+        # VaR at 95%: 5th percentile of fitted distribution
+        var_95_pct = -stats.t.ppf(0.05, df_t, loc=loc_t, scale=scale_t)
+        # CVaR: expected loss beyond VaR (conditional expectation)
+        # For t-distribution: E[X | X < -VaR]
+        tail_samples = returns[returns < -var_95_pct]
+        if len(tail_samples) > 0:
+            cvar_95_pct = -float(np.mean(tail_samples))
+        else:
+            cvar_95_pct = var_95_pct * 1.4  # fallback approximation
+    except Exception:
+        # Fallback to parametric normal
+        var_95_pct = -(mu - Z_95 * sigma)
+        phi_z95 = math.exp(-0.5 * Z_95 ** 2) / math.sqrt(2 * math.pi)
+        cvar_95_pct = -(mu - sigma * phi_z95 / 0.05)
+
+    var_95 = abs(portfolio_value * var_95_pct)
+    cvar_95 = abs(portfolio_value * max(cvar_95_pct, var_95_pct))
 
     # Annualized realized volatility
     realized_vol = sigma * math.sqrt(252)

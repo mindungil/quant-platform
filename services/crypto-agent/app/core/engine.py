@@ -17,6 +17,7 @@ from shared.logging import get_logger
 from shared.persistence import RedisStore
 from shared.realtime import RealtimeBus
 from shared.regime import detect_regime, suggest_formula_type
+from app.core.formula_selector import rank_formulas_ml
 from shared.formulas import formula_registry
 import shared.formulas.momentum
 import shared.formulas.reversion
@@ -128,36 +129,61 @@ def _calculate_position_size(
     win_rate: float = 0.55,
     payoff_ratio: float = 1.5,
     realized_vol: float = 0.0,
+    recent_returns: list[float] | None = None,
 ) -> float:
-    """Full Kelly Criterion with fractional Kelly and volatility adjustment.
+    """Position sizing with Kelly Criterion + scipy optimization.
 
-    Kelly formula: f* = (p * b - q) / b
-    where p = win probability, q = 1-p, b = payoff ratio (avg_win/avg_loss)
+    Two modes:
+    1. If recent_returns provided (30+): use scipy to optimize Kelly from actual return distribution
+    2. Otherwise: use analytical Kelly formula f* = (p*b - q) / b
 
-    We use half-Kelly (kelly_fraction=0.5) for reduced variance,
-    then scale inversely with volatility.
+    Always applies fractional Kelly and volatility adjustment.
     """
-    # Kelly optimal fraction
-    p = max(0.01, min(0.99, win_rate))
-    q = 1 - p
-    b = max(0.01, payoff_ratio)
-    kelly_optimal = (p * b - q) / b
+    kelly_optimal = 0.0
 
-    # If Kelly is negative, no position (edge is negative)
+    # Mode 1: scipy-optimized Kelly from return distribution
+    if recent_returns and len(recent_returns) >= 30:
+        try:
+            import numpy as np
+            from scipy.optimize import minimize_scalar
+
+            returns = np.array(recent_returns)
+
+            def neg_growth_rate(fraction: float) -> float:
+                """Negative geometric growth rate — we minimize this."""
+                if fraction <= 0:
+                    return 0.0
+                growth = np.mean(np.log(1 + fraction * returns))
+                return -growth
+
+            result = minimize_scalar(neg_growth_rate, bounds=(0.001, 0.5), method="bounded")
+            if result.success:
+                kelly_optimal = result.x
+        except Exception:
+            pass
+
+    # Mode 2: Analytical Kelly fallback
+    if kelly_optimal <= 0:
+        p = max(0.01, min(0.99, win_rate))
+        q = 1 - p
+        b = max(0.01, payoff_ratio)
+        kelly_optimal = (p * b - q) / b
+
+    # If Kelly is negative, no position
     if kelly_optimal <= 0:
         return 0.0
 
     # Fractional Kelly for safety
     risk_fraction = kelly_optimal * settings.kelly_fraction
 
-    # Scale by signal strength (stronger signal = closer to full fraction)
-    signal_multiplier = min(abs(signal_score) / 0.6, 1.0)  # normalize: score of 0.6 = full size
+    # Scale by signal strength
+    signal_multiplier = min(abs(signal_score) / 0.6, 1.0)
     risk_fraction *= signal_multiplier
 
-    # Volatility adjustment: reduce position when vol is high
+    # Volatility adjustment
     if realized_vol > 0 and settings.target_vol > 0:
         vol_scalar = settings.target_vol / max(realized_vol, 0.01)
-        vol_scalar = min(vol_scalar, 1.5)  # cap upside scaling
+        vol_scalar = min(vol_scalar, 1.5)
         risk_fraction *= vol_scalar
 
     # Cap at max_position_pct
@@ -395,19 +421,51 @@ def _phase_score(
     """Phase 5 — Score: select and run the best formula.
 
     Selection priority:
-    1. Memory-based: formula with highest composite score (risk-adjusted * sample confidence)
-    2. Regime-suggested: best formula type for detected market regime
-    3. Default: composite_adaptive fallback
+    1. ML-based: GradientBoosting prediction (if >= 50 historical samples)
+    2. Memory-based: formula with highest composite score (risk-adjusted * sample confidence)
+    3. Regime-suggested: best formula type for detected market regime
+    4. Default: composite_adaptive fallback
     """
     phase = _track_phase("score")
 
     selected_formula = None
 
-    # If we have memory of formula performance, pick the highest composite score
+    # Priority 1: ML-based selection (if enough historical data)
     if formula_scores:
+        try:
+            # Fetch full memory items for ML training
+            import httpx
+            resp = httpx.post(
+                f"{settings.memory_service_base_url}/memory/search/formula-outcomes",
+                json={"regime_label": "", "top_k": 200},  # get all formula memories
+                timeout=5.0,
+            )
+            if resp.status_code == 200:
+                all_items = resp.json().get("items", [])
+                ml_rankings = rank_formulas_ml(
+                    features,
+                    all_items,
+                    formula_registry.list_names(),
+                )
+                if ml_rankings:
+                    best_ml = ml_rankings[0]
+                    selected_formula = formula_registry.get(best_ml.name)
+                    if selected_formula:
+                        logger.info(
+                            "formula_selected_by_ml",
+                            extra={
+                                "formula": best_ml.name,
+                                "predicted_score": best_ml.predicted_score,
+                                "confidence": best_ml.confidence,
+                            },
+                        )
+        except Exception as exc:
+            logger.warning("ml_selection_failed", extra={"error": str(exc)})
+
+    # Priority 2: Memory heuristic (risk-adjusted composite score)
+    if selected_formula is None and formula_scores:
         best_name = max(formula_scores, key=lambda f: formula_scores[f]["composite"])
         best_info = formula_scores[best_name]
-        # Only trust memory if composite score is positive (formula has edge)
         if best_info["composite"] > 0:
             selected_formula = formula_registry.get(best_name)
             if selected_formula:

@@ -1,6 +1,10 @@
 from datetime import timedelta
 
 import pandas as pd
+from ta.momentum import RSIIndicator, StochRSIIndicator, StochasticOscillator
+from ta.trend import MACD, EMAIndicator, SMAIndicator, ADXIndicator
+from ta.volatility import BollingerBands, AverageTrueRange
+from ta.volume import OnBalanceVolumeIndicator, VolumeWeightedAveragePrice
 
 from app.models.feature import CandlePayload, FeatureResponse
 
@@ -53,56 +57,57 @@ def calculate_features(asset: str, candles: list[CandlePayload]) -> FeatureRespo
     low = df["low"]
     volume = df["volume"]
 
-    delta = close.diff()
-    gain = delta.clip(lower=0).rolling(window=14, min_periods=14).mean()
-    loss = (-delta.clip(upper=0)).rolling(window=14, min_periods=14).mean()
-    rs = gain / loss.replace(0, pd.NA)
-    rsi = 100 - (100 / (1 + rs))
-    rsi = rsi.where(loss.ne(0), 100.0)
+    # --- ta library: production-grade indicator calculations ---
 
-    ema_9 = close.ewm(span=9, adjust=False).mean()
-    ema_12 = close.ewm(span=12, adjust=False).mean()
-    ema_21 = close.ewm(span=21, adjust=False).mean()
-    ema_26 = close.ewm(span=26, adjust=False).mean()
-    ema_50 = close.ewm(span=50, adjust=False).mean()
-    ema_200 = close.ewm(span=200, adjust=False).mean()
-    sma_20 = close.rolling(window=20, min_periods=20).mean()
-    sma_50 = close.rolling(window=50, min_periods=50).mean()
-    rolling_std = close.rolling(window=20, min_periods=20).std()
-    bb_upper = sma_20 + (rolling_std * 2)
-    bb_lower = sma_20 - (rolling_std * 2)
-    macd = ema_12 - ema_26
-    macd_signal = macd.ewm(span=9, adjust=False).mean()
+    # RSI (14)
+    rsi_ind = RSIIndicator(close=close, window=14)
+    rsi = rsi_ind.rsi()
 
-    lowest_low = low.rolling(window=14, min_periods=14).min()
-    highest_high = high.rolling(window=14, min_periods=14).max()
-    stochastic_k = ((close - lowest_low) / (highest_high - lowest_low).replace(0, pd.NA)) * 100
-    stochastic_d = stochastic_k.rolling(window=3, min_periods=3).mean()
-    typical_price = (high + low + close) / 3
-    vwap = (typical_price * volume).cumsum() / volume.cumsum()
+    # MACD (12, 26, 9)
+    macd_ind = MACD(close=close, window_fast=12, window_slow=26, window_sign=9)
+    macd_line = macd_ind.macd()
+    macd_signal_line = macd_ind.macd_signal()
 
-    prev_close = close.shift(1)
-    tr = pd.concat([
-        high - low,
-        (high - prev_close).abs(),
-        (low - prev_close).abs(),
-    ], axis=1).max(axis=1)
-    atr_14 = tr.ewm(span=14, min_periods=14).mean()
+    # Bollinger Bands (20, 2.0)
+    bb_ind = BollingerBands(close=close, window=20, window_dev=2)
+    bb_upper = bb_ind.bollinger_hband()
+    bb_lower = bb_ind.bollinger_lband()
 
-    plus_dm = high.diff().clip(lower=0)
-    minus_dm = (-low.diff()).clip(lower=0)
-    # When +DM > -DM, keep +DM, else 0 (and vice versa)
-    plus_dm = plus_dm.where(plus_dm > minus_dm, 0.0)
-    minus_dm = minus_dm.where(minus_dm > plus_dm, 0.0)
-    plus_di = 100 * plus_dm.ewm(span=14, min_periods=14).mean() / atr_14.replace(0, pd.NA)
-    minus_di = 100 * minus_dm.ewm(span=14, min_periods=14).mean() / atr_14.replace(0, pd.NA)
-    dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, pd.NA)
-    adx_14 = dx.ewm(span=14, min_periods=14).mean()
+    # EMAs
+    ema_9 = EMAIndicator(close=close, window=9).ema_indicator()
+    ema_21 = EMAIndicator(close=close, window=21).ema_indicator()
+    ema_50 = EMAIndicator(close=close, window=50).ema_indicator()
+    ema_200 = EMAIndicator(close=close, window=200).ema_indicator()
 
-    obv_direction = pd.Series(0, index=df.index, dtype=float)
-    obv_direction[close > close.shift(1)] = 1.0
-    obv_direction[close < close.shift(1)] = -1.0
-    obv = (volume * obv_direction).cumsum()
+    # SMAs
+    sma_20 = SMAIndicator(close=close, window=20).sma_indicator()
+    sma_50 = SMAIndicator(close=close, window=50).sma_indicator()
+
+    # Stochastic (14, 3)
+    stoch_ind = StochasticOscillator(high=high, low=low, close=close, window=14, smooth_window=3)
+    stoch_k = stoch_ind.stoch()
+    stoch_d = stoch_ind.stoch_signal()
+
+    # VWAP
+    try:
+        vwap_ind = VolumeWeightedAveragePrice(high=high, low=low, close=close, volume=volume)
+        vwap = vwap_ind.volume_weighted_average_price()
+    except Exception:
+        # VWAP may fail with insufficient data
+        typical_price = (high + low + close) / 3
+        vwap = (typical_price * volume).cumsum() / volume.cumsum()
+
+    # ATR (14)
+    atr_ind = AverageTrueRange(high=high, low=low, close=close, window=14)
+    atr_14 = atr_ind.average_true_range()
+
+    # ADX (14)
+    adx_ind = ADXIndicator(high=high, low=low, close=close, window=14)
+    adx_14 = adx_ind.adx()
+
+    # OBV
+    obv_ind = OnBalanceVolumeIndicator(close=close, volume=volume)
+    obv = obv_ind.on_balance_volume()
 
     return FeatureResponse(
         asset=asset,
@@ -110,8 +115,8 @@ def calculate_features(asset: str, candles: list[CandlePayload]) -> FeatureRespo
         close=_safe_float(close.iloc[-1]),
         volume=_safe_float(volume.iloc[-1]),
         rsi_14=_safe_float(rsi.iloc[-1]),
-        macd=_safe_float(macd.iloc[-1]),
-        macd_signal=_safe_float(macd_signal.iloc[-1]),
+        macd=_safe_float(macd_line.iloc[-1]),
+        macd_signal=_safe_float(macd_signal_line.iloc[-1]),
         bb_upper=_safe_float(bb_upper.iloc[-1]),
         bb_lower=_safe_float(bb_lower.iloc[-1]),
         ema_9=_safe_float(ema_9.iloc[-1]),
@@ -120,8 +125,8 @@ def calculate_features(asset: str, candles: list[CandlePayload]) -> FeatureRespo
         ema_200=_safe_float(ema_200.iloc[-1]),
         sma_20=_safe_float(sma_20.iloc[-1]),
         sma_50=_safe_float(sma_50.iloc[-1]),
-        stochastic_k=_safe_float(stochastic_k.iloc[-1]),
-        stochastic_d=_safe_float(stochastic_d.iloc[-1]),
+        stochastic_k=_safe_float(stoch_k.iloc[-1]),
+        stochastic_d=_safe_float(stoch_d.iloc[-1]),
         vwap=_safe_float(vwap.iloc[-1]),
         atr_14=_safe_float(atr_14.iloc[-1]),
         adx_14=_safe_float(adx_14.iloc[-1]),
