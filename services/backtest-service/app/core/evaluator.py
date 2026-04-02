@@ -7,6 +7,7 @@ from uuid import uuid4
 import httpx
 import numpy as np
 import pandas as pd
+import empyrical as ep
 
 from app.core.config import settings
 from app.models.backtest import BacktestJob, BacktestRequest, BacktestResult
@@ -203,25 +204,14 @@ def _calc_metrics(trades: list[dict], risk_free_daily: float) -> dict:
     win_rate = float(len(wins) / n)
     mean_ret = float(np.mean(returns))
 
-    # Sharpe (annualized, excess returns, sample std)
-    excess = returns - risk_free_daily
-    mean_excess = float(np.mean(excess))
-    std_excess = float(np.std(excess, ddof=1)) if n > 1 else 1e-9
-    sharpe = mean_excess / max(std_excess, 1e-9) * math.sqrt(252)
+    # Sharpe (empyrical - annualized, risk-free adjusted)
+    sharpe = float(ep.sharpe_ratio(returns, risk_free=risk_free_daily))
 
-    # Sortino (requires at least 2 downside observations for meaningful std)
-    downside = excess[excess < 0]
-    if len(downside) > 1:
-        downside_std = float(np.std(downside, ddof=1))
-        sortino = mean_excess / max(downside_std, 1e-9) * math.sqrt(252)
-    else:
-        sortino = sharpe  # fallback to Sharpe when insufficient downside data
+    # Sortino (empyrical)
+    sortino = float(ep.sortino_ratio(returns, required_return=risk_free_daily))
 
-    # Max drawdown from equity curve
-    equity = np.cumprod(1 + returns)
-    running_max = np.maximum.accumulate(equity)
-    drawdowns = (running_max - equity) / running_max
-    max_dd = float(np.max(drawdowns))
+    # Max drawdown (empyrical)
+    max_dd = float(abs(ep.max_drawdown(returns)))
 
     # Profit factor
     gross_profit = float(np.sum(wins)) if len(wins) > 0 else 0.0
@@ -237,7 +227,7 @@ def _calc_metrics(trades: list[dict], risk_free_daily: float) -> dict:
     avg_loss = float(np.mean(losses)) if len(losses) > 0 else 0.0
     payoff_ratio = avg_win / abs(avg_loss) if avg_loss != 0 else 999.0
 
-    total_return = float(equity[-1] - 1)
+    total_return = float(np.prod(1 + returns) - 1)
 
     # Clamp ratios to prevent extreme values from tiny samples
     sharpe = max(-10.0, min(10.0, sharpe))

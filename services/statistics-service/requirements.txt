@@ -6,3 +6,5 @@ psycopg[binary]==3.2.10
 redis==6.4.0
 sqlalchemy==2.0.43
 uvicorn==0.34.0
+empyrical-reloaded==0.5.10
+pytz==2024.2

@@ -17,6 +17,7 @@ from shared.logging import get_logger
 from shared.persistence import RedisStore
 from shared.realtime import RealtimeBus
 from shared.regime import detect_regime, suggest_formula_type
+from app.core.bandit import FormulaMAB
 from app.core.formula_selector import rank_formulas_ml
 from shared.formulas import formula_registry
 import shared.formulas.momentum
@@ -41,6 +42,9 @@ strategy_client = StrategyClient(settings.strategy_registry_base_url)
 llm_gateway_client = LlmGatewayClient(settings.llm_gateway_base_url)
 realtime_bus = RealtimeBus(RedisStore(settings.redis_url))
 logger = get_logger("crypto-agent")
+
+# Initialize Multi-Armed Bandit for formula selection
+formula_mab = FormulaMAB(formula_registry.list_names())
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -422,9 +426,10 @@ def _phase_score(
 
     Selection priority:
     1. ML-based: GradientBoosting prediction (if >= 50 historical samples)
-    2. Memory-based: formula with highest composite score (risk-adjusted * sample confidence)
-    3. Regime-suggested: best formula type for detected market regime
-    4. Default: composite_adaptive fallback
+    2. Thompson Sampling MAB: contextual bandit (exploration-exploitation)
+    3. Memory-based: formula with highest composite score (risk-adjusted * sample confidence)
+    4. Regime-suggested: best formula type for detected market regime
+    5. Default: composite_adaptive fallback
     """
     phase = _track_phase("score")
 
@@ -462,7 +467,34 @@ def _phase_score(
         except Exception as exc:
             logger.warning("ml_selection_failed", extra={"error": str(exc)})
 
-    # Priority 2: Memory heuristic (risk-adjusted composite score)
+    # Priority 2: Thompson Sampling MAB (contextual bandit)
+    if selected_formula is None and formula_scores:
+        try:
+            import httpx
+            resp = httpx.post(
+                f"{settings.memory_service_base_url}/memory/search/formula-outcomes",
+                json={"regime_label": suggested_type, "top_k": 200},
+                timeout=5.0,
+            )
+            if resp.status_code == 200:
+                items = resp.json().get("items", [])
+                if items:
+                    formula_mab.load_from_memory(items)
+        except Exception:
+            pass
+
+        mab_choice = formula_mab.select(
+            regime=suggested_type,
+            eligible=list(formula_scores.keys()),
+        )
+        selected_formula = formula_registry.get(mab_choice)
+        if selected_formula:
+            logger.info(
+                "formula_selected_by_mab",
+                extra={"formula": mab_choice, "regime": suggested_type},
+            )
+
+    # Priority 3: Memory heuristic (risk-adjusted composite score)
     if selected_formula is None and formula_scores:
         best_name = max(formula_scores, key=lambda f: formula_scores[f]["composite"])
         best_info = formula_scores[best_name]
@@ -479,7 +511,7 @@ def _phase_score(
                     },
                 )
 
-    # If no memory or formula not found, use regime-suggested formula
+    # Priority 4: If no memory or formula not found, use regime-suggested formula
     if selected_formula is None:
         candidates = formula_registry.get_for_regime(suggested_type)
         if candidates:
