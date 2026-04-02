@@ -9,7 +9,6 @@ import {
   PageTransition,
   StaggerContainer,
   StaggerItem,
-  AnimatedNumber,
   AnimatePresence,
   motion,
 } from "../../components/motion";
@@ -86,10 +85,10 @@ export default function AdminPage() {
     : "unknown";
 
   const modeColors: Record<string, string> = {
-    live: "bg-green-500",
-    shadow: "bg-yellow-500",
-    stopped: "bg-red-500",
-    unknown: "bg-neutral-300",
+    live: "bg-neutral-900",
+    shadow: "bg-neutral-400",
+    stopped: "bg-neutral-200",
+    unknown: "bg-neutral-200",
   };
 
   if (!loaded) {
@@ -98,7 +97,7 @@ export default function AdminPage() {
         <main className="grid gap-6">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="card animate-pulse">
+              <div key={i} className="rounded border border-neutral-200 bg-white p-6 animate-pulse">
                 <div className="mx-auto h-4 w-20 rounded bg-neutral-200" />
                 <div className="mx-auto mt-3 h-8 w-16 rounded bg-neutral-200" />
               </div>
@@ -114,10 +113,10 @@ export default function AdminPage() {
       <PageTransition>
         <main className="grid gap-6">
           {/* Header */}
-          <section className="card">
-            <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">관리자</p>
-            <h2 className="mt-2 text-3xl font-semibold text-neutral-900">운영 제어판</h2>
-            <p className="mt-3 text-neutral-500">
+          <section className="rounded border border-neutral-200 bg-white p-6">
+            <p className="text-sm font-medium uppercase tracking-wider text-neutral-400">ADMIN</p>
+            <h2 className="mt-1 text-2xl font-semibold text-neutral-900">운영 제어판</h2>
+            <p className="mt-2 text-neutral-500">
               시스템 개요, 빠른 작업, 세부 제어판 탐색
             </p>
           </section>
@@ -125,43 +124,44 @@ export default function AdminPage() {
           {/* Overview Cards */}
           <StaggerContainer className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StaggerItem>
-              <div className="card text-center">
-                <p className="text-sm text-neutral-500">서비스</p>
-                <p className="mt-1 text-3xl font-bold text-neutral-900">
-                  <AnimatedNumber value={serviceCount} />
+              <div className="rounded border border-neutral-200 bg-white p-6 text-center">
+                <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">서비스</p>
+                <p className="mt-1 font-mono text-2xl font-semibold text-neutral-900">
+                  {serviceCount}
                 </p>
               </div>
             </StaggerItem>
             <StaggerItem>
-              <div className="card text-center">
-                <p className="text-sm text-neutral-500">가동 시간</p>
-                <p className="mt-1 text-3xl font-bold text-neutral-900">
-                  {uptimeHours !== null ? <><AnimatedNumber value={uptimeHours} decimals={0} />h</> : "--"}
+              <div className="rounded border border-neutral-200 bg-white p-6 text-center">
+                <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">가동 시간</p>
+                <p className="mt-1 font-mono text-2xl font-semibold text-neutral-900">
+                  {uptimeHours !== null ? `${uptimeHours}h` : "--"}
                 </p>
               </div>
             </StaggerItem>
             <StaggerItem>
-              <div className="card text-center">
-                <p className="text-sm text-neutral-500">모드</p>
+              <div className="rounded border border-neutral-200 bg-white p-6 text-center">
+                <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">모드</p>
                 <div className="mt-2 flex items-center justify-center gap-2">
-                  <span className={`inline-block h-3 w-3 rounded-full ${modeColors[currentMode]}`} />
-                  <span className="text-lg font-semibold capitalize text-neutral-900">{currentMode}</span>
+                  <span className={`inline-block h-2 w-2 rounded-full ${modeColors[currentMode]}`} />
+                  <span className="font-mono text-lg font-semibold uppercase text-neutral-900">{currentMode}</span>
                 </div>
               </div>
             </StaggerItem>
             <StaggerItem>
-              <div className="card text-center">
-                <p className="text-sm text-neutral-500">DLQ 메시지</p>
-                <p className="mt-1 text-3xl font-bold text-yellow-600">
-                  {dlqStats ? <AnimatedNumber value={dlqStats.total_messages} /> : "--"}
+              <div className="rounded border border-neutral-200 bg-white p-6 text-center">
+                <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">DLQ 메시지</p>
+                <p className="mt-1 font-mono text-2xl font-semibold text-neutral-900">
+                  {dlqStats ? dlqStats.total_messages : "--"}
                 </p>
               </div>
             </StaggerItem>
           </StaggerContainer>
 
           {/* Quick Actions */}
-          <section className="card">
-            <h3 className="mb-4 text-xl font-semibold text-neutral-900">빠른 작업</h3>
+          <section className="rounded border border-neutral-200 bg-white p-6">
+            <p className="text-sm font-medium uppercase tracking-wider text-neutral-400">ACTIONS</p>
+            <h3 className="mt-2 text-lg font-semibold text-neutral-900">빠른 작업</h3>
             <AnimatePresence>
               {actionResult && (
                 <motion.div
@@ -169,18 +169,18 @@ export default function AdminPage() {
                   animate={{ opacity: 1, height: "auto" }}
                   exit={{ opacity: 0, height: 0 }}
                   transition={{ duration: 0.25 }}
-                  className={`mb-4 rounded-lg px-4 py-3 text-sm ${
-                    actionResult.type === "ok" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+                  className={`mt-4 rounded border px-4 py-3 text-sm ${
+                    actionResult.type === "ok" ? "border-neutral-200 text-green-600" : "border-neutral-200 text-red-600"
                   }`}
                 >
                   {actionResult.message}
                 </motion.div>
               )}
             </AnimatePresence>
-            <StaggerContainer className="flex flex-wrap gap-3">
+            <StaggerContainer className="mt-4 flex flex-wrap gap-3">
               <StaggerItem>
                 <button
-                  className="btn-danger px-6 py-3 font-semibold ring-2 ring-red-200 animate-pulse"
+                  className="btn-danger px-6 py-3 font-semibold"
                   disabled={actionLoading === "emergency-stop"}
                   onClick={() => handleAction("emergency-stop")}
                 >
@@ -189,7 +189,7 @@ export default function AdminPage() {
               </StaggerItem>
               <StaggerItem>
                 <button
-                  className="rounded-lg bg-green-600 px-6 py-3 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+                  className="rounded border border-neutral-900 bg-white px-6 py-3 text-sm font-semibold text-neutral-900 hover:bg-neutral-50 disabled:opacity-50"
                   disabled={actionLoading === "enable-live"}
                   onClick={() => handleAction("enable-live")}
                 >
@@ -210,29 +210,30 @@ export default function AdminPage() {
 
           {/* Execution Config */}
           {execConfig && (
-            <section className="card">
-              <h3 className="mb-4 text-xl font-semibold text-neutral-900">실행 설정</h3>
-              <StaggerContainer className="grid gap-3 sm:grid-cols-3">
+            <section className="rounded border border-neutral-200 bg-white p-6">
+              <p className="text-sm font-medium uppercase tracking-wider text-neutral-400">CONFIG</p>
+              <h3 className="mt-2 text-lg font-semibold text-neutral-900">실행 설정</h3>
+              <StaggerContainer className="mt-4 grid gap-3 sm:grid-cols-3">
                 <StaggerItem>
-                  <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
-                    <p className="text-xs text-neutral-400">live_trading_enabled</p>
-                    <p className={`mt-1 text-lg font-semibold ${execConfig.live_trading_enabled ? "text-green-600" : "text-red-600"}`}>
+                  <div className="rounded border border-neutral-200 bg-white p-4">
+                    <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">live_trading_enabled</p>
+                    <p className={`mt-1 font-mono text-lg font-semibold ${execConfig.live_trading_enabled ? "text-green-600" : "text-red-600"}`}>
                       {execConfig.live_trading_enabled ? "true" : "false"}
                     </p>
                   </div>
                 </StaggerItem>
                 <StaggerItem>
-                  <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
-                    <p className="text-xs text-neutral-400">default_shadow_mode</p>
-                    <p className={`mt-1 text-lg font-semibold ${execConfig.default_shadow_mode ? "text-yellow-600" : "text-neutral-600"}`}>
+                  <div className="rounded border border-neutral-200 bg-white p-4">
+                    <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">default_shadow_mode</p>
+                    <p className="mt-1 font-mono text-lg font-semibold text-neutral-900">
                       {execConfig.default_shadow_mode ? "true" : "false"}
                     </p>
                   </div>
                 </StaggerItem>
                 <StaggerItem>
-                  <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
-                    <p className="text-xs text-neutral-400">allowed_exchanges</p>
-                    <p className="mt-1 text-lg font-semibold text-neutral-900">
+                  <div className="rounded border border-neutral-200 bg-white p-4">
+                    <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">allowed_exchanges</p>
+                    <p className="mt-1 font-mono text-lg font-semibold text-neutral-900">
                       {execConfig.allowed_exchanges?.join(", ") || "none"}
                     </p>
                   </div>
@@ -243,14 +244,15 @@ export default function AdminPage() {
 
           {/* DLQ Stats */}
           {dlqStats && dlqStats.streams && Object.keys(dlqStats.streams).length > 0 && (
-            <section className="card">
-              <h3 className="mb-4 text-xl font-semibold text-neutral-900">DLQ 스트림</h3>
-              <StaggerContainer className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <section className="rounded border border-neutral-200 bg-white p-6">
+              <p className="text-sm font-medium uppercase tracking-wider text-neutral-400">DLQ</p>
+              <h3 className="mt-2 text-lg font-semibold text-neutral-900">DLQ 스트림</h3>
+              <StaggerContainer className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {Object.entries(dlqStats.streams).map(([stream, count]) => (
                   <StaggerItem key={stream}>
-                    <div className="flex items-center justify-between rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3">
+                    <div className="flex items-center justify-between rounded border border-neutral-200 bg-white px-4 py-3">
                       <span className="text-sm text-neutral-600">{stream}</span>
-                      <span className="text-lg font-bold text-yellow-600">{count}</span>
+                      <span className="font-mono text-lg font-semibold text-neutral-900">{count}</span>
                     </div>
                   </StaggerItem>
                 ))}
@@ -261,21 +263,21 @@ export default function AdminPage() {
           {/* Navigation */}
           <StaggerContainer className="grid gap-4 sm:grid-cols-3">
             <StaggerItem>
-              <Link href="/admin/trading" className="card block transition hover:border-neutral-300 hover:shadow-md">
-                <h3 className="text-xl font-semibold text-neutral-900">실시간 트레이딩 제어</h3>
-                <p className="mt-2 text-neutral-500">사전 점검, 라이브 활성화, 긴급 정지, 실행 설정</p>
+              <Link href="/admin/trading" className="block rounded border border-neutral-200 bg-white p-6 transition hover:border-neutral-300">
+                <h3 className="text-lg font-semibold text-neutral-900">실시간 트레이딩 제어</h3>
+                <p className="mt-2 text-sm text-neutral-500">사전 점검, 라이브 활성화, 긴급 정지, 실행 설정</p>
               </Link>
             </StaggerItem>
             <StaggerItem>
-              <Link href="/admin/system" className="card block transition hover:border-neutral-300 hover:shadow-md">
-                <h3 className="text-xl font-semibold text-neutral-900">시스템 상태</h3>
-                <p className="mt-2 text-neutral-500">서비스 상태, 이벤트, DLQ 관리</p>
+              <Link href="/admin/system" className="block rounded border border-neutral-200 bg-white p-6 transition hover:border-neutral-300">
+                <h3 className="text-lg font-semibold text-neutral-900">시스템 상태</h3>
+                <p className="mt-2 text-sm text-neutral-500">서비스 상태, 이벤트, DLQ 관리</p>
               </Link>
             </StaggerItem>
             <StaggerItem>
-              <Link href="/admin/users" className="card block transition hover:border-neutral-300 hover:shadow-md">
-                <h3 className="text-xl font-semibold text-neutral-900">사용자 관리</h3>
-                <p className="mt-2 text-neutral-500">사용자 목록, 역할 관리, 통계</p>
+              <Link href="/admin/users" className="block rounded border border-neutral-200 bg-white p-6 transition hover:border-neutral-300">
+                <h3 className="text-lg font-semibold text-neutral-900">사용자 관리</h3>
+                <p className="mt-2 text-sm text-neutral-500">사용자 목록, 역할 관리, 통계</p>
               </Link>
             </StaggerItem>
           </StaggerContainer>

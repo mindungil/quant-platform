@@ -132,12 +132,15 @@ function SettingsContent() {
   return (
     <PageTransition>
       <main className="grid gap-6">
-        <h2 className="text-2xl font-semibold text-neutral-900">설정</h2>
+        <div className="rounded border border-neutral-200 bg-white p-6">
+          <p className="text-sm font-medium uppercase tracking-wider text-neutral-400">SETTINGS</p>
+          <h2 className="mt-1 text-2xl font-semibold text-neutral-900">설정</h2>
+        </div>
 
         <div className="grid gap-6 lg:grid-cols-2">
           {/* API Credentials */}
           <FadeInView delay={0}>
-            <section className="card space-y-4">
+            <section className="rounded border border-neutral-200 bg-white p-6 space-y-4">
               <h3 className="text-lg font-semibold text-neutral-900">API 인증 정보</h3>
 
               <AnimatePresence mode="wait">
@@ -147,7 +150,7 @@ function SettingsContent() {
                     initial={{ opacity: 0, y: -8 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -8 }}
-                    className="rounded-lg bg-red-50 p-3 text-sm text-red-600"
+                    className="rounded border border-neutral-200 bg-white p-3 text-sm text-red-600"
                   >
                     {credError}
                   </motion.p>
@@ -158,7 +161,7 @@ function SettingsContent() {
                     initial={{ opacity: 0, y: -8 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -8 }}
-                    className="rounded-lg bg-green-50 p-3 text-sm text-green-700"
+                    className="rounded border border-neutral-200 bg-white p-3 text-sm text-green-600"
                   >
                     {credSuccess}
                   </motion.p>
@@ -167,7 +170,7 @@ function SettingsContent() {
 
               <div className="space-y-3">
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-neutral-500">거래소</label>
+                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-neutral-400">거래소</label>
                   <select
                     className="input-field"
                     value={exchange}
@@ -181,7 +184,7 @@ function SettingsContent() {
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-neutral-500">API 키</label>
+                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-neutral-400">API 키</label>
                   <input
                     className="input-field"
                     value={apiKey}
@@ -191,7 +194,7 @@ function SettingsContent() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-neutral-500">API 시크릿</label>
+                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-neutral-400">API 시크릿</label>
                   <input
                     className="input-field"
                     value={apiSecret}
@@ -215,7 +218,7 @@ function SettingsContent() {
                 {credLoading ? (
                   <div className="space-y-2">
                     {[0, 1].map((i) => (
-                      <div key={i} className="animate-pulse rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                      <div key={i} className="animate-pulse rounded border border-neutral-200 bg-white p-3">
                         <div className="h-4 w-20 rounded bg-neutral-200" />
                         <div className="mt-1 h-3 w-32 rounded bg-neutral-100" />
                       </div>
@@ -227,18 +230,18 @@ function SettingsContent() {
                   <StaggerContainer className="space-y-2">
                     {credentials.map((cred) => (
                       <StaggerItem key={cred.credential_id}>
-                        <div className="flex items-center justify-between rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                        <div className="flex items-center justify-between rounded border border-neutral-200 bg-white p-3">
                           <div>
                             <span className="text-sm font-medium uppercase text-neutral-900">{cred.exchange}</span>
                             <p className="mt-0.5 font-mono text-xs text-neutral-400">{cred.api_key_masked}</p>
                             {cred.sandbox && (
-                              <span className="text-xs text-yellow-600">샌드박스</span>
+                              <span className="text-xs text-neutral-400">샌드박스</span>
                             )}
                           </div>
                           <button
                             onClick={() => deleteCredential(cred.credential_id, cred.exchange)}
                             disabled={deletingId === cred.credential_id}
-                            className="rounded-lg border border-red-200 px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-40"
+                            className="rounded border border-neutral-200 px-3 py-1 text-xs font-medium text-neutral-600 hover:border-neutral-400 disabled:opacity-40"
                           >
                             {deletingId === cred.credential_id ? "..." : "삭제"}
                           </button>
@@ -255,12 +258,12 @@ function SettingsContent() {
           <div className="space-y-6">
             {/* Risk Settings */}
             <FadeInView delay={0.1}>
-              <section className="card space-y-4">
+              <section className="rounded border border-neutral-200 bg-white p-6 space-y-4">
                 <h3 className="text-lg font-semibold text-neutral-900">리스크 설정</h3>
                 {riskLoading ? (
                   <div className="grid grid-cols-2 gap-3">
                     {[0, 1, 2, 3].map((i) => (
-                      <div key={i} className="animate-pulse rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                      <div key={i} className="animate-pulse rounded border border-neutral-200 bg-white p-3">
                         <div className="h-3 w-16 rounded bg-neutral-200" />
                         <div className="mt-2 h-5 w-20 rounded bg-neutral-200" />
                       </div>
@@ -269,27 +272,27 @@ function SettingsContent() {
                 ) : risk ? (
                   <div className="space-y-3">
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                      <div className="rounded border border-neutral-200 bg-white p-3">
                         <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">최대 주문금액</p>
-                        <p className="mt-1 text-lg font-semibold text-neutral-900">
+                        <p className="mt-1 font-mono text-lg font-semibold text-neutral-900">
                           {risk.max_notional != null ? `$${risk.max_notional.toLocaleString()}` : "--"}
                         </p>
                       </div>
-                      <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                      <div className="rounded border border-neutral-200 bg-white p-3">
                         <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">노출 한도</p>
-                        <p className="mt-1 text-lg font-semibold text-neutral-900">
+                        <p className="mt-1 font-mono text-lg font-semibold text-neutral-900">
                           {risk.exposure_limit != null ? `$${risk.exposure_limit.toLocaleString()}` : "--"}
                         </p>
                       </div>
-                      <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                      <div className="rounded border border-neutral-200 bg-white p-3">
                         <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">최대 낙폭</p>
-                        <p className="mt-1 text-lg font-semibold text-neutral-900">
+                        <p className="mt-1 font-mono text-lg font-semibold text-neutral-900">
                           {risk.max_drawdown != null ? `${(risk.max_drawdown * 100).toFixed(1)}%` : "--"}
                         </p>
                       </div>
-                      <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                      <div className="rounded border border-neutral-200 bg-white p-3">
                         <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">자동화</p>
-                        <p className={`mt-1 text-lg font-semibold ${risk.automation_enabled ? "text-green-600" : "text-red-600"}`}>
+                        <p className={`mt-1 font-mono text-lg font-semibold ${risk.automation_enabled ? "text-green-600" : "text-red-600"}`}>
                           {risk.automation_enabled ? "활성" : "비활성"}
                         </p>
                       </div>
@@ -303,7 +306,7 @@ function SettingsContent() {
                         <summary className="cursor-pointer text-xs text-neutral-400 hover:text-neutral-700">
                           전체 리스크 파라미터
                         </summary>
-                        <pre className="mt-2 overflow-x-auto rounded-lg border border-neutral-100 bg-neutral-50 p-3 text-xs text-neutral-600">
+                        <pre className="mt-2 overflow-x-auto rounded border border-neutral-200 bg-white p-3 font-mono text-xs text-neutral-600">
                           {JSON.stringify(risk, null, 2)}
                         </pre>
                       </details>
@@ -317,28 +320,28 @@ function SettingsContent() {
 
             {/* Profile */}
             <FadeInView delay={0.2}>
-              <section className="card space-y-4">
+              <section className="rounded border border-neutral-200 bg-white p-6 space-y-4">
                 <h3 className="text-lg font-semibold text-neutral-900">프로필</h3>
                 {profile ? (
                   <div className="space-y-3">
-                    <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                    <div className="rounded border border-neutral-200 bg-white p-3">
                       <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">이메일</p>
                       <p className="mt-1 text-sm text-neutral-900">{profile.email}</p>
                     </div>
                     {profile.plan && (
-                      <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                      <div className="rounded border border-neutral-200 bg-white p-3">
                         <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">플랜</p>
                         <p className="mt-1 text-sm text-neutral-900">{profile.plan}</p>
                       </div>
                     )}
                     {profile.roles && profile.roles.length > 0 && (
-                      <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                      <div className="rounded border border-neutral-200 bg-white p-3">
                         <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">역할</p>
                         <div className="mt-1 flex flex-wrap gap-1">
                           {profile.roles.map((role) => (
                             <span
                               key={role}
-                              className="badge bg-neutral-100 text-neutral-600"
+                              className="inline-flex items-center rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-600"
                             >
                               {role}
                             </span>

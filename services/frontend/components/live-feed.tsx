@@ -18,7 +18,7 @@ export function LiveFeed() {
       <div className="space-y-2 text-sm text-neutral-600">
         {events.length === 0 ? <p className="text-neutral-400">No events yet. Log in and wait for gateway pushes.</p> : null}
         {events.map((event, index) => (
-          <pre key={`${event}-${index}`} className="overflow-x-auto rounded-lg border border-neutral-100 bg-neutral-50 p-3 text-xs text-neutral-600">
+          <pre key={`${event}-${index}`} className="overflow-x-auto rounded border border-neutral-200 bg-white p-3 font-mono text-xs text-neutral-600">
             {event}
           </pre>
         ))}

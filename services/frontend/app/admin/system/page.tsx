@@ -74,10 +74,10 @@ export default function AdminSystemPage() {
 
   const isHealthy = (status: string) => status === "ok" || status === "healthy";
 
-  const statusColor = (status: string) => {
-    if (isHealthy(status)) return "bg-green-500";
-    if (status === "degraded" || status === "warning") return "bg-yellow-500";
-    return "bg-red-500";
+  const statusDot = (status: string) => {
+    if (isHealthy(status)) return "bg-neutral-900";
+    if (status === "degraded" || status === "warning") return "bg-neutral-400";
+    return "bg-neutral-300";
   };
 
   return (
@@ -85,9 +85,10 @@ export default function AdminSystemPage() {
       <PageTransition>
         <main className="grid gap-6">
           {/* Header */}
-          <section className="card">
-            <h2 className="text-3xl font-semibold text-neutral-900">시스템 상태</h2>
-            <p className="mt-2 text-neutral-500">
+          <section className="rounded border border-neutral-200 bg-white p-6">
+            <p className="text-sm font-medium uppercase tracking-wider text-neutral-400">SYSTEM</p>
+            <h2 className="mt-1 text-2xl font-semibold text-neutral-900">시스템 상태</h2>
+            <p className="mt-1 text-sm text-neutral-500">
               서비스 상태, 최근 이벤트, 데드레터 큐 관리
             </p>
             {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
@@ -95,20 +96,18 @@ export default function AdminSystemPage() {
 
           {/* Service Health Grid */}
           <section>
-            <h3 className="mb-3 text-lg font-semibold text-neutral-900">서비스</h3>
+            <p className="mb-3 text-sm font-medium uppercase tracking-wider text-neutral-400">SERVICES</p>
             {health?.services ? (
               <StaggerContainer className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {Object.entries(health.services).map(([name, svc]) => (
                   <StaggerItem key={name}>
-                    <div className="card flex items-start gap-3">
+                    <div className="flex items-start gap-3 rounded border border-neutral-200 bg-white p-4 transition hover:border-neutral-300">
                       <span
-                        className={`mt-1 inline-block h-3 w-3 flex-shrink-0 rounded-full ${statusColor(svc.status)} ${
-                          isHealthy(svc.status) ? "animate-pulse" : ""
-                        }`}
+                        className={`mt-1 inline-block h-2 w-2 flex-shrink-0 rounded-full ${statusDot(svc.status)}`}
                       />
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold text-neutral-900">{name}</p>
-                        <p className="text-xs text-neutral-400">
+                        <p className="font-mono text-xs text-neutral-400">
                           {svc.status}
                           {svc.latency_ms !== undefined && ` / ${svc.latency_ms}ms`}
                         </p>
@@ -119,26 +118,27 @@ export default function AdminSystemPage() {
                 ))}
               </StaggerContainer>
             ) : (
-              <div className="card text-sm text-neutral-400">서비스 상태 로딩 중...</div>
+              <div className="rounded border border-neutral-200 bg-white p-6 text-sm text-neutral-400">서비스 상태 로딩 중...</div>
             )}
           </section>
 
           {/* DLQ Management */}
-          <section className="card">
-            <h3 className="mb-4 text-xl font-semibold text-neutral-900">데드레터 큐</h3>
+          <section className="rounded border border-neutral-200 bg-white p-6">
+            <p className="text-sm font-medium uppercase tracking-wider text-neutral-400">DEAD LETTER QUEUE</p>
+            <h3 className="mt-2 text-lg font-semibold text-neutral-900">데드레터 큐</h3>
             {dlqStats ? (
               <>
-                <p className="mb-3 text-sm text-neutral-500">
-                  전체 메시지: <span className="font-semibold text-yellow-600">{dlqStats.total}</span>
+                <p className="mt-3 mb-3 text-sm text-neutral-500">
+                  전체 메시지: <span className="font-mono font-semibold text-neutral-900">{dlqStats.total}</span>
                 </p>
                 {dlqStats.streams && Object.keys(dlqStats.streams).length > 0 ? (
                   <StaggerContainer className="space-y-2">
                     {Object.entries(dlqStats.streams).map(([stream, count]) => (
                       <StaggerItem key={stream}>
-                        <div className="flex items-center justify-between rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3">
+                        <div className="flex items-center justify-between rounded border border-neutral-200 bg-white px-4 py-3">
                           <div>
                             <p className="text-sm font-medium text-neutral-900">{stream}</p>
-                            <p className="text-xs text-neutral-400">{count} message{count !== 1 ? "s" : ""}</p>
+                            <p className="font-mono text-xs text-neutral-400">{count} message{count !== 1 ? "s" : ""}</p>
                           </div>
                           <button
                             className="btn-primary inline-flex items-center gap-2 text-xs disabled:opacity-50"
@@ -163,21 +163,22 @@ export default function AdminSystemPage() {
                 )}
               </>
             ) : (
-              <p className="text-sm text-neutral-400">DLQ 통계 로딩 중...</p>
+              <p className="mt-4 text-sm text-neutral-400">DLQ 통계 로딩 중...</p>
             )}
           </section>
 
           {/* Recent Events */}
-          <section className="card">
-            <h3 className="mb-4 text-xl font-semibold text-neutral-900">최근 시스템 이벤트</h3>
+          <section className="rounded border border-neutral-200 bg-white p-6">
+            <p className="text-sm font-medium uppercase tracking-wider text-neutral-400">EVENTS</p>
+            <h3 className="mt-2 text-lg font-semibold text-neutral-900">최근 시스템 이벤트</h3>
             {events.length > 0 ? (
-              <StaggerContainer className="space-y-2">
+              <StaggerContainer className="mt-4 space-y-2">
                 {events.map((event, index) => (
                   <StaggerItem key={`${event.event_id ?? index}-${index}`}>
-                    <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3">
+                    <div className="rounded border border-neutral-200 bg-white px-4 py-3">
                       <div className="flex items-center gap-3">
                         <span className="text-xs font-medium text-neutral-900">{event.source}</span>
-                        <span className="badge bg-neutral-100 text-neutral-500">{event.type}</span>
+                        <span className="inline-flex items-center rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-600">{event.type}</span>
                         <span className="ml-auto text-xs text-neutral-400">
                           {event.timestamp ? new Date(event.timestamp).toLocaleString() : ""}
                         </span>
@@ -188,7 +189,7 @@ export default function AdminSystemPage() {
                 ))}
               </StaggerContainer>
             ) : (
-              <p className="text-sm text-neutral-400">최근 이벤트 없음</p>
+              <p className="mt-4 text-sm text-neutral-400">최근 이벤트 없음</p>
             )}
           </section>
         </main>

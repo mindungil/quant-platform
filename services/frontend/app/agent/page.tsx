@@ -83,10 +83,11 @@ function AgentContent() {
     <PageTransition>
       <main className="grid gap-6">
         {/* Header */}
-        <section className="card">
+        <section className="rounded border border-neutral-200 bg-white p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-2xl font-semibold text-neutral-900">에이전트 활동</h2>
+              <p className="text-sm font-medium uppercase tracking-wider text-neutral-400">AGENT</p>
+              <h2 className="mt-1 text-2xl font-semibold text-neutral-900">에이전트 활동</h2>
               <p className="mt-1 text-sm text-neutral-500">
                 AI 에이전트의 의사결정 과정과 이력을 실시간으로 모니터링합니다
               </p>
@@ -96,10 +97,10 @@ function AgentContent() {
                 <button
                   key={a}
                   onClick={() => setSelectedAsset(a)}
-                  className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                  className={`rounded px-3 py-1.5 text-sm font-medium transition ${
                     selectedAsset === a
                       ? "bg-neutral-900 text-white"
-                      : "bg-neutral-100 text-neutral-500 hover:bg-neutral-200"
+                      : "bg-transparent text-neutral-400 border border-neutral-200 hover:border-neutral-300"
                   }`}
                 >
                   {a.replace("USDT", "")}
@@ -118,21 +119,22 @@ function AgentContent() {
 
         {/* Agent Recommendations */}
         <FadeInView>
-          <section className="card">
-            <h3 className="mb-4 text-lg font-semibold text-neutral-900">
+          <section className="rounded border border-neutral-200 bg-white p-6">
+            <p className="text-sm font-medium uppercase tracking-wider text-neutral-400">ANALYSIS</p>
+            <h3 className="mt-2 text-lg font-semibold text-neutral-900">
               {selectedAsset} 시장 분석 결과
             </h3>
             {recs.length > 0 ? (
-              <StaggerContainer className="grid gap-3 md:grid-cols-3">
+              <StaggerContainer className="mt-4 grid gap-3 md:grid-cols-3">
                 {recs.map((r, i) => (
                   <StaggerItem key={i}>
-                    <div className={`rounded-lg border p-4 ${i === 0 ? "border-neutral-900 bg-neutral-50" : "border-neutral-200"}`}>
-                      {i === 0 && <p className="mb-2 text-xs font-semibold text-neutral-900">최적 추천</p>}
+                    <div className={`rounded border p-4 ${i === 0 ? "border-neutral-900" : "border-neutral-200"}`}>
+                      {i === 0 && <p className="mb-2 text-xs font-medium uppercase tracking-wider text-neutral-900">최적 추천</p>}
                       <p className="text-lg font-bold text-neutral-900">{r.name}</p>
                       <p className="mt-1 text-sm text-neutral-500">{r.reasoning}</p>
                       <div className="mt-3 flex flex-wrap gap-1">
-                        <span className="badge bg-neutral-900 text-white text-xs">{r.formula_name}</span>
-                        <span className="badge bg-neutral-100 text-neutral-500 text-xs">
+                        <span className="inline-flex items-center rounded-full bg-neutral-900 px-2 py-0.5 text-xs font-medium text-white">{r.formula_name}</span>
+                        <span className="inline-flex items-center rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-600">
                           신뢰도 {(r.confidence * 100).toFixed(0)}%
                         </span>
                       </div>
@@ -141,47 +143,48 @@ function AgentContent() {
                 ))}
               </StaggerContainer>
             ) : (
-              <p className="text-sm text-neutral-400">시장 데이터를 수집 중입니다...</p>
+              <p className="mt-4 text-sm text-neutral-400">시장 데이터를 수집 중입니다...</p>
             )}
           </section>
         </FadeInView>
 
         {/* Decision History */}
         <FadeInView delay={0.1}>
-          <section className="card">
-            <h3 className="mb-4 text-lg font-semibold text-neutral-900">의사결정 이력</h3>
+          <section className="rounded border border-neutral-200 bg-white p-6">
+            <p className="text-sm font-medium uppercase tracking-wider text-neutral-400">HISTORY</p>
+            <h3 className="mt-2 text-lg font-semibold text-neutral-900">의사결정 이력</h3>
             {loading ? (
-              <div className="space-y-3">
+              <div className="mt-4 space-y-3">
                 {[0,1,2].map(i => <div key={i} className="skeleton h-20 w-full" />)}
               </div>
             ) : decisions.length === 0 ? (
-              <p className="text-sm text-neutral-400">
+              <p className="mt-4 text-sm text-neutral-400">
                 아직 이력이 없습니다. 에이전트가 시장 데이터를 수집하면 자동으로 의사결정을 시작합니다.
               </p>
             ) : (
-              <StaggerContainer className="space-y-3">
+              <StaggerContainer className="mt-4 space-y-3">
                 {decisions.map((d, i) => {
                   const isBuy = d.action === "BUY";
                   const isSell = d.action === "SELL";
                   return (
                     <StaggerItem key={d.decision_id ?? i}>
-                      <div className={`rounded-lg border p-4 ${
-                        isBuy ? "border-l-4 border-l-green-500 border-neutral-200" :
-                        isSell ? "border-l-4 border-l-red-500 border-neutral-200" :
-                        "border-neutral-200"
+                      <div className={`rounded border border-neutral-200 p-4 ${
+                        isBuy ? "border-l-2 border-l-green-600" :
+                        isSell ? "border-l-2 border-l-red-600" :
+                        "border-l-2 border-l-neutral-200"
                       }`}>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
-                            <span className={`badge ${
-                              isBuy ? "bg-green-50 text-green-700" :
-                              isSell ? "bg-red-50 text-red-700" :
-                              "bg-neutral-100 text-neutral-500"
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                              isBuy ? "bg-neutral-900 text-white" :
+                              isSell ? "border border-neutral-900 text-neutral-900" :
+                              "bg-neutral-100 text-neutral-400"
                             }`}>{d.action}</span>
-                            <span className="text-sm font-medium text-neutral-900">
-                              점수 {d.signal_score?.toFixed(4)}
+                            <span className="font-mono text-sm font-medium text-neutral-900">
+                              {d.signal_score?.toFixed(4)}
                             </span>
                             {d.threshold_crossed && (
-                              <span className="badge bg-yellow-50 text-yellow-700 text-xs">임계값 돌파</span>
+                              <span className="inline-flex items-center rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-600">임계값 돌파</span>
                             )}
                           </div>
                           {d.timestamp && (
@@ -200,8 +203,8 @@ function AgentContent() {
                             </summary>
                             <div className="mt-2 space-y-1">
                               {d.decision_phases.map((p, pi) => (
-                                <div key={pi} className="flex items-center gap-2 text-xs">
-                                  <span className={`inline-block h-1.5 w-1.5 rounded-full ${p.status === "completed" ? "bg-green-500" : "bg-red-500"}`} />
+                                <div key={pi} className="flex items-center gap-2 font-mono text-xs">
+                                  <span className={`inline-block h-1.5 w-1.5 rounded-full ${p.status === "completed" ? "bg-neutral-900" : "bg-neutral-300"}`} />
                                   <span className="font-medium text-neutral-600">{p.name}</span>
                                   {p.duration_ms != null && (
                                     <span className="text-neutral-400">{p.duration_ms.toFixed(0)}ms</span>

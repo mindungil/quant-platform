@@ -8,7 +8,6 @@ import {
   PageTransition,
   StaggerContainer,
   StaggerItem,
-  AnimatedNumber,
   motion,
 } from "../../../components/motion";
 
@@ -60,8 +59,9 @@ export default function AdminUsersPage() {
       <PageTransition>
         <main className="grid gap-6">
           {/* Header */}
-          <section className="card">
-            <h2 className="text-3xl font-semibold text-neutral-900">사용자 관리</h2>
+          <section className="rounded border border-neutral-200 bg-white p-6">
+            <p className="text-sm font-medium uppercase tracking-wider text-neutral-400">USERS</p>
+            <h2 className="mt-1 text-2xl font-semibold text-neutral-900">사용자 관리</h2>
             <p className="mt-2 text-neutral-500">
               사용자 계정 관리, 플랜 확인, 역할 할당
             </p>
@@ -71,33 +71,33 @@ export default function AdminUsersPage() {
           {/* Stats */}
           <StaggerContainer className="grid gap-4 sm:grid-cols-3">
             <StaggerItem>
-              <div className="card text-center">
-                <p className="text-sm text-neutral-500">전체 사용자</p>
-                <p className="mt-1 text-3xl font-bold text-neutral-900">
-                  <AnimatedNumber value={users.length} />
+              <div className="rounded border border-neutral-200 bg-white p-6 text-center">
+                <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">전체 사용자</p>
+                <p className="mt-1 font-mono text-2xl font-semibold text-neutral-900">
+                  {users.length}
                 </p>
               </div>
             </StaggerItem>
             <StaggerItem>
-              <div className="card text-center">
-                <p className="text-sm text-neutral-500">관리자</p>
-                <p className="mt-1 text-3xl font-bold text-neutral-900">
-                  <AnimatedNumber value={adminCount} />
+              <div className="rounded border border-neutral-200 bg-white p-6 text-center">
+                <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">관리자</p>
+                <p className="mt-1 font-mono text-2xl font-semibold text-neutral-900">
+                  {adminCount}
                 </p>
               </div>
             </StaggerItem>
             <StaggerItem>
-              <div className="card text-center">
-                <p className="text-sm text-neutral-500">일반 사용자</p>
-                <p className="mt-1 text-3xl font-bold text-neutral-900">
-                  <AnimatedNumber value={users.length - adminCount} />
+              <div className="rounded border border-neutral-200 bg-white p-6 text-center">
+                <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">일반 사용자</p>
+                <p className="mt-1 font-mono text-2xl font-semibold text-neutral-900">
+                  {users.length - adminCount}
                 </p>
               </div>
             </StaggerItem>
           </StaggerContainer>
 
           {/* User Table */}
-          <section className="card overflow-x-auto">
+          <section className="rounded border border-neutral-200 bg-white p-6 overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-neutral-200 text-xs font-medium uppercase tracking-wider text-neutral-400">
@@ -123,20 +123,19 @@ export default function AdminUsersPage() {
                         <p className="text-xs text-neutral-400">{user.email}</p>
                       </td>
                       <td className="py-3 pr-4">
-                        <span className="badge bg-neutral-100 text-neutral-600">
+                        <span className="inline-flex items-center rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-600">
                           {user.plan}
                         </span>
                       </td>
                       <td className="py-3 pr-4">
-                        <motion.select
+                        <select
                           value={user.roles.includes("admin") ? "admin" : "user"}
                           onChange={(e) => updateRole(user, e.target.value)}
-                          className="rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-xs text-neutral-900 outline-none focus:border-neutral-900 transition-colors duration-200"
-                          whileFocus={{ scale: 1.02 }}
+                          className="rounded border border-neutral-200 bg-white px-3 py-1.5 text-xs text-neutral-900 outline-none focus:border-neutral-900 transition-colors duration-200"
                         >
                           <option value="user">user</option>
                           <option value="admin">admin</option>
-                        </motion.select>
+                        </select>
                       </td>
                       <td className="py-3 pr-4 text-xs text-neutral-400">
                         {user.created_at ? new Date(user.created_at).toLocaleDateString() : "--"}

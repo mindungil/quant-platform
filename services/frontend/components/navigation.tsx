@@ -29,17 +29,17 @@ export function Navigation() {
           <Link
             key={href}
             href={href}
-            className={`relative rounded-lg px-3 py-2 transition ${
+            className={`relative rounded px-3 py-2 transition-colors ${
               isActive
-                ? "font-medium text-neutral-900"
-                : "text-neutral-500 hover:text-neutral-900"
+                ? "font-medium text-white"
+                : "text-neutral-400 hover:text-white"
             }`}
           >
             {label}
             {isActive && (
               <motion.div
                 layoutId="nav-indicator"
-                className="absolute inset-x-1 -bottom-px h-0.5 rounded-full bg-neutral-900"
+                className="absolute inset-x-1 -bottom-px h-0.5 rounded-full bg-white"
                 transition={{ type: "spring", stiffness: 380, damping: 30 }}
               />
             )}
@@ -47,7 +47,7 @@ export function Navigation() {
         );
       })}
       <button
-        className="ml-2 rounded-lg border border-neutral-200 px-3 py-2 text-sm text-neutral-500 transition hover:border-red-300 hover:text-red-600"
+        className="ml-2 rounded border border-neutral-700 px-3 py-1.5 text-sm text-neutral-400 transition-colors hover:border-red-400/50 hover:text-red-400"
         onClick={() => {
           clearToken();
           window.location.href = "/";

@@ -37,7 +37,7 @@ export function AuthGuard({ children }: { children: ReactNode }) {
   if (authorized === null) {
     return (
       <main className="grid gap-6">
-        <div className="card animate-pulse">
+        <div className="rounded border border-neutral-200 bg-white p-6 animate-pulse">
           <p className="text-neutral-400">인증 중...</p>
         </div>
       </main>
@@ -47,7 +47,7 @@ export function AuthGuard({ children }: { children: ReactNode }) {
   if (!authorized) {
     return (
       <main className="grid gap-6">
-        <div className="card">
+        <div className="rounded border border-neutral-200 bg-white p-6">
           <h2 className="text-2xl font-semibold text-neutral-900">세션 만료</h2>
           <p className="mt-3 text-neutral-500">
             로그인 페이지로 이동 중...
