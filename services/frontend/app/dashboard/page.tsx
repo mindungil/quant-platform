@@ -78,7 +78,7 @@ function ErrorHint({ message }: { message?: string }) {
   if (!message) return null;
   return (
     <p className="mt-1 text-xs italic text-red-500">
-      Service unavailable: {message.slice(0, 80)}
+      서비스 불가: {message.slice(0, 80)}
     </p>
   );
 }
@@ -134,7 +134,7 @@ function WsIndicator() {
         <span className="inline-block h-2 w-2 rounded-full bg-red-500 animate-pulse" />
       )}
       <span className="text-neutral-400">
-        {connected ? `Live feed connected (${msgCount} msgs)` : "Connecting..."}
+        {connected ? `라이브 피드 연결됨 (${msgCount}건)` : "연결 중..."}
       </span>
     </div>
   );
@@ -197,7 +197,7 @@ function DashboardContent() {
       })
       .catch((e) => {
         setData(null);
-        setError(e instanceof Error ? e.message : "Failed to load dashboard");
+        setError(e instanceof Error ? e.message : "대시보드 로드 실패");
       })
       .finally(() => setLoading(false));
   }, []);
@@ -221,7 +221,7 @@ function DashboardContent() {
         <div className="card">
           <p className="text-red-500">{error}</p>
           <p className="mt-2 text-sm text-neutral-500">
-            Make sure you are logged in and the gateway is reachable.
+            로그인 상태와 게이트웨이 연결을 확인해주세요.
           </p>
         </div>
       </main>
@@ -240,20 +240,20 @@ function DashboardContent() {
         <section className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
           <FadeInView>
             <div className="card">
-              <h2 className="mb-3 text-2xl font-semibold text-neutral-900">Portfolio Dashboard</h2>
+              <h2 className="mb-3 text-2xl font-semibold text-neutral-900">포트폴리오 대시보드</h2>
               <ChartPlaceholder />
             </div>
           </FadeInView>
           <FadeInView delay={0.1}>
             <div className="card space-y-3">
-              <h3 className="mb-3 text-lg font-semibold text-neutral-900">Portfolio Summary</h3>
+              <h3 className="mb-3 text-lg font-semibold text-neutral-900">포트폴리오 요약</h3>
               {data?.portfolio_error ? (
                 <ErrorHint message={data.portfolio_error} />
               ) : (
                 <StaggerContainer className="grid grid-cols-2 gap-3">
                   <StaggerItem>
                     <StatCard
-                      label="Total Equity"
+                      label="총 자산"
                       value={`$${formatNumber(portfolio?.total_equity)}`}
                       rawValue={portfolio?.total_equity ?? undefined}
                       prefix="$"
@@ -261,7 +261,7 @@ function DashboardContent() {
                   </StaggerItem>
                   <StaggerItem>
                     <StatCard
-                      label="Cash Balance"
+                      label="현금 잔고"
                       value={`$${formatNumber(portfolio?.cash_balance)}`}
                       rawValue={portfolio?.cash_balance ?? undefined}
                       prefix="$"
@@ -269,7 +269,7 @@ function DashboardContent() {
                   </StaggerItem>
                   <StaggerItem>
                     <StatCard
-                      label="Total Exposure"
+                      label="총 노출"
                       value={`$${formatNumber(portfolio?.total_exposure)}`}
                       rawValue={portfolio?.total_exposure ?? undefined}
                       prefix="$"
@@ -277,7 +277,7 @@ function DashboardContent() {
                   </StaggerItem>
                   <StaggerItem>
                     <StatCard
-                      label="Open Positions"
+                      label="보유 포지션"
                       value={String(positions.length)}
                       rawValue={positions.length}
                       decimals={0}
@@ -287,7 +287,7 @@ function DashboardContent() {
               )}
 
               <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Active Strategy</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">활성 전략</p>
                 {data?.active_strategy_error ? (
                   <ErrorHint message={data.active_strategy_error} />
                 ) : (
@@ -299,7 +299,7 @@ function DashboardContent() {
 
               {execution ? (
                 <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
-                  <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Execution Posture</p>
+                  <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">실행 설정</p>
                   <pre className="mt-2 overflow-x-auto text-xs text-neutral-600">
                     {JSON.stringify(execution, null, 2)}
                   </pre>
@@ -314,9 +314,9 @@ function DashboardContent() {
           {/* Positions */}
           <FadeInView delay={0.05}>
             <div className="card">
-              <h3 className="mb-3 text-lg font-semibold text-neutral-900">Positions</h3>
+              <h3 className="mb-3 text-lg font-semibold text-neutral-900">포지션</h3>
               {positions.length === 0 ? (
-                <p className="text-sm text-neutral-400">No open positions</p>
+                <p className="text-sm text-neutral-400">보유 포지션 없음</p>
               ) : (
                 <StaggerContainer className="space-y-2">
                   {positions.map((pos) => (
@@ -325,7 +325,7 @@ function DashboardContent() {
                         <div>
                           <p className="font-medium text-neutral-900">{pos.asset}</p>
                           <p className="text-xs text-neutral-400">
-                            Qty {formatNumber(pos.quantity, 4)} @ ${formatNumber(pos.entry_price)}
+                            수량 {formatNumber(pos.quantity, 4)} @ ${formatNumber(pos.entry_price)}
                           </p>
                         </div>
                         <div className="text-right">
@@ -352,11 +352,11 @@ function DashboardContent() {
           {/* Recent Signals */}
           <FadeInView delay={0.1}>
             <div className="card">
-              <h3 className="mb-3 text-lg font-semibold text-neutral-900">Recent Signals</h3>
+              <h3 className="mb-3 text-lg font-semibold text-neutral-900">최근 시그널</h3>
               {data?.signals_error ? (
                 <ErrorHint message={data.signals_error} />
               ) : signals.length === 0 ? (
-                <p className="text-sm text-neutral-400">No signals available</p>
+                <p className="text-sm text-neutral-400">시그널 없음</p>
               ) : (
                 <StaggerContainer className="space-y-2">
                   {signals.slice(0, 5).map((sig, idx) => {
@@ -402,11 +402,11 @@ function DashboardContent() {
           {/* Latest Orders */}
           <FadeInView delay={0.15}>
             <div className="card">
-              <h3 className="mb-3 text-lg font-semibold text-neutral-900">Latest Orders</h3>
+              <h3 className="mb-3 text-lg font-semibold text-neutral-900">최근 주문</h3>
               {data?.orders_error ? (
                 <ErrorHint message={data.orders_error} />
               ) : orders.length === 0 ? (
-                <p className="text-sm text-neutral-400">No recent orders</p>
+                <p className="text-sm text-neutral-400">최근 주문 없음</p>
               ) : (
                 <StaggerContainer className="space-y-2">
                   {orders.slice(0, 5).map((order, idx) => (
@@ -425,7 +425,7 @@ function DashboardContent() {
                           </span>
                         </div>
                         <p className="mt-1 text-xs text-neutral-400">
-                          Qty: {order.quantity ?? "--"} | Status: {order.status ?? "--"}
+                          수량: {order.quantity ?? "--"} | 상태: {order.status ?? "--"}
                         </p>
                       </div>
                     </StaggerItem>
@@ -440,7 +440,7 @@ function DashboardContent() {
         <section className="grid gap-6 lg:grid-cols-2">
           <FadeInView delay={0.05}>
             <div className="card">
-              <h3 className="mb-3 text-lg font-semibold text-neutral-900">Statistics</h3>
+              <h3 className="mb-3 text-lg font-semibold text-neutral-900">통계</h3>
               {data?.statistics_error ? (
                 <ErrorHint message={data.statistics_error} />
               ) : statistics ? (
@@ -448,7 +448,7 @@ function DashboardContent() {
                   {JSON.stringify(statistics, null, 2)}
                 </pre>
               ) : (
-                <p className="text-sm text-neutral-400">No statistics available</p>
+                <p className="text-sm text-neutral-400">통계 없음</p>
               )}
             </div>
           </FadeInView>

@@ -98,7 +98,7 @@ function OrdersContent() {
       })
       .catch((e) => {
         setOrders([]);
-        setError(e instanceof Error ? e.message : "Failed to load orders");
+        setError(e instanceof Error ? e.message : "주문 로드 실패");
       })
       .finally(() => setLoading(false));
   }, []);
@@ -117,7 +117,7 @@ function OrdersContent() {
       await gatewayFetch(`/orders/${orderId}`, { method: "DELETE" });
       fetchOrders();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Cancel failed";
+      const msg = e instanceof Error ? e.message : "취소 실패";
       alert(msg);
     } finally {
       setCancelling((prev) => {
@@ -136,7 +136,7 @@ function OrdersContent() {
       <main className="grid gap-6">
         <section className="card">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="text-2xl font-semibold text-neutral-900">Orders</h2>
+            <h2 className="text-2xl font-semibold text-neutral-900">주문</h2>
             <div className="flex flex-wrap items-center gap-2">
               <div ref={filterRef} className="relative flex flex-wrap items-center gap-2">
                 {STATUS_FILTERS.map((f, idx) => (
@@ -149,7 +149,7 @@ function OrdersContent() {
                         : "border-neutral-200 text-neutral-500 hover:border-neutral-400"
                     }`}
                   >
-                    {f}
+                    {f === "ALL" ? "전체" : f === "OPEN" ? "미체결" : f === "FILLED" ? "체결" : f === "CANCELLED" ? "취소됨" : f === "PENDING" ? "대기" : f === "REJECTED" ? "거부" : f}
                     {filter === f && (
                       <motion.div
                         layoutId="order-filter-underline"
@@ -164,7 +164,7 @@ function OrdersContent() {
                 onClick={fetchOrders}
                 className="btn-secondary ml-2 text-xs"
               >
-                Refresh
+                새로고침
               </button>
             </div>
           </div>
@@ -194,13 +194,13 @@ function OrdersContent() {
           <div className="card">
             <p className="text-red-500">{error}</p>
             <p className="mt-2 text-sm text-neutral-500">
-              Make sure you are logged in and the order service is running.
+              로그인 상태와 주문 서비스 연결을 확인해주세요.
             </p>
           </div>
         ) : filtered.length === 0 ? (
           <div className="card">
             <p className="text-neutral-400">
-              {filter === "ALL" ? "No orders found." : `No ${filter} orders found.`}
+              {filter === "ALL" ? "주문 없음" : `${filter === "OPEN" ? "미체결" : filter === "FILLED" ? "체결" : filter === "CANCELLED" ? "취소됨" : filter === "PENDING" ? "대기" : filter === "REJECTED" ? "거부" : filter} 주문 없음`}
             </p>
           </div>
         ) : (
@@ -229,8 +229,8 @@ function OrdersContent() {
                         </span>
                       </div>
                       <div className="flex items-center gap-4 text-sm text-neutral-500">
-                        <span>Qty: {formatNumber(order.quantity, 4)}</span>
-                        {order.price != null && <span>Price: ${formatNumber(order.price)}</span>}
+                        <span>수량: {formatNumber(order.quantity, 4)}</span>
+                        {order.price != null && <span>가격: ${formatNumber(order.price)}</span>}
                         <span className="text-xs">{formatTs(order.created_at)}</span>
                         {!isTerminal && (
                           <motion.button
@@ -243,7 +243,7 @@ function OrdersContent() {
                             disabled={isCancelling}
                             className="rounded-lg border border-red-200 px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-40"
                           >
-                            {isCancelling ? "Cancelling..." : "Cancel"}
+                            {isCancelling ? "취소 중..." : "취소"}
                           </motion.button>
                         )}
                       </div>
@@ -253,47 +253,47 @@ function OrdersContent() {
                       <div className="mt-4 space-y-3 border-t border-neutral-200 pt-4">
                         <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
                           <div>
-                            <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">Order ID</p>
+                            <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">주문 ID</p>
                             <p className="mt-1 font-mono text-xs text-neutral-600">{order.order_id}</p>
                           </div>
                           <div>
-                            <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">Type</p>
+                            <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">유형</p>
                             <p className="mt-1 text-neutral-600">{order.order_type ?? "MARKET"}</p>
                           </div>
                           <div>
-                            <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">Exchange</p>
+                            <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">거래소</p>
                             <p className="mt-1 text-neutral-600">{order.exchange ?? "--"}</p>
                           </div>
                           <div>
-                            <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">Updated</p>
+                            <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">수정일</p>
                             <p className="mt-1 text-neutral-600">{formatTs(order.updated_at)}</p>
                           </div>
                         </div>
 
                         {order.filled_quantity != null && (
                           <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-sm">
-                            <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">Fill Info</p>
+                            <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">체결 정보</p>
                             <p className="mt-1 text-neutral-600">
-                              Filled: {formatNumber(order.filled_quantity, 4)} @ ${formatNumber(order.filled_price)}
+                              체결: {formatNumber(order.filled_quantity, 4)} @ ${formatNumber(order.filled_price)}
                             </p>
                           </div>
                         )}
 
                         {order.reject_reason && (
                           <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm">
-                            <p className="text-xs font-medium uppercase tracking-wider text-red-600">Reject Reason</p>
+                            <p className="text-xs font-medium uppercase tracking-wider text-red-600">거부 사유</p>
                             <p className="mt-1 text-red-700">{order.reject_reason}</p>
                           </div>
                         )}
 
                         {order.protections && order.protections.length > 0 && (
                           <div>
-                            <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">Protections</p>
+                            <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">보호 설정</p>
                             <div className="mt-2 space-y-1">
                               {order.protections.map((p, idx) => (
                                 <div key={idx} className="rounded-lg border border-neutral-100 bg-neutral-50 p-2 text-xs text-neutral-600">
-                                  {p.type} {p.trigger_price != null ? `| Trigger: $${formatNumber(p.trigger_price)}` : ""}
-                                  {p.limit_price != null ? ` | Limit: $${formatNumber(p.limit_price)}` : ""}
+                                  {p.type} {p.trigger_price != null ? `| 트리거: $${formatNumber(p.trigger_price)}` : ""}
+                                  {p.limit_price != null ? ` | 지정가: $${formatNumber(p.limit_price)}` : ""}
                                 </div>
                               ))}
                             </div>
@@ -302,7 +302,7 @@ function OrdersContent() {
 
                         {order.lifecycle_events && order.lifecycle_events.length > 0 && (
                           <div>
-                            <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">Lifecycle Events</p>
+                            <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">주문 이력</p>
                             <div className="mt-2 space-y-1">
                               {order.lifecycle_events.map((ev, idx) => (
                                 <div key={idx} className="flex items-center gap-3 rounded-lg border border-neutral-100 bg-neutral-50 p-2 text-xs">

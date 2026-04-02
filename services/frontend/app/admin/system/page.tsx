@@ -66,7 +66,7 @@ export default function AdminSystemPage() {
       await gatewayFetch(`/admin/dlq/reprocess/${stream}`, { method: "POST" });
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Reprocess failed");
+      setError(err instanceof Error ? err.message : "재처리 실패");
     } finally {
       setReprocessing(null);
     }
@@ -86,16 +86,16 @@ export default function AdminSystemPage() {
         <main className="grid gap-6">
           {/* Header */}
           <section className="card">
-            <h2 className="text-3xl font-semibold text-neutral-900">System Health</h2>
+            <h2 className="text-3xl font-semibold text-neutral-900">시스템 상태</h2>
             <p className="mt-2 text-neutral-500">
-              Service health grid, recent events, and dead-letter queue management.
+              서비스 상태, 최근 이벤트, 데드레터 큐 관리
             </p>
             {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
           </section>
 
           {/* Service Health Grid */}
           <section>
-            <h3 className="mb-3 text-lg font-semibold text-neutral-900">Services</h3>
+            <h3 className="mb-3 text-lg font-semibold text-neutral-900">서비스</h3>
             {health?.services ? (
               <StaggerContainer className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {Object.entries(health.services).map(([name, svc]) => (
@@ -119,17 +119,17 @@ export default function AdminSystemPage() {
                 ))}
               </StaggerContainer>
             ) : (
-              <div className="card text-sm text-neutral-400">Loading service health...</div>
+              <div className="card text-sm text-neutral-400">서비스 상태 로딩 중...</div>
             )}
           </section>
 
           {/* DLQ Management */}
           <section className="card">
-            <h3 className="mb-4 text-xl font-semibold text-neutral-900">Dead Letter Queue</h3>
+            <h3 className="mb-4 text-xl font-semibold text-neutral-900">데드레터 큐</h3>
             {dlqStats ? (
               <>
                 <p className="mb-3 text-sm text-neutral-500">
-                  Total messages: <span className="font-semibold text-yellow-600">{dlqStats.total}</span>
+                  전체 메시지: <span className="font-semibold text-yellow-600">{dlqStats.total}</span>
                 </p>
                 {dlqStats.streams && Object.keys(dlqStats.streams).length > 0 ? (
                   <StaggerContainer className="space-y-2">
@@ -152,24 +152,24 @@ export default function AdminSystemPage() {
                                 transition={{ repeat: Infinity, duration: 0.6, ease: "linear" }}
                               />
                             )}
-                            {reprocessing === stream ? "Processing..." : "Reprocess"}
+                            {reprocessing === stream ? "처리 중..." : "재처리"}
                           </button>
                         </div>
                       </StaggerItem>
                     ))}
                   </StaggerContainer>
                 ) : (
-                  <p className="text-sm text-neutral-400">No DLQ streams.</p>
+                  <p className="text-sm text-neutral-400">DLQ 스트림 없음</p>
                 )}
               </>
             ) : (
-              <p className="text-sm text-neutral-400">Loading DLQ stats...</p>
+              <p className="text-sm text-neutral-400">DLQ 통계 로딩 중...</p>
             )}
           </section>
 
           {/* Recent Events */}
           <section className="card">
-            <h3 className="mb-4 text-xl font-semibold text-neutral-900">Recent System Events</h3>
+            <h3 className="mb-4 text-xl font-semibold text-neutral-900">최근 시스템 이벤트</h3>
             {events.length > 0 ? (
               <StaggerContainer className="space-y-2">
                 {events.map((event, index) => (
@@ -188,7 +188,7 @@ export default function AdminSystemPage() {
                 ))}
               </StaggerContainer>
             ) : (
-              <p className="text-sm text-neutral-400">No recent events.</p>
+              <p className="text-sm text-neutral-400">최근 이벤트 없음</p>
             )}
           </section>
         </main>

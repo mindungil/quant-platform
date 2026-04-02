@@ -61,9 +61,9 @@ export default function AdminUsersPage() {
         <main className="grid gap-6">
           {/* Header */}
           <section className="card">
-            <h2 className="text-3xl font-semibold text-neutral-900">User Management</h2>
+            <h2 className="text-3xl font-semibold text-neutral-900">사용자 관리</h2>
             <p className="mt-2 text-neutral-500">
-              Manage user accounts, review plans, and assign roles.
+              사용자 계정 관리, 플랜 확인, 역할 할당
             </p>
             {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
           </section>
@@ -72,7 +72,7 @@ export default function AdminUsersPage() {
           <StaggerContainer className="grid gap-4 sm:grid-cols-3">
             <StaggerItem>
               <div className="card text-center">
-                <p className="text-sm text-neutral-500">Total Users</p>
+                <p className="text-sm text-neutral-500">전체 사용자</p>
                 <p className="mt-1 text-3xl font-bold text-neutral-900">
                   <AnimatedNumber value={users.length} />
                 </p>
@@ -80,7 +80,7 @@ export default function AdminUsersPage() {
             </StaggerItem>
             <StaggerItem>
               <div className="card text-center">
-                <p className="text-sm text-neutral-500">Admins</p>
+                <p className="text-sm text-neutral-500">관리자</p>
                 <p className="mt-1 text-3xl font-bold text-neutral-900">
                   <AnimatedNumber value={adminCount} />
                 </p>
@@ -88,7 +88,7 @@ export default function AdminUsersPage() {
             </StaggerItem>
             <StaggerItem>
               <div className="card text-center">
-                <p className="text-sm text-neutral-500">Regular Users</p>
+                <p className="text-sm text-neutral-500">일반 사용자</p>
                 <p className="mt-1 text-3xl font-bold text-neutral-900">
                   <AnimatedNumber value={users.length - adminCount} />
                 </p>
@@ -101,11 +101,11 @@ export default function AdminUsersPage() {
             <table className="w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-neutral-200 text-xs font-medium uppercase tracking-wider text-neutral-400">
-                  <th className="pb-3 pr-4">User</th>
-                  <th className="pb-3 pr-4">Plan</th>
-                  <th className="pb-3 pr-4">Role</th>
-                  <th className="pb-3 pr-4">Created</th>
-                  <th className="pb-3">Actions</th>
+                  <th className="pb-3 pr-4">사용자</th>
+                  <th className="pb-3 pr-4">플랜</th>
+                  <th className="pb-3 pr-4">역할</th>
+                  <th className="pb-3 pr-4">생성일</th>
+                  <th className="pb-3">작업</th>
                 </tr>
               </thead>
               <tbody>
@@ -151,7 +151,7 @@ export default function AdminUsersPage() {
                 ) : (
                   <tr>
                     <td colSpan={5} className="py-8 text-center text-neutral-400">
-                      No users found.
+                      사용자를 찾을 수 없습니다.
                     </td>
                   </tr>
                 )}

@@ -58,17 +58,17 @@ export default function AdminPage() {
     try {
       if (action === "emergency-stop") {
         await gatewayFetch("/admin/execution/emergency-stop", { method: "POST" });
-        setActionResult({ type: "ok", message: "Emergency stop executed." });
+        setActionResult({ type: "ok", message: "긴급 정지가 실행되었습니다." });
       } else if (action === "enable-live") {
         await gatewayFetch("/admin/execution/enable-live", { method: "POST" });
-        setActionResult({ type: "ok", message: "Live trading enabled." });
+        setActionResult({ type: "ok", message: "실시간 트레이딩이 활성화되었습니다." });
       } else {
         await gatewayFetch("/admin/execution/preflight", { method: "POST" });
-        setActionResult({ type: "ok", message: "Pre-flight checks passed." });
+        setActionResult({ type: "ok", message: "사전 점검을 통과했습니다." });
       }
       await load();
     } catch (err) {
-      setActionResult({ type: "error", message: err instanceof Error ? err.message : "Action failed" });
+      setActionResult({ type: "error", message: err instanceof Error ? err.message : "작업 실패" });
     } finally {
       setActionLoading("");
     }
@@ -115,10 +115,10 @@ export default function AdminPage() {
         <main className="grid gap-6">
           {/* Header */}
           <section className="card">
-            <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">Admin</p>
-            <h2 className="mt-2 text-3xl font-semibold text-neutral-900">Operator Control Surface</h2>
+            <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">관리자</p>
+            <h2 className="mt-2 text-3xl font-semibold text-neutral-900">운영 제어판</h2>
             <p className="mt-3 text-neutral-500">
-              System overview, quick actions, and navigation to detailed control panels.
+              시스템 개요, 빠른 작업, 세부 제어판 탐색
             </p>
           </section>
 
@@ -126,7 +126,7 @@ export default function AdminPage() {
           <StaggerContainer className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StaggerItem>
               <div className="card text-center">
-                <p className="text-sm text-neutral-500">Services</p>
+                <p className="text-sm text-neutral-500">서비스</p>
                 <p className="mt-1 text-3xl font-bold text-neutral-900">
                   <AnimatedNumber value={serviceCount} />
                 </p>
@@ -134,7 +134,7 @@ export default function AdminPage() {
             </StaggerItem>
             <StaggerItem>
               <div className="card text-center">
-                <p className="text-sm text-neutral-500">Uptime</p>
+                <p className="text-sm text-neutral-500">가동 시간</p>
                 <p className="mt-1 text-3xl font-bold text-neutral-900">
                   {uptimeHours !== null ? <><AnimatedNumber value={uptimeHours} decimals={0} />h</> : "--"}
                 </p>
@@ -142,7 +142,7 @@ export default function AdminPage() {
             </StaggerItem>
             <StaggerItem>
               <div className="card text-center">
-                <p className="text-sm text-neutral-500">Mode</p>
+                <p className="text-sm text-neutral-500">모드</p>
                 <div className="mt-2 flex items-center justify-center gap-2">
                   <span className={`inline-block h-3 w-3 rounded-full ${modeColors[currentMode]}`} />
                   <span className="text-lg font-semibold capitalize text-neutral-900">{currentMode}</span>
@@ -151,7 +151,7 @@ export default function AdminPage() {
             </StaggerItem>
             <StaggerItem>
               <div className="card text-center">
-                <p className="text-sm text-neutral-500">DLQ Messages</p>
+                <p className="text-sm text-neutral-500">DLQ 메시지</p>
                 <p className="mt-1 text-3xl font-bold text-yellow-600">
                   {dlqStats ? <AnimatedNumber value={dlqStats.total_messages} /> : "--"}
                 </p>
@@ -161,7 +161,7 @@ export default function AdminPage() {
 
           {/* Quick Actions */}
           <section className="card">
-            <h3 className="mb-4 text-xl font-semibold text-neutral-900">Quick Actions</h3>
+            <h3 className="mb-4 text-xl font-semibold text-neutral-900">빠른 작업</h3>
             <AnimatePresence>
               {actionResult && (
                 <motion.div
@@ -184,7 +184,7 @@ export default function AdminPage() {
                   disabled={actionLoading === "emergency-stop"}
                   onClick={() => handleAction("emergency-stop")}
                 >
-                  {actionLoading === "emergency-stop" ? "Stopping..." : "Emergency Stop"}
+                  {actionLoading === "emergency-stop" ? "정지 중..." : "긴급 정지"}
                 </button>
               </StaggerItem>
               <StaggerItem>
@@ -193,7 +193,7 @@ export default function AdminPage() {
                   disabled={actionLoading === "enable-live"}
                   onClick={() => handleAction("enable-live")}
                 >
-                  {actionLoading === "enable-live" ? "Enabling..." : "Enable Live"}
+                  {actionLoading === "enable-live" ? "활성화 중..." : "라이브 활성화"}
                 </button>
               </StaggerItem>
               <StaggerItem>
@@ -202,7 +202,7 @@ export default function AdminPage() {
                   disabled={actionLoading === "preflight"}
                   onClick={() => handleAction("preflight")}
                 >
-                  {actionLoading === "preflight" ? "Running..." : "Run Pre-flight"}
+                  {actionLoading === "preflight" ? "실행 중..." : "사전 점검 실행"}
                 </button>
               </StaggerItem>
             </StaggerContainer>
@@ -211,7 +211,7 @@ export default function AdminPage() {
           {/* Execution Config */}
           {execConfig && (
             <section className="card">
-              <h3 className="mb-4 text-xl font-semibold text-neutral-900">Execution Config</h3>
+              <h3 className="mb-4 text-xl font-semibold text-neutral-900">실행 설정</h3>
               <StaggerContainer className="grid gap-3 sm:grid-cols-3">
                 <StaggerItem>
                   <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
@@ -244,7 +244,7 @@ export default function AdminPage() {
           {/* DLQ Stats */}
           {dlqStats && dlqStats.streams && Object.keys(dlqStats.streams).length > 0 && (
             <section className="card">
-              <h3 className="mb-4 text-xl font-semibold text-neutral-900">DLQ Streams</h3>
+              <h3 className="mb-4 text-xl font-semibold text-neutral-900">DLQ 스트림</h3>
               <StaggerContainer className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {Object.entries(dlqStats.streams).map(([stream, count]) => (
                   <StaggerItem key={stream}>
@@ -262,20 +262,20 @@ export default function AdminPage() {
           <StaggerContainer className="grid gap-4 sm:grid-cols-3">
             <StaggerItem>
               <Link href="/admin/trading" className="card block transition hover:border-neutral-300 hover:shadow-md">
-                <h3 className="text-xl font-semibold text-neutral-900">Live Trading Control</h3>
-                <p className="mt-2 text-neutral-500">Pre-flight checks, enable live, emergency stop, and execution config.</p>
+                <h3 className="text-xl font-semibold text-neutral-900">실시간 트레이딩 제어</h3>
+                <p className="mt-2 text-neutral-500">사전 점검, 라이브 활성화, 긴급 정지, 실행 설정</p>
               </Link>
             </StaggerItem>
             <StaggerItem>
               <Link href="/admin/system" className="card block transition hover:border-neutral-300 hover:shadow-md">
-                <h3 className="text-xl font-semibold text-neutral-900">System Health</h3>
-                <p className="mt-2 text-neutral-500">Service health grid, events, and DLQ management.</p>
+                <h3 className="text-xl font-semibold text-neutral-900">시스템 상태</h3>
+                <p className="mt-2 text-neutral-500">서비스 상태, 이벤트, DLQ 관리</p>
               </Link>
             </StaggerItem>
             <StaggerItem>
               <Link href="/admin/users" className="card block transition hover:border-neutral-300 hover:shadow-md">
-                <h3 className="text-xl font-semibold text-neutral-900">User Management</h3>
-                <p className="mt-2 text-neutral-500">User list, role management, and stats.</p>
+                <h3 className="text-xl font-semibold text-neutral-900">사용자 관리</h3>
+                <p className="mt-2 text-neutral-500">사용자 목록, 역할 관리, 통계</p>
               </Link>
             </StaggerItem>
           </StaggerContainer>

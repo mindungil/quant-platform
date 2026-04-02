@@ -54,7 +54,7 @@ export default function AdminTradingPage() {
       setEditShadow(config.default_shadow_mode);
       setConfigDirty(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load config");
+      setError(err instanceof Error ? err.message : "설정을 불러오지 못했습니다");
     }
   }, []);
 
@@ -77,10 +77,10 @@ export default function AdminTradingPage() {
       const result = await gatewayFetch("/admin/execution/pre-flight", { method: "POST", body: JSON.stringify({}) });
       setPreflight(result);
       if (result.all_passed) {
-        setSuccess("All pre-flight checks passed.");
+        setSuccess("모든 사전 점검을 통과했습니다.");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Pre-flight failed");
+      setError(err instanceof Error ? err.message : "사전 점검 실패");
       setPreflight(null);
     } finally {
       setPreflightLoading(false);
@@ -93,11 +93,11 @@ export default function AdminTradingPage() {
     setSuccess("");
     try {
       await gatewayFetch("/admin/execution/enable-live", { method: "POST", body: JSON.stringify({}) });
-      setSuccess("Live trading has been enabled.");
+      setSuccess("실시간 트레이딩이 활성화되었습니다.");
       setEnableConfirm(false);
       await loadConfig();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to enable live trading");
+      setError(err instanceof Error ? err.message : "실시간 트레이딩 활성화 실패");
     } finally {
       setEnableLoading(false);
     }
@@ -109,12 +109,12 @@ export default function AdminTradingPage() {
     setSuccess("");
     try {
       await gatewayFetch("/admin/execution/emergency-stop", { method: "POST", body: JSON.stringify({}) });
-      setSuccess("Emergency stop executed. All trading halted.");
+      setSuccess("긴급 정지가 실행되었습니다. 모든 트레이딩이 중단되었습니다.");
       setStopConfirm(false);
       setPreflight(null);
       await loadConfig();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Emergency stop failed");
+      setError(err instanceof Error ? err.message : "긴급 정지 실패");
     } finally {
       setStopLoading(false);
     }
@@ -136,10 +136,10 @@ export default function AdminTradingPage() {
           default_shadow_mode: editShadow,
         }),
       });
-      setSuccess("Execution config updated.");
+      setSuccess("실행 설정이 업데이트되었습니다.");
       await loadConfig();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save config");
+      setError(err instanceof Error ? err.message : "설정 저장 실패");
     } finally {
       setConfigSaving(false);
     }
@@ -168,10 +168,10 @@ export default function AdminTradingPage() {
   };
 
   const statusLabels: Record<string, string> = {
-    live: "LIVE",
-    shadow: "SHADOW",
-    stopped: "STOPPED",
-    unknown: "UNKNOWN",
+    live: "라이브",
+    shadow: "섀도우",
+    stopped: "정지됨",
+    unknown: "알 수 없음",
   };
 
   return (
@@ -182,9 +182,9 @@ export default function AdminTradingPage() {
           <section className="card">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-3xl font-semibold text-neutral-900">Live Trading Control</h2>
+                <h2 className="text-3xl font-semibold text-neutral-900">실시간 트레이딩 제어</h2>
                 <p className="mt-2 text-neutral-500">
-                  Pre-flight checks, execution controls, and configuration.
+                  사전 점검, 실행 제어, 설정 관리
                 </p>
               </div>
               <motion.div
@@ -194,7 +194,7 @@ export default function AdminTradingPage() {
                 }}
                 transition={{ duration: 0.5 }}
               >
-                <p className="text-xs text-neutral-400">Current Status</p>
+                <p className="text-xs text-neutral-400">현재 상태</p>
                 <motion.p
                   key={currentMode}
                   initial={{ opacity: 0, scale: 0.8 }}
@@ -239,13 +239,13 @@ export default function AdminTradingPage() {
           {/* Pre-flight Checks */}
           <section className="card">
             <div className="flex items-center justify-between">
-              <h3 className="text-xl font-semibold text-neutral-900">Pre-flight Checks</h3>
+              <h3 className="text-xl font-semibold text-neutral-900">사전 점검</h3>
               <button
                 className="btn-primary disabled:opacity-50"
                 disabled={preflightLoading}
                 onClick={runPreflight}
               >
-                {preflightLoading ? "Running..." : "Run Pre-flight"}
+                {preflightLoading ? "실행 중..." : "사전 점검 실행"}
               </button>
             </div>
             <AnimatePresence>
@@ -279,7 +279,7 @@ export default function AdminTradingPage() {
                           <span
                             className={`text-xs font-semibold ${check.passed ? "text-green-600" : "text-red-600"}`}
                           >
-                            {check.passed ? "PASS" : "FAIL"}
+                            {check.passed ? "통과" : "실패"}
                           </span>
                         </div>
                       </StaggerItem>
@@ -288,14 +288,14 @@ export default function AdminTradingPage() {
                   <div className={`mt-2 rounded-lg px-4 py-2 text-center text-sm font-semibold ${
                     preflight.all_passed ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
                   }`}>
-                    {preflight.all_passed ? "All checks passed" : "Some checks failed"}
+                    {preflight.all_passed ? "모든 점검 통과" : "일부 점검 실패"}
                   </div>
                 </motion.div>
               )}
             </AnimatePresence>
             {!preflight && !preflightLoading && (
               <p className="mt-4 text-sm text-neutral-400">
-                Run pre-flight to verify credentials, exchange connectivity, risk limits, and active strategies.
+                사전 점검을 실행하여 인증 정보, 거래소 연결, 리스크 한도, 활성 전략을 확인하세요.
               </p>
             )}
           </section>
@@ -304,9 +304,9 @@ export default function AdminTradingPage() {
           <div className="grid gap-4 sm:grid-cols-2">
             {/* Enable Live */}
             <section className="card">
-              <h3 className="mb-3 text-xl font-semibold text-neutral-900">Enable Live Trading</h3>
+              <h3 className="mb-3 text-xl font-semibold text-neutral-900">실시간 트레이딩 활성화</h3>
               <p className="mb-4 text-sm text-neutral-500">
-                Requires all pre-flight checks to pass before activation.
+                활성화 전 모든 사전 점검을 통과해야 합니다.
               </p>
               <AnimatePresence mode="wait">
                 {!enableConfirm ? (
@@ -316,7 +316,7 @@ export default function AdminTradingPage() {
                       disabled={!preflight?.all_passed || execConfig?.live_trading_enabled === true}
                       onClick={() => setEnableConfirm(true)}
                     >
-                      {execConfig?.live_trading_enabled ? "Already Live" : "Enable Live Trading"}
+                      {execConfig?.live_trading_enabled ? "이미 활성화됨" : "실시간 트레이딩 활성화"}
                     </button>
                   </motion.div>
                 ) : (
@@ -329,7 +329,7 @@ export default function AdminTradingPage() {
                     className="space-y-3"
                   >
                     <p className="text-sm font-medium text-yellow-700">
-                      Confirm: Enable live trading with real funds?
+                      확인: 실제 자금으로 실시간 트레이딩을 활성화하시겠습니까?
                     </p>
                     <div className="flex gap-3">
                       <button
@@ -337,13 +337,13 @@ export default function AdminTradingPage() {
                         disabled={enableLoading}
                         onClick={enableLive}
                       >
-                        {enableLoading ? "Enabling..." : "Yes, Enable Live"}
+                        {enableLoading ? "활성화 중..." : "예, 활성화"}
                       </button>
                       <button
                         className="btn-secondary flex-1 py-3"
                         onClick={() => setEnableConfirm(false)}
                       >
-                        Cancel
+                        취소
                       </button>
                     </div>
                   </motion.div>
@@ -353,9 +353,9 @@ export default function AdminTradingPage() {
 
             {/* Emergency Stop */}
             <section className="card">
-              <h3 className="mb-3 text-xl font-semibold text-neutral-900">Emergency Stop</h3>
+              <h3 className="mb-3 text-xl font-semibold text-neutral-900">긴급 정지</h3>
               <p className="mb-4 text-sm text-neutral-500">
-                Immediately halt all trading operations and cancel open orders.
+                모든 트레이딩 작업을 즉시 중단하고 미체결 주문을 취소합니다.
               </p>
               <AnimatePresence mode="wait">
                 {!stopConfirm ? (
@@ -364,7 +364,7 @@ export default function AdminTradingPage() {
                       className="w-full rounded-lg bg-red-600 py-3 text-lg font-bold text-white hover:bg-red-700"
                       onClick={() => setStopConfirm(true)}
                     >
-                      EMERGENCY STOP
+                      긴급 정지
                     </button>
                   </motion.div>
                 ) : (
@@ -377,7 +377,7 @@ export default function AdminTradingPage() {
                     className="space-y-3"
                   >
                     <p className="text-sm font-medium text-red-700">
-                      Are you sure? This will stop ALL trading immediately.
+                      정말 정지하시겠습니까? 모든 트레이딩이 즉시 중단됩니다.
                     </p>
                     <div className="flex gap-3">
                       <button
@@ -385,13 +385,13 @@ export default function AdminTradingPage() {
                         disabled={stopLoading}
                         onClick={emergencyStop}
                       >
-                        {stopLoading ? "Stopping..." : "Yes, Stop Everything"}
+                        {stopLoading ? "정지 중..." : "예, 전부 정지"}
                       </button>
                       <button
                         className="btn-secondary flex-1 py-3"
                         onClick={() => setStopConfirm(false)}
                       >
-                        Cancel
+                        취소
                       </button>
                     </div>
                   </motion.div>
@@ -402,7 +402,7 @@ export default function AdminTradingPage() {
 
           {/* Execution Config Editor */}
           <section className="card">
-            <h3 className="mb-4 text-xl font-semibold text-neutral-900">Execution Config</h3>
+            <h3 className="mb-4 text-xl font-semibold text-neutral-900">실행 설정</h3>
             {execConfig ? (
               <div className="space-y-4">
                 <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
@@ -411,7 +411,7 @@ export default function AdminTradingPage() {
                     {execConfig.live_trading_enabled ? "true" : "false"}
                   </p>
                   <p className="mt-1 text-xs text-neutral-400">
-                    Controlled via Enable Live / Emergency Stop buttons above.
+                    위의 실시간 활성화 / 긴급 정지 버튼으로 제어됩니다.
                   </p>
                 </div>
 
@@ -427,7 +427,7 @@ export default function AdminTradingPage() {
                     placeholder="binance, bybit, okx"
                     className="mt-2 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900"
                   />
-                  <p className="mt-1 text-xs text-neutral-400">Comma-separated exchange identifiers.</p>
+                  <p className="mt-1 text-xs text-neutral-400">쉼표로 구분된 거래소 식별자</p>
                 </div>
 
                 <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
@@ -444,7 +444,7 @@ export default function AdminTradingPage() {
                     <span className="text-sm text-neutral-900">default_shadow_mode</span>
                   </label>
                   <p className="mt-2 text-xs text-neutral-400">
-                    When enabled, new strategies start in shadow mode by default.
+                    활성화 시 새 전략이 기본적으로 섀도우 모드로 시작됩니다.
                   </p>
                 </div>
 
@@ -453,11 +453,11 @@ export default function AdminTradingPage() {
                   disabled={!configDirty || configSaving}
                   onClick={saveConfig}
                 >
-                  {configSaving ? "Saving..." : "Save Config"}
+                  {configSaving ? "저장 중..." : "설정 저장"}
                 </button>
               </div>
             ) : (
-              <p className="text-sm text-neutral-400">Loading execution config...</p>
+              <p className="text-sm text-neutral-400">실행 설정 로딩 중...</p>
             )}
           </section>
         </main>

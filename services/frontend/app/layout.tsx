@@ -4,10 +4,10 @@ import { Navigation } from "../components/navigation";
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="ko">
       <head>
-        <title>Quant Platform</title>
-        <meta name="description" content="Autonomous trading command deck — real-time signals, portfolio management, and strategy execution." />
+        <title>퀀트 플랫폼</title>
+        <meta name="description" content="자율 트레이딩 커맨드 덱 — 실시간 시그널, 포트폴리오 관리, 전략 실행" />
         <link
           href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
           rel="stylesheet"
@@ -21,7 +21,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
                 <span className="text-sm font-bold text-white">Q</span>
               </div>
               <span className="text-lg font-semibold tracking-tight text-neutral-900">
-                Quant Platform
+                퀀트 플랫폼
               </span>
             </div>
             <Navigation />

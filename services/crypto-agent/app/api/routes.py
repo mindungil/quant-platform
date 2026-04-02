@@ -42,3 +42,24 @@ def get_latest_decision(asset: str):
 @router.get("/decisions/history/{asset}")
 def get_decision_history(asset: str):
     return decision_repository.get_history(asset)
+
+
+@router.get("/recommendations/{asset}")
+def get_recommendations(asset: str, top_k: int = 3):
+    from app.core.recommender import recommend_strategies
+    recs = recommend_strategies(asset=asset, top_k=top_k)
+    return [
+        {
+            "name": r.name,
+            "description": r.description,
+            "asset_type": r.asset_type,
+            "indicators": r.indicators,
+            "weights": r.weights,
+            "thresholds": r.thresholds,
+            "formula_name": r.formula_name,
+            "regime": r.regime,
+            "confidence": r.confidence,
+            "reasoning": r.reasoning,
+        }
+        for r in recs
+    ]

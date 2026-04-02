@@ -16,15 +16,15 @@ function formatRelativeTime(timestamp: string | undefined): string {
     const now = Date.now();
     const then = new Date(timestamp).getTime();
     const diffMs = now - then;
-    if (diffMs < 0) return "just now";
+    if (diffMs < 0) return "방금";
     const seconds = Math.floor(diffMs / 1000);
-    if (seconds < 60) return `${seconds}s ago`;
+    if (seconds < 60) return `${seconds}초 전`;
     const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes}m ago`;
+    if (minutes < 60) return `${minutes}분 전`;
     const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
+    if (hours < 24) return `${hours}시간 전`;
     const days = Math.floor(hours / 24);
-    return `${days}d ago`;
+    return `${days}일 전`;
   } catch {
     return "";
   }
@@ -55,7 +55,7 @@ export default function FeedPage() {
   return (
     <PageTransition>
       <main className="card">
-        <h2 className="mb-6 text-2xl font-semibold text-neutral-900">Agent Feed</h2>
+        <h2 className="mb-6 text-2xl font-semibold text-neutral-900">활동 피드</h2>
         <div className="space-y-4">
           {loading ? (
             <StaggerContainer className="space-y-4">
@@ -74,7 +74,7 @@ export default function FeedPage() {
               ))}
             </StaggerContainer>
           ) : feed.length === 0 ? (
-            <p className="text-sm text-neutral-400">No feed items yet.</p>
+            <p className="text-sm text-neutral-400">이벤트 없음</p>
           ) : (
             <AnimatePresence initial={false}>
               {feed.map((item: any, index: number) => (

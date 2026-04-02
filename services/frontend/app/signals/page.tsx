@@ -59,7 +59,7 @@ export default function SignalsPage() {
       })
       .catch((e) => {
         setSignals([]);
-        setError(e instanceof Error ? e.message : "Failed to load signals");
+        setError(e instanceof Error ? e.message : "시그널 로드 실패");
       })
       .finally(() => setLoading(false));
   }, []);
@@ -68,7 +68,7 @@ export default function SignalsPage() {
     <PageTransition>
       <main className="grid gap-6">
         <section className="card">
-          <h2 className="mb-4 text-2xl font-semibold text-neutral-900">Signal View</h2>
+          <h2 className="mb-4 text-2xl font-semibold text-neutral-900">시그널 뷰</h2>
           <ChartPlaceholder />
         </section>
 
@@ -92,12 +92,12 @@ export default function SignalsPage() {
           <div className="card">
             <p className="text-red-500">{error}</p>
             <p className="mt-2 text-sm text-neutral-500">
-              Make sure you are logged in and the signal service is running.
+              로그인 상태와 시그널 서비스 연결을 확인해주세요.
             </p>
           </div>
         ) : signals.length === 0 ? (
           <div className="card">
-            <p className="text-neutral-400">No signals available yet.</p>
+            <p className="text-neutral-400">시그널 없음</p>
           </div>
         ) : (
           <StaggerContainer className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -144,20 +144,20 @@ export default function SignalsPage() {
 
                   {signal.confidence != null ? (
                     <p className="mt-1 text-xs text-neutral-500">
-                      Confidence: {(signal.confidence * 100).toFixed(1)}%
+                      신뢰도: {(signal.confidence * 100).toFixed(1)}%
                     </p>
                   ) : null}
 
                   {signal.model_version ? (
                     <p className="mt-1 text-xs text-neutral-400">
-                      Model: {signal.model_version}
+                      모델: {signal.model_version}
                     </p>
                   ) : null}
 
                   {signal.components ? (
                     <details className="mt-3">
                       <summary className="cursor-pointer text-xs text-neutral-400 hover:text-neutral-700">
-                        Components
+                        구성요소
                       </summary>
                       <pre className="mt-2 overflow-x-auto rounded-lg border border-neutral-100 bg-neutral-50 p-3 text-xs text-neutral-600">
                         {JSON.stringify(signal.components, null, 2)}

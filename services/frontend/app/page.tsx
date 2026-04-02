@@ -18,10 +18,10 @@ export default function HomePage() {
         method: "POST",
         body: JSON.stringify({ email, password, display_name: displayName, plan: "premium" })
       });
-      setMessage("Account created. You can now sign in.");
+      setMessage("계정이 생성되었습니다. 로그인해주세요.");
       setIsLogin(true);
     } catch (err: any) {
-      setMessage(`Registration failed: ${err.message || "Unknown error"}`);
+      setMessage(`회원가입 실패: ${err.message || "Unknown error"}`);
     }
   }
 
@@ -33,16 +33,16 @@ export default function HomePage() {
         body: JSON.stringify({ email, password })
       });
       if (!response.access_token) {
-        setMessage("Login failed: Invalid credentials");
+        setMessage("로그인 실패: 잘못된 인증 정보");
         return;
       }
       setToken(response.access_token);
-      setMessage("Logged in. Redirecting…");
+      setMessage("로그인 성공. 이동 중…");
       window.setTimeout(() => {
         window.location.href = "/dashboard";
       }, 300);
     } catch (err: any) {
-      setMessage(`Login failed: ${err.message || "Unknown error"}`);
+      setMessage(`로그인 실패: ${err.message || "Unknown error"}`);
     }
   }
 
@@ -59,15 +59,15 @@ export default function HomePage() {
             >
               <span className="text-lg font-bold text-white">Q</span>
             </motion.div>
-            <h1 className="text-2xl font-semibold text-neutral-900">Quant Platform</h1>
+            <h1 className="text-2xl font-semibold text-neutral-900">퀀트 플랫폼</h1>
             <p className="mt-2 text-sm text-neutral-500">
-              Autonomous trading command deck
+              자율 트레이딩 커맨드 덱
             </p>
           </div>
 
           <div className="card">
             <h2 className="mb-6 text-lg font-semibold text-neutral-900">
-              {isLogin ? "Sign in" : "Create account"}
+              {isLogin ? "로그인" : "회원가입"}
             </h2>
 
             <div className="space-y-4">
@@ -81,34 +81,34 @@ export default function HomePage() {
                     style={{ overflow: "hidden" }}
                   >
                     <div className="pb-4">
-                      <label className="mb-1.5 block text-sm font-medium text-neutral-700">Display Name</label>
+                      <label className="mb-1.5 block text-sm font-medium text-neutral-700">표시 이름</label>
                       <input
                         className="input-field"
                         value={displayName}
                         onChange={(e) => setDisplayName(e.target.value)}
-                        placeholder="Your name"
+                        placeholder="이름 입력"
                       />
                     </div>
                   </motion.div>
                 )}
               </AnimatePresence>
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-neutral-700">Email</label>
+                <label className="mb-1.5 block text-sm font-medium text-neutral-700">이메일</label>
                 <input
                   className="input-field"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
+                  placeholder="email@example.com"
                 />
               </div>
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-neutral-700">Password</label>
+                <label className="mb-1.5 block text-sm font-medium text-neutral-700">비밀번호</label>
                 <input
                   className="input-field"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter password"
+                  placeholder="비밀번호 입력"
                 />
               </div>
 
@@ -116,7 +116,7 @@ export default function HomePage() {
                 className="btn-primary w-full"
                 onClick={isLogin ? login : register}
               >
-                {isLogin ? "Sign in" : "Create account"}
+                {isLogin ? "로그인" : "회원가입"}
               </button>
             </div>
 
@@ -125,7 +125,7 @@ export default function HomePage() {
                 className="text-sm text-neutral-500 hover:text-neutral-900"
                 onClick={() => setIsLogin(!isLogin)}
               >
-                {isLogin ? "Don't have an account? Register" : "Already have an account? Sign in"}
+                {isLogin ? "계정이 없으신가요? 회원가입" : "이미 계정이 있으신가요? 로그인"}
               </button>
             </div>
 

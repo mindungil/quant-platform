@@ -7,19 +7,19 @@ import { motion } from "framer-motion";
 import { clearToken, hasRole } from "../lib/api";
 
 const baseLinks = [
-  ["/dashboard", "Dashboard"],
-  ["/signals", "Signals"],
-  ["/strategies", "Strategies"],
-  ["/orders", "Orders"],
-  ["/feed", "Feed"],
-  ["/settings", "Settings"],
+  ["/dashboard", "대시보드"],
+  ["/signals", "시그널"],
+  ["/strategies", "전략"],
+  ["/orders", "주문"],
+  ["/feed", "피드"],
+  ["/settings", "설정"],
 ];
 
 export function Navigation() {
   const pathname = usePathname();
   const links = [...baseLinks];
   if (hasRole("admin")) {
-    links.push(["/admin", "Admin"]);
+    links.push(["/admin", "관리"]);
   }
 
   return (
@@ -54,7 +54,7 @@ export function Navigation() {
           window.location.href = "/";
         }}
       >
-        Logout
+        로그아웃
       </button>
     </nav>
   );

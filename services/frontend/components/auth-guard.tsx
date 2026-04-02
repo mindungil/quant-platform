@@ -38,7 +38,7 @@ export function AuthGuard({ children }: { children: ReactNode }) {
     return (
       <main className="grid gap-6">
         <div className="card animate-pulse">
-          <p className="text-neutral-400">Authenticating...</p>
+          <p className="text-neutral-400">인증 중...</p>
         </div>
       </main>
     );
@@ -48,9 +48,9 @@ export function AuthGuard({ children }: { children: ReactNode }) {
     return (
       <main className="grid gap-6">
         <div className="card">
-          <h2 className="text-2xl font-semibold text-neutral-900">Session Expired</h2>
+          <h2 className="text-2xl font-semibold text-neutral-900">세션 만료</h2>
           <p className="mt-3 text-neutral-500">
-            Redirecting to login...
+            로그인 페이지로 이동 중...
           </p>
         </div>
       </main>

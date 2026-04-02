@@ -20,7 +20,7 @@ export function AdminGuard({ children }: { children: ReactNode }) {
   if (authorized === null) {
     return (
       <main className="card">
-        <p className="text-neutral-400">Checking admin access...</p>
+        <p className="text-neutral-400">관리자 권한 확인 중...</p>
       </main>
     );
   }
@@ -29,7 +29,7 @@ export function AdminGuard({ children }: { children: ReactNode }) {
     return (
       <main className="card">
         <h2 className="text-2xl font-semibold text-neutral-900">403</h2>
-        <p className="mt-3 text-neutral-500">Admin access is required for this section. Redirecting to the dashboard.</p>
+        <p className="mt-3 text-neutral-500">이 페이지는 관리자 권한이 필요합니다. 대시보드로 이동합니다.</p>
       </main>
     );
   }
