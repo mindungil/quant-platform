@@ -101,6 +101,8 @@ services:
       dockerfile: Dockerfile
     env_file:
       - .env.example
+    environment:
+      - API_GATEWAY_BASE_URL=http://backend:8017
     ports:
       - "8018:3000"
     depends_on:

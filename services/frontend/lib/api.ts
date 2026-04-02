@@ -1,18 +1,8 @@
 "use client";
 
-function resolveGatewayBase(): string {
-  // If env var is set, use it
-  const env = process.env.NEXT_PUBLIC_GATEWAY_BASE_URL;
-  if (env) return env;
-  // In browser: use same hostname as the page, port 8017
-  if (typeof window !== "undefined") {
-    return `${window.location.protocol}//${window.location.hostname}:8017`;
-  }
-  // SSR fallback
-  return "http://localhost:8017";
-}
-
-export const gatewayBase = resolveGatewayBase();
+// All API calls go through /api/gateway/* on the same origin (Next.js rewrites to gateway)
+// This works with VS Code port forwarding, reverse proxies, etc. — only port 8018 needed.
+export const gatewayBase = "/api/gateway";
 
 type TokenClaims = {
   sub?: string;
