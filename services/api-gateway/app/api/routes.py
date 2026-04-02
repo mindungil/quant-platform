@@ -26,6 +26,7 @@ credential_client = GatewayClient(settings.credential_store_base_url)
 risk_client = GatewayClient(settings.risk_service_base_url)
 backtest_client = GatewayClient(settings.backtest_service_base_url)
 agent_client = GatewayClient(settings.crypto_agent_base_url)
+orchestrator_client = GatewayClient(settings.orchestrator_agent_base_url)
 portfolio_client = GatewayClient(settings.portfolio_service_base_url)
 statistics_client = GatewayClient(settings.statistics_service_base_url)
 realtime_bus = RealtimeBus(RedisStore(settings.redis_url), replay_limit=settings.realtime_replay_limit)
@@ -436,6 +437,29 @@ def get_recommendations(asset: str, principal: GatewayPrincipal = Depends(requir
     return JSONResponse(result)
 
 
+# ── System Summary (proxy to orchestrator-agent) ─────────────────────
+
+
+@router.get("/system/summary")
+def system_summary(principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    """Proxy to orchestrator-agent for full multi-agent system summary."""
+    try:
+        response = orchestrator_client.request("GET", "/orchestrator/summary")
+        return _proxy_json(response)
+    except Exception:
+        return JSONResponse({"system_status": "부분 응답", "error": "orchestrator unreachable"})
+
+
+@router.get("/system/conflicts")
+def system_conflicts(principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    """Proxy to orchestrator-agent for conflict detection."""
+    try:
+        response = orchestrator_client.request("GET", "/orchestrator/conflicts")
+        return _proxy_json(response)
+    except Exception:
+        return JSONResponse({"conflicts": [], "error": "orchestrator unreachable"})
+
+
 # ── Admin: Live Trading Gate (proxy to order-service) ──────────────────
 
 
@@ -517,6 +541,7 @@ def admin_system_health(principal: GatewayPrincipal = Depends(require_role("admi
         "order-service": _probe_service("order-service", settings.order_service_base_url),
         "portfolio-service": _probe_service("portfolio-service", settings.portfolio_service_base_url),
         "statistics-service": _probe_service("statistics-service", settings.statistics_service_base_url),
+        "orchestrator-agent": _probe_service("orchestrator-agent", settings.orchestrator_agent_base_url),
         "external-data-service": _probe_service("external-data-service", settings.external_data_service_base_url),
         "llm-gateway": _probe_service("llm-gateway", settings.llm_gateway_base_url),
     }

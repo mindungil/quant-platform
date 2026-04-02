@@ -19,6 +19,7 @@ class Settings:
     risk_service_base_url: str = os.getenv("RISK_SERVICE_BASE_URL", "http://localhost:8009")
     portfolio_service_base_url: str = os.getenv("PORTFOLIO_SERVICE_BASE_URL", "http://localhost:8012")
     statistics_service_base_url: str = os.getenv("STATISTICS_SERVICE_BASE_URL", "http://localhost:8013")
+    orchestrator_agent_base_url: str = os.getenv("ORCHESTRATOR_AGENT_BASE_URL", "http://localhost:8014")
     external_data_service_base_url: str = os.getenv("EXTERNAL_DATA_SERVICE_BASE_URL", "http://localhost:8020")
     llm_gateway_base_url: str = os.getenv("LLM_GATEWAY_BASE_URL", "http://localhost:8021")
     jwt_secret: str = os.getenv("JWT_SECRET", "dev-secret")

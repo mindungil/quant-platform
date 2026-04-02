@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
-from app.core.engine import build_summary, get_all_agent_statuses
+from app.core.engine import build_summary, build_system_summary, get_all_agent_statuses
 from app.db.repository import orchestrator_repository
 
 router = APIRouter()
@@ -25,6 +25,13 @@ def summary():
 @router.get("/orchestrator/snapshots/latest")
 def latest_snapshot():
     return orchestrator_repository.latest() or {"status": "empty"}
+
+
+@router.get("/orchestrator/conflicts")
+def check_conflicts():
+    """Check for conflicts between agents."""
+    summary = build_system_summary()
+    return {"conflicts": summary.get("conflicts", []), "system_status": summary.get("system_status")}
 
 
 @router.get("/orchestrator/agents")
