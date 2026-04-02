@@ -30,6 +30,8 @@ class Settings:
     default_stop_loss_pct: float = float(os.getenv("DEFAULT_AGENT_STOP_LOSS_PCT", "0.02"))
     default_take_profit_pct: float = float(os.getenv("DEFAULT_AGENT_TAKE_PROFIT_PCT", "0.05"))
     default_trailing_stop_pct: float = float(os.getenv("DEFAULT_AGENT_TRAILING_STOP_PCT", "0.03"))
+    agent_cycle_interval: int = int(os.getenv("AGENT_CYCLE_INTERVAL", "300"))
+    monitored_assets_csv: str = os.getenv("MONITORED_ASSETS", "BTCUSDT,ETHUSDT,SOLUSDT")
 
 
 settings = Settings()

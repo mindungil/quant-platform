@@ -2,460 +2,256 @@
 
 import { useEffect, useState } from "react";
 import { gatewayFetch } from "../../lib/api";
-import { ChartPlaceholder } from "../../components/chart-placeholder";
-import { LiveFeed } from "../../components/live-feed";
 import { AuthGuard } from "../../components/auth-guard";
-import { connectGatewaySocket } from "../../lib/socket";
 import {
   PageTransition,
   StaggerContainer,
   StaggerItem,
   AnimatedNumber,
   FadeInView,
+  motion,
 } from "../../components/motion";
 
-interface PortfolioPosition {
-  asset: string;
-  quantity: number;
-  entry_price: number;
-  current_price: number;
-  unrealized_pnl: number;
+interface Recommendation {
+  name: string;
+  description: string;
+  formula_name: string;
+  regime: string;
+  confidence: number;
+  reasoning: string;
 }
 
-interface Portfolio {
-  positions?: PortfolioPosition[];
-  total_exposure?: number;
-  cash_balance?: number;
-  total_equity?: number;
-}
-
-interface Signal {
+interface Decision {
+  decision_id?: string;
   asset: string;
+  action: string;
   signal_score: number;
-  direction: string;
-  feature_timestamp?: string;
-  components?: Record<string, unknown>;
-}
-
-interface Order {
-  order_id?: string;
-  asset?: string;
-  side?: string;
-  quantity?: number;
-  status?: string;
-  created_at?: string;
+  reasoning?: string;
+  timestamp?: string;
+  threshold_crossed?: boolean;
+  components?: Record<string, number>;
 }
 
 interface DashboardData {
-  user?: Record<string, unknown>;
-  generated_at?: string;
-  active_strategy?: Record<string, unknown> | null;
-  active_strategy_error?: string;
-  portfolio?: Portfolio | null;
-  portfolio_error?: string;
-  signals?: Signal[];
-  signals_error?: string;
-  statistics?: Record<string, unknown> | null;
-  statistics_error?: string;
-  orders?: Order[];
-  orders_error?: string;
-  memory_probe?: unknown;
-  settings?: {
-    execution?: Record<string, unknown>;
-    credentials?: unknown[];
+  portfolio?: {
+    total_exposure?: number;
+    unrealized_pnl?: number;
+    realized_pnl?: number;
+    total_pnl?: number;
+    positions?: Record<string, number>;
+    concentration?: Record<string, number>;
   };
+  statistics?: {
+    trade_count?: number;
+    total_return?: number;
+    sharpe?: number;
+    win_rate?: number;
+    profit_factor?: number;
+  };
+  active_strategy?: {
+    name?: string;
+    status?: string;
+  } | null;
+  orders?: Array<{ asset?: string; side?: string; status?: string }>;
 }
 
-function formatNumber(value: number | undefined | null, decimals = 2): string {
-  if (value == null) return "--";
-  return value.toLocaleString(undefined, {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  });
-}
-
-function ErrorHint({ message }: { message?: string }) {
-  if (!message) return null;
-  return (
-    <p className="mt-1 text-xs italic text-red-500">
-      서비스 불가: {message.slice(0, 80)}
-    </p>
-  );
-}
-
-function StatCard({ label, value, rawValue, prefix, decimals = 2, sub }: { label: string; value: string; rawValue?: number; prefix?: string; decimals?: number; sub?: string }) {
-  return (
-    <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
-      <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-neutral-900">
-        {rawValue != null ? (
-          <>{prefix}<AnimatedNumber value={rawValue} decimals={decimals} /></>
-        ) : (
-          <span className="stat-value">{value}</span>
-        )}
-      </p>
-      {sub ? <p className="mt-1 text-xs text-neutral-400">{sub}</p> : null}
-    </div>
-  );
-}
-
-function WsIndicator() {
-  const [connected, setConnected] = useState(false);
-  const [msgCount, setMsgCount] = useState(0);
-
-  useEffect(() => {
-    let alive = true;
-    const disconnect = connectGatewaySocket((payload) => {
-      if (alive) {
-        setConnected(true);
-        setMsgCount((c) => c + 1);
-      }
-      void payload;
-    });
-
-    // Assume connected after short delay if no error
-    const timer = window.setTimeout(() => {
-      if (alive) setConnected(true);
-    }, 3000);
-
-    return () => {
-      alive = false;
-      clearTimeout(timer);
-      disconnect();
-      setConnected(false);
-    };
-  }, []);
-
-  return (
-    <div className="flex items-center gap-2 text-xs">
-      {connected ? (
-        <span className="live-dot" />
-      ) : (
-        <span className="inline-block h-2 w-2 rounded-full bg-red-500 animate-pulse" />
-      )}
-      <span className="text-neutral-400">
-        {connected ? `라이브 피드 연결됨 (${msgCount}건)` : "연결 중..."}
-      </span>
-    </div>
-  );
-}
-
-function SkeletonDashboard() {
-  return (
-    <main className="grid gap-6">
-      <div className="flex items-center justify-end">
-        <div className="skeleton h-4 w-48" />
-      </div>
-      <section className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
-        <div className="card space-y-4">
-          <div className="skeleton h-6 w-48" />
-          <div className="skeleton h-48 w-full" />
-        </div>
-        <div className="card space-y-3">
-          <div className="skeleton h-6 w-40" />
-          <div className="grid grid-cols-2 gap-3">
-            <div className="skeleton h-20 w-full" />
-            <div className="skeleton h-20 w-full" />
-            <div className="skeleton h-20 w-full" />
-            <div className="skeleton h-20 w-full" />
-          </div>
-          <div className="skeleton h-24 w-full" />
-        </div>
-      </section>
-      <section className="grid gap-6 lg:grid-cols-3">
-        <div className="card space-y-3">
-          <div className="skeleton h-6 w-24" />
-          <div className="skeleton h-16 w-full" />
-          <div className="skeleton h-16 w-full" />
-        </div>
-        <div className="card space-y-3">
-          <div className="skeleton h-6 w-32" />
-          <div className="skeleton h-16 w-full" />
-          <div className="skeleton h-16 w-full" />
-        </div>
-        <div className="card space-y-3">
-          <div className="skeleton h-6 w-28" />
-          <div className="skeleton h-16 w-full" />
-          <div className="skeleton h-16 w-full" />
-        </div>
-      </section>
-    </main>
-  );
+function formatNum(v: number | undefined | null, d = 2): string {
+  if (v == null) return "--";
+  return v.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
 }
 
 function DashboardContent() {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [recs, setRecs] = useState<Recommendation[]>([]);
+  const [decisions, setDecisions] = useState<Decision[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setLoading(true);
-    gatewayFetch("/dashboard")
-      .then((d) => {
-        setData(d as DashboardData);
-        setError(null);
-      })
-      .catch((e) => {
-        setData(null);
-        setError(e instanceof Error ? e.message : "대시보드 로드 실패");
-      })
-      .finally(() => setLoading(false));
+    Promise.all([
+      gatewayFetch("/dashboard").catch(() => null),
+      gatewayFetch("/recommendations/BTCUSDT").catch(() => []),
+      gatewayFetch("/decisions/history/BTCUSDT").catch(() => []),
+    ]).then(([dash, rec, dec]) => {
+      setData(dash as DashboardData);
+      setRecs(Array.isArray(rec) ? rec : []);
+      const decArr = Array.isArray(dec) ? dec : [];
+      setDecisions(decArr.slice(-5).reverse());
+      setLoading(false);
+    });
   }, []);
 
-  const portfolio = data?.portfolio ?? null;
-  const positions: PortfolioPosition[] =
-    (portfolio && Array.isArray(portfolio.positions) ? portfolio.positions : null) ?? [];
-  const signals: Signal[] = Array.isArray(data?.signals) ? (data?.signals ?? []) : [];
-  const orders: Order[] = Array.isArray(data?.orders) ? (data?.orders ?? []) : [];
-  const execution =
-    (data?.settings?.execution as Record<string, unknown> | undefined) ?? null;
-  const statistics = data?.statistics ?? null;
-
   if (loading) {
-    return <SkeletonDashboard />;
-  }
-
-  if (error && !data) {
     return (
       <main className="grid gap-6">
-        <div className="card">
-          <p className="text-red-500">{error}</p>
-          <p className="mt-2 text-sm text-neutral-500">
-            로그인 상태와 게이트웨이 연결을 확인해주세요.
-          </p>
-        </div>
+        {[0,1,2].map(i => (
+          <div key={i} className="card animate-pulse space-y-3">
+            <div className="skeleton h-6 w-48" />
+            <div className="skeleton h-32 w-full" />
+          </div>
+        ))}
       </main>
     );
   }
 
+  const portfolio = data?.portfolio;
+  const stats = data?.statistics;
+  const posCount = portfolio?.positions ? Object.keys(portfolio.positions).length : 0;
+  const topRec = recs[0];
+
   return (
     <PageTransition>
       <main className="grid gap-6">
-        {/* WebSocket connection indicator */}
-        <div className="flex items-center justify-end">
-          <WsIndicator />
+        {/* Agent Status Banner */}
+        <section className="card">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-2xl font-semibold text-neutral-900">에이전트 대시보드</h2>
+              <p className="mt-1 text-sm text-neutral-500">
+                AI 에이전트가 시장을 분석하고 자동으로 의사결정합니다
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="live-dot" />
+              <span className="text-sm text-neutral-500">에이전트 활성</span>
+            </div>
+          </div>
+        </section>
+
+        {/* Row 1: Agent Recommendation + Portfolio */}
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* Agent's Current Recommendation */}
+          <FadeInView>
+            <section className="card">
+              <h3 className="mb-4 text-lg font-semibold text-neutral-900">
+                에이전트 추천 전략
+              </h3>
+              {topRec ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xl font-bold text-neutral-900">{topRec.name}</span>
+                    <span className="badge bg-neutral-100 text-neutral-600">
+                      신뢰도 {(topRec.confidence * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                  <p className="text-sm text-neutral-600">{topRec.reasoning}</p>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="badge bg-neutral-900 text-white">{topRec.formula_name}</span>
+                    <span className="badge bg-neutral-100 text-neutral-500">{topRec.regime}</span>
+                  </div>
+                  {recs.length > 1 && (
+                    <details className="mt-2">
+                      <summary className="cursor-pointer text-xs text-neutral-400 hover:text-neutral-700">
+                        다른 추천 {recs.length - 1}개 보기
+                      </summary>
+                      <div className="mt-2 space-y-2">
+                        {recs.slice(1).map((r, i) => (
+                          <div key={i} className="rounded-lg border border-neutral-100 bg-neutral-50 p-3">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium text-neutral-900">{r.name}</span>
+                              <span className="text-xs text-neutral-400">{(r.confidence * 100).toFixed(0)}%</span>
+                            </div>
+                            <p className="mt-1 text-xs text-neutral-500">{r.reasoning}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-neutral-400">에이전트가 시장을 분석 중입니다...</p>
+              )}
+            </section>
+          </FadeInView>
+
+          {/* Portfolio Summary */}
+          <FadeInView delay={0.1}>
+            <section className="card">
+              <h3 className="mb-4 text-lg font-semibold text-neutral-900">포트폴리오</h3>
+              <StaggerContainer className="grid grid-cols-2 gap-3">
+                <StaggerItem>
+                  <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                    <p className="text-xs text-neutral-400">총 노출</p>
+                    <p className="mt-1 text-xl font-semibold text-neutral-900">
+                      $<AnimatedNumber value={portfolio?.total_exposure ?? 0} decimals={0} />
+                    </p>
+                  </div>
+                </StaggerItem>
+                <StaggerItem>
+                  <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                    <p className="text-xs text-neutral-400">미실현 PnL</p>
+                    <p className={`mt-1 text-xl font-semibold ${(portfolio?.unrealized_pnl ?? 0) >= 0 ? "text-green-600" : "text-red-600"}`}>
+                      {(portfolio?.unrealized_pnl ?? 0) >= 0 ? "+" : ""}${formatNum(portfolio?.unrealized_pnl)}
+                    </p>
+                  </div>
+                </StaggerItem>
+                <StaggerItem>
+                  <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                    <p className="text-xs text-neutral-400">거래 수</p>
+                    <p className="mt-1 text-xl font-semibold text-neutral-900">
+                      <AnimatedNumber value={stats?.trade_count ?? 0} decimals={0} />
+                    </p>
+                  </div>
+                </StaggerItem>
+                <StaggerItem>
+                  <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                    <p className="text-xs text-neutral-400">승률</p>
+                    <p className="mt-1 text-xl font-semibold text-neutral-900">
+                      {stats?.win_rate != null ? `${(stats.win_rate * 100).toFixed(1)}%` : "--"}
+                    </p>
+                  </div>
+                </StaggerItem>
+              </StaggerContainer>
+            </section>
+          </FadeInView>
         </div>
 
-        {/* Row 1: Chart + Portfolio summary */}
-        <section className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
-          <FadeInView>
-            <div className="card">
-              <h2 className="mb-3 text-2xl font-semibold text-neutral-900">포트폴리오 대시보드</h2>
-              <ChartPlaceholder />
-            </div>
-          </FadeInView>
-          <FadeInView delay={0.1}>
-            <div className="card space-y-3">
-              <h3 className="mb-3 text-lg font-semibold text-neutral-900">포트폴리오 요약</h3>
-              {data?.portfolio_error ? (
-                <ErrorHint message={data.portfolio_error} />
-              ) : (
-                <StaggerContainer className="grid grid-cols-2 gap-3">
-                  <StaggerItem>
-                    <StatCard
-                      label="총 자산"
-                      value={`$${formatNumber(portfolio?.total_equity)}`}
-                      rawValue={portfolio?.total_equity ?? undefined}
-                      prefix="$"
-                    />
-                  </StaggerItem>
-                  <StaggerItem>
-                    <StatCard
-                      label="현금 잔고"
-                      value={`$${formatNumber(portfolio?.cash_balance)}`}
-                      rawValue={portfolio?.cash_balance ?? undefined}
-                      prefix="$"
-                    />
-                  </StaggerItem>
-                  <StaggerItem>
-                    <StatCard
-                      label="총 노출"
-                      value={`$${formatNumber(portfolio?.total_exposure)}`}
-                      rawValue={portfolio?.total_exposure ?? undefined}
-                      prefix="$"
-                    />
-                  </StaggerItem>
-                  <StaggerItem>
-                    <StatCard
-                      label="보유 포지션"
-                      value={String(positions.length)}
-                      rawValue={positions.length}
-                      decimals={0}
-                    />
-                  </StaggerItem>
-                </StaggerContainer>
-              )}
-
-              <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">활성 전략</p>
-                {data?.active_strategy_error ? (
-                  <ErrorHint message={data.active_strategy_error} />
-                ) : (
-                  <pre className="mt-2 overflow-x-auto text-xs text-neutral-600">
-                    {JSON.stringify(data?.active_strategy ?? null, null, 2)}
-                  </pre>
-                )}
-              </div>
-
-              {execution ? (
-                <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
-                  <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">실행 설정</p>
-                  <pre className="mt-2 overflow-x-auto text-xs text-neutral-600">
-                    {JSON.stringify(execution, null, 2)}
-                  </pre>
-                </div>
-              ) : null}
-            </div>
-          </FadeInView>
-        </section>
-
-        {/* Row 2: Positions, Signals, Orders */}
-        <section className="grid gap-6 lg:grid-cols-3">
-          {/* Positions */}
-          <FadeInView delay={0.05}>
-            <div className="card">
-              <h3 className="mb-3 text-lg font-semibold text-neutral-900">포지션</h3>
-              {positions.length === 0 ? (
-                <p className="text-sm text-neutral-400">보유 포지션 없음</p>
-              ) : (
-                <StaggerContainer className="space-y-2">
-                  {positions.map((pos) => (
-                    <StaggerItem key={pos.asset}>
-                      <div className="card-interactive flex items-center justify-between rounded-lg border border-neutral-100 bg-neutral-50 p-3 text-sm">
-                        <div>
-                          <p className="font-medium text-neutral-900">{pos.asset}</p>
-                          <p className="text-xs text-neutral-400">
-                            수량 {formatNumber(pos.quantity, 4)} @ ${formatNumber(pos.entry_price)}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-medium text-neutral-900">${formatNumber(pos.current_price)}</p>
-                          <p
-                            className={`text-xs ${
-                              (pos.unrealized_pnl ?? 0) >= 0
-                                ? "text-green-600"
-                                : "text-red-600"
-                            }`}
-                          >
-                            {(pos.unrealized_pnl ?? 0) >= 0 ? "+" : ""}
-                            ${formatNumber(pos.unrealized_pnl)}
-                          </p>
-                        </div>
-                      </div>
-                    </StaggerItem>
-                  ))}
-                </StaggerContainer>
-              )}
-            </div>
-          </FadeInView>
-
-          {/* Recent Signals */}
-          <FadeInView delay={0.1}>
-            <div className="card">
-              <h3 className="mb-3 text-lg font-semibold text-neutral-900">최근 시그널</h3>
-              {data?.signals_error ? (
-                <ErrorHint message={data.signals_error} />
-              ) : signals.length === 0 ? (
-                <p className="text-sm text-neutral-400">시그널 없음</p>
-              ) : (
-                <StaggerContainer className="space-y-2">
-                  {signals.slice(0, 5).map((sig, idx) => {
-                    const isBuy = sig.direction.toUpperCase() === "BUY" || sig.direction.toUpperCase() === "LONG";
-                    const isSell = sig.direction.toUpperCase() === "SELL" || sig.direction.toUpperCase() === "SHORT";
-                    return (
-                      <StaggerItem key={`${sig.asset}-${sig.feature_timestamp ?? idx}`}>
-                        <div
-                          className={`card-interactive rounded-lg border border-neutral-100 bg-neutral-50 p-3 ${
-                            isBuy
-                              ? "border-l-2 border-l-green-500"
-                              : isSell
-                                ? "border-l-2 border-l-red-500"
-                                : ""
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-medium uppercase tracking-wider text-neutral-500">
-                              {sig.asset}
-                            </span>
+        {/* Row 2: Recent Agent Decisions */}
+        <FadeInView delay={0.15}>
+          <section className="card">
+            <h3 className="mb-4 text-lg font-semibold text-neutral-900">최근 에이전트 결정</h3>
+            {decisions.length === 0 ? (
+              <p className="text-sm text-neutral-400">아직 의사결정 이력이 없습니다. 에이전트가 시장 데이터를 수집하면 자동으로 결정합니다.</p>
+            ) : (
+              <StaggerContainer className="space-y-3">
+                {decisions.map((d, i) => {
+                  const isBuy = d.action === "BUY";
+                  const isSell = d.action === "SELL";
+                  return (
+                    <StaggerItem key={d.decision_id ?? i}>
+                      <div className={`rounded-lg border p-4 ${
+                        isBuy ? "border-l-4 border-l-green-500 border-neutral-200" :
+                        isSell ? "border-l-4 border-l-red-500 border-neutral-200" :
+                        "border-neutral-200"
+                      }`}>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm font-semibold text-neutral-900">{d.asset}</span>
                             <span className={`badge ${
-                              isBuy
-                                ? "bg-green-50 text-green-700"
-                                : isSell
-                                  ? "bg-red-50 text-red-700"
-                                  : "bg-neutral-100 text-neutral-500"
-                            }`}>
-                              {sig.direction}
+                              isBuy ? "bg-green-50 text-green-700" :
+                              isSell ? "bg-red-50 text-red-700" :
+                              "bg-neutral-100 text-neutral-500"
+                            }`}>{d.action}</span>
+                            <span className="text-sm text-neutral-500">
+                              점수: {d.signal_score?.toFixed(4)}
                             </span>
                           </div>
-                          <p className="mt-1 text-xl font-semibold text-neutral-900">
-                            {formatNumber(sig.signal_score, 4)}
-                          </p>
+                          {d.timestamp && (
+                            <span className="text-xs text-neutral-400">
+                              {new Date(d.timestamp).toLocaleString("ko-KR")}
+                            </span>
+                          )}
                         </div>
-                      </StaggerItem>
-                    );
-                  })}
-                </StaggerContainer>
-              )}
-            </div>
-          </FadeInView>
-
-          {/* Latest Orders */}
-          <FadeInView delay={0.15}>
-            <div className="card">
-              <h3 className="mb-3 text-lg font-semibold text-neutral-900">최근 주문</h3>
-              {data?.orders_error ? (
-                <ErrorHint message={data.orders_error} />
-              ) : orders.length === 0 ? (
-                <p className="text-sm text-neutral-400">최근 주문 없음</p>
-              ) : (
-                <StaggerContainer className="space-y-2">
-                  {orders.slice(0, 5).map((order, idx) => (
-                    <StaggerItem key={order.order_id ?? idx}>
-                      <div className="card-interactive rounded-lg border border-neutral-100 bg-neutral-50 p-3 text-sm">
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium text-neutral-900">{order.asset ?? "N/A"}</span>
-                          <span
-                            className={`badge ${
-                              order.side === "BUY"
-                                ? "bg-green-50 text-green-700"
-                                : "bg-red-50 text-red-700"
-                            }`}
-                          >
-                            {order.side ?? "--"}
-                          </span>
-                        </div>
-                        <p className="mt-1 text-xs text-neutral-400">
-                          수량: {order.quantity ?? "--"} | 상태: {order.status ?? "--"}
-                        </p>
+                        {d.reasoning && (
+                          <p className="mt-2 text-xs text-neutral-500">{d.reasoning}</p>
+                        )}
                       </div>
                     </StaggerItem>
-                  ))}
-                </StaggerContainer>
-              )}
-            </div>
-          </FadeInView>
-        </section>
-
-        {/* Row 3: Statistics */}
-        <section className="grid gap-6 lg:grid-cols-2">
-          <FadeInView delay={0.05}>
-            <div className="card">
-              <h3 className="mb-3 text-lg font-semibold text-neutral-900">통계</h3>
-              {data?.statistics_error ? (
-                <ErrorHint message={data.statistics_error} />
-              ) : statistics ? (
-                <pre className="overflow-x-auto text-xs text-neutral-600">
-                  {JSON.stringify(statistics, null, 2)}
-                </pre>
-              ) : (
-                <p className="text-sm text-neutral-400">통계 없음</p>
-              )}
-            </div>
-          </FadeInView>
-          <FadeInView delay={0.1}>
-            <LiveFeed />
-          </FadeInView>
-        </section>
+                  );
+                })}
+              </StaggerContainer>
+            )}
+          </section>
+        </FadeInView>
       </main>
     </PageTransition>
   );

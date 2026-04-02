@@ -424,6 +424,12 @@ def get_decision_history(asset: str, principal: GatewayPrincipal = Depends(requi
     return JSONResponse(result)
 
 
+@router.get("/agent/status")
+def get_agent_status(principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    result = agent_client.get("/agent/status", headers=principal.forwarded_headers)
+    return JSONResponse(result)
+
+
 @router.get("/recommendations/{asset}")
 def get_recommendations(asset: str, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
     result = agent_client.get(f"/recommendations/{asset}", headers=principal.forwarded_headers)

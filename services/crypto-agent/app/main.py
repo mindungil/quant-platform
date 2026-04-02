@@ -4,6 +4,7 @@ from fastapi import FastAPI
 
 from app.api.routes import router
 from app.core.config import settings
+from app.core.scheduler import scheduler
 from app.services.event_publisher import publisher
 from app.services.nats_consumer import consumer
 from shared.health import check_redis, check_sql, check_tcp
@@ -22,9 +23,11 @@ async def lifespan(_: FastAPI):
     )
     await publisher.connect()
     await consumer.start()
+    await scheduler.start()
     try:
         yield
     finally:
+        await scheduler.stop()
         await consumer.stop()
         await publisher.close()
 

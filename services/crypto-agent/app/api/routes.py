@@ -44,6 +44,12 @@ def get_decision_history(asset: str):
     return decision_repository.get_history(asset)
 
 
+@router.get("/agent/status")
+def agent_status():
+    from app.core.scheduler import scheduler
+    return scheduler.status
+
+
 @router.get("/recommendations/{asset}")
 def get_recommendations(asset: str, top_k: int = 3):
     from app.core.recommender import recommend_strategies
