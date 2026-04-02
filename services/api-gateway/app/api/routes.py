@@ -182,10 +182,10 @@ def create_strategy(payload: dict, principal: GatewayPrincipal = Depends(require
 def update_strategy_backtest(
     strategy_id: str, payload: dict, principal: GatewayPrincipal = Depends(require_principal)
 ) -> JSONResponse:
-    result = strategy_client.patch(
-        f"/strategies/{strategy_id}/backtest", headers=principal.forwarded_headers, json=payload
+    response = strategy_client.request(
+        "PATCH", f"/strategies/{strategy_id}/backtest", headers=principal.forwarded_headers, json=payload
     )
-    return JSONResponse(result)
+    return _proxy_json(response)
 
 
 @router.patch("/strategies/{strategy_id}/status")
@@ -327,8 +327,8 @@ def run_backtest(payload: dict, principal: GatewayPrincipal = Depends(require_pr
 
 @router.get("/backtests/{job_id}")
 def get_backtest(job_id: str, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
-    result = backtest_client.get(f"/backtests/{job_id}", headers=principal.forwarded_headers)
-    return JSONResponse(result)
+    response = backtest_client.request("GET", f"/backtests/{job_id}", headers=principal.forwarded_headers)
+    return _proxy_json(response)
 
 
 # ── Credential Management (proxy to credential-store) ──────────────────
@@ -371,6 +371,12 @@ def get_risk_settings(principal: GatewayPrincipal = Depends(require_principal)) 
     return JSONResponse(result)
 
 
+@router.put("/settings/risk")
+def update_risk_settings(payload: dict, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    response = risk_client.request("PUT", f"/risk/settings/{principal.user_id}", json=payload)
+    return _proxy_json(response)
+
+
 # ── Portfolio (proxy to portfolio-service) ──────────────────────────────
 
 
@@ -380,13 +386,19 @@ def get_portfolio(principal: GatewayPrincipal = Depends(require_principal)) -> J
     return JSONResponse(result)
 
 
+@router.post("/portfolio/optimize")
+def optimize_portfolio(payload: dict = {}, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    response = portfolio_client.request("POST", f"/portfolio/{principal.user_id}/optimize", json=payload)
+    return _proxy_json(response)
+
+
 # ── Statistics (proxy to statistics-service) ────────────────────────────
 
 
 @router.get("/statistics")
 def get_statistics(principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
-    result = statistics_client.get(f"/statistics/{principal.user_id}", headers=principal.forwarded_headers)
-    return JSONResponse(result)
+    response = statistics_client.request("GET", f"/statistics/{principal.user_id}", headers=principal.forwarded_headers)
+    return _proxy_json(response)
 
 
 # ── Agent Decisions (proxy to crypto-agent) ─────────────────────────────

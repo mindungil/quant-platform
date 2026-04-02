@@ -95,6 +95,26 @@ class CredentialRepository:
             api_secret=decrypt(str(value["api_secret"])),
         )
 
+    def list_for_user(self, user_id: str) -> list[CredentialMaskedResponse]:
+        rows = self._store.fetch_all(
+            "SELECT exchange FROM credential_records WHERE user_id = :user_id",
+            {"user_id": user_id},
+        )
+        results = []
+        for row in rows:
+            masked = self.get_masked(user_id, row["exchange"])
+            if masked:
+                results.append(masked)
+        return results
+
+    def delete(self, user_id: str, exchange: str) -> bool:
+        self._items.pop((user_id, exchange), None)
+        self._store.execute(
+            "DELETE FROM credential_records WHERE user_id = :user_id AND exchange = :exchange",
+            {"user_id": user_id, "exchange": exchange},
+        )
+        return True
+
     def get_masked(self, user_id: str, exchange: str) -> CredentialMaskedResponse | None:
         credential = self.get(user_id, exchange)
         if credential is None:

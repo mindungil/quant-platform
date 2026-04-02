@@ -28,6 +28,19 @@ def store_credential(payload: CredentialCreate, x_user_id: str | None = Header(d
     return credential_repository.save(payload)
 
 
+@router.get("/credentials/{user_id}", response_model=list[CredentialMaskedResponse])
+def list_credentials(user_id: str, x_user_id: str | None = Header(default=None)) -> list[CredentialMaskedResponse]:
+    effective_user = x_user_id or user_id
+    return credential_repository.list_for_user(effective_user)
+
+
+@router.delete("/credentials/{user_id}/{exchange}")
+def delete_credential(user_id: str, exchange: str, x_user_id: str | None = Header(default=None)) -> dict:
+    effective_user = x_user_id or user_id
+    credential_repository.delete(effective_user, exchange)
+    return {"status": "deleted", "exchange": exchange}
+
+
 @router.get("/credentials/{user_id}/{exchange}", response_model=CredentialMaskedResponse)
 def get_credential(user_id: str, exchange: str, x_user_id: str | None = Header(default=None)) -> CredentialMaskedResponse:
     if x_user_id is not None and x_user_id != user_id:
