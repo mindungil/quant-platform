@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { gatewayFetch } from "../../lib/api";
 import { AuthGuard } from "../../components/auth-guard";
 import {
@@ -8,21 +8,103 @@ import {
   StaggerContainer,
   StaggerItem,
   Expandable,
+  AnimatedNumber,
   motion,
 } from "../../components/motion";
 
-interface OrderEvent {
-  event: string;
-  timestamp: string;
-  details?: Record<string, unknown>;
+/* ── friendly mappings ───────────────────────────────────────── */
+const ASSET_NAMES: Record<string, string> = {
+  BTCUSDT: "비트코인",
+  ETHUSDT: "이더리움",
+  SOLUSDT: "솔라나",
+  XRPUSDT: "리플",
+  DOGEUSDT: "도지코인",
+  ADAUSDT: "에이다",
+  BNBUSDT: "바이낸스코인",
+};
+
+const SIDE_LABEL: Record<string, string> = { BUY: "매수", SELL: "매도" };
+
+const STATUS_LABEL: Record<string, string> = {
+  FILLED: "체결",
+  REJECTED: "거부",
+  CANCELLED: "취소",
+  EXPIRED: "만료",
+  PENDING: "대기",
+  NEW: "대기",
+  OPEN: "진행중",
+};
+
+function friendlyAsset(raw: string): string {
+  return ASSET_NAMES[raw.toUpperCase()] ?? raw;
 }
 
-interface OrderProtection {
-  type: string;
-  trigger_price?: number;
-  limit_price?: number;
+function friendlySide(raw: string): string {
+  return SIDE_LABEL[raw.toUpperCase()] ?? raw;
 }
 
+function friendlyStatus(raw: string): string {
+  return STATUS_LABEL[raw.toUpperCase()] ?? raw;
+}
+
+/* ── status dot colours ──────────────────────────────────────── */
+function statusDotColor(status: string): string {
+  const s = status.toUpperCase();
+  if (s === "FILLED") return "bg-green-500";
+  if (s === "REJECTED") return "bg-red-500";
+  if (s === "CANCELLED" || s === "EXPIRED") return "bg-neutral-300";
+  if (s === "PENDING" || s === "NEW") return "bg-amber-400";
+  if (s === "OPEN") return "bg-blue-500";
+  return "bg-neutral-300";
+}
+
+function statusTextColor(status: string): string {
+  const s = status.toUpperCase();
+  if (s === "FILLED") return "text-green-700";
+  if (s === "REJECTED") return "text-red-600";
+  if (s === "CANCELLED" || s === "EXPIRED") return "text-neutral-400";
+  if (s === "PENDING" || s === "NEW") return "text-amber-600";
+  if (s === "OPEN") return "text-blue-600";
+  return "text-neutral-400";
+}
+
+/* ── relative time ───────────────────────────────────────────── */
+function relativeTime(ts: string | undefined): string {
+  if (!ts) return "--";
+  try {
+    const diff = Date.now() - new Date(ts).getTime();
+    const sec = Math.floor(diff / 1000);
+    if (sec < 0) return "방금";
+    if (sec < 60) return `${sec}초 전`;
+    const min = Math.floor(sec / 60);
+    if (min < 60) return `${min}분 전`;
+    const hr = Math.floor(min / 60);
+    if (hr < 24) return `${hr}시간 전`;
+    const day = Math.floor(hr / 24);
+    if (day < 30) return `${day}일 전`;
+    return new Date(ts).toLocaleDateString("ko-KR");
+  } catch {
+    return ts;
+  }
+}
+
+function formatPrice(value: number | undefined | null): string {
+  if (value == null) return "--";
+  return "$" + value.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function formatQty(value: number | undefined | null): string {
+  if (value == null) return "--";
+  return value.toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 6,
+  });
+}
+
+/* ── types ───────────────────────────────────────────────────── */
 interface Order {
   order_id: string;
   asset: string;
@@ -34,8 +116,8 @@ interface Order {
   created_at: string;
   updated_at?: string;
   exchange?: string;
-  lifecycle_events?: OrderEvent[];
-  protections?: OrderProtection[];
+  lifecycle_events?: { event: string; timestamp: string; details?: Record<string, unknown> }[];
+  protections?: { type: string; trigger_price?: number; limit_price?: number }[];
   filled_quantity?: number;
   filled_price?: number;
   reject_reason?: string;
@@ -43,42 +125,199 @@ interface Order {
 
 type StatusFilter = "ALL" | "FILLED" | "REJECTED" | "CANCELLED" | "PENDING" | "OPEN";
 
-const STATUS_FILTERS: StatusFilter[] = ["ALL", "PENDING", "OPEN", "FILLED", "CANCELLED", "REJECTED"];
+const STATUS_FILTERS: StatusFilter[] = [
+  "ALL",
+  "PENDING",
+  "OPEN",
+  "FILLED",
+  "CANCELLED",
+  "REJECTED",
+];
+const FILTER_LABELS: Record<string, string> = {
+  ALL: "전체",
+  PENDING: "대기",
+  OPEN: "진행중",
+  FILLED: "체결",
+  CANCELLED: "취소",
+  REJECTED: "거부",
+};
 
 const TERMINAL_STATUSES = new Set(["FILLED", "CANCELLED", "REJECTED", "EXPIRED"]);
 
-function statusBadgeClass(status: string): string {
-  const s = status.toUpperCase();
-  if (s === "FILLED") return "bg-neutral-900 text-white";
-  if (s === "CANCELLED" || s === "EXPIRED") return "bg-neutral-100 text-neutral-400";
-  if (s === "REJECTED") return "bg-neutral-100 text-red-600";
-  if (s === "PENDING" || s === "NEW" || s === "OPEN") return "bg-neutral-100 text-neutral-600";
-  return "bg-neutral-100 text-neutral-400";
+/* ── Order timeline item ─────────────────────────────────────── */
+function OrderItem({
+  order,
+  isExpanded,
+  onToggle,
+  onCancel,
+  isCancelling,
+}: {
+  order: Order;
+  isExpanded: boolean;
+  onToggle: () => void;
+  onCancel: () => void;
+  isCancelling: boolean;
+}) {
+  const isTerminal = TERMINAL_STATUSES.has(order.status.toUpperCase());
+  const isBuy = order.side === "BUY";
+
+  return (
+    <article className="relative rounded-xl border border-neutral-200 bg-white transition-all hover:border-neutral-300 hover:shadow-sm">
+      {/* main row — clickable */}
+      <button
+        onClick={onToggle}
+        className="flex w-full items-start gap-4 p-5 text-left"
+      >
+        {/* side indicator */}
+        <div
+          className={`mt-0.5 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold ${
+            isBuy
+              ? "bg-green-50 text-green-600"
+              : "bg-red-50 text-red-600"
+          }`}
+        >
+          {friendlySide(order.side)}
+        </div>
+
+        {/* content */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-base font-semibold text-neutral-900">
+              {friendlyAsset(order.asset)}
+            </span>
+
+            {/* status dot + text */}
+            <span className="flex items-center gap-1.5">
+              <span
+                className={`inline-block h-2 w-2 rounded-full ${statusDotColor(
+                  order.status
+                )}`}
+              />
+              <span
+                className={`text-xs font-medium ${statusTextColor(
+                  order.status
+                )}`}
+              >
+                {friendlyStatus(order.status)}
+              </span>
+            </span>
+          </div>
+
+          {/* price + qty summary */}
+          <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-neutral-500">
+            <span>
+              {formatQty(order.filled_quantity ?? order.quantity)}
+              {order.filled_price != null
+                ? ` @ ${formatPrice(order.filled_price)}`
+                : order.price != null
+                ? ` @ ${formatPrice(order.price)}`
+                : ""}
+            </span>
+            {order.filled_quantity != null &&
+              order.filled_price != null && (
+                <span className="font-mono text-xs text-neutral-400">
+                  총 {formatPrice(order.filled_quantity * order.filled_price)}
+                </span>
+              )}
+          </div>
+        </div>
+
+        {/* right side: time + cancel */}
+        <div className="flex flex-shrink-0 flex-col items-end gap-2">
+          <span className="text-xs text-neutral-400">
+            {relativeTime(order.created_at)}
+          </span>
+          {!isTerminal && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onCancel();
+              }}
+              disabled={isCancelling}
+              className="rounded-full border border-neutral-200 px-3 py-1 text-[11px] font-medium text-neutral-500 transition hover:border-neutral-400 hover:text-neutral-700 disabled:opacity-40"
+            >
+              {isCancelling ? "취소 중..." : "주문 취소"}
+            </button>
+          )}
+        </div>
+      </button>
+
+      {/* expandable detail */}
+      <Expandable open={isExpanded}>
+        <div className="border-t border-neutral-100 px-5 pb-5 pt-4">
+          <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
+            <div>
+              <p className="text-[11px] text-neutral-400">주문 유형</p>
+              <p className="mt-0.5 text-neutral-700">
+                {order.order_type === "LIMIT"
+                  ? "지정가"
+                  : order.order_type === "MARKET"
+                  ? "시장가"
+                  : order.order_type ?? "시장가"}
+              </p>
+            </div>
+            <div>
+              <p className="text-[11px] text-neutral-400">거래소</p>
+              <p className="mt-0.5 text-neutral-700">
+                {order.exchange ?? "--"}
+              </p>
+            </div>
+            <div>
+              <p className="text-[11px] text-neutral-400">주문 수량</p>
+              <p className="mt-0.5 font-mono text-neutral-700">
+                {formatQty(order.quantity)}
+              </p>
+            </div>
+            <div>
+              <p className="text-[11px] text-neutral-400">주문 가격</p>
+              <p className="mt-0.5 font-mono text-neutral-700">
+                {formatPrice(order.price)}
+              </p>
+            </div>
+          </div>
+
+          {/* fill info */}
+          {order.filled_quantity != null && (
+            <div className="mt-4 rounded-lg bg-green-50 p-3">
+              <p className="text-[11px] font-medium text-green-700">
+                체결 정보
+              </p>
+              <p className="mt-1 font-mono text-sm text-green-800">
+                {formatQty(order.filled_quantity)} @ {formatPrice(order.filled_price)}
+              </p>
+            </div>
+          )}
+
+          {/* reject reason */}
+          {order.reject_reason && (
+            <div className="mt-4 rounded-lg bg-red-50 p-3">
+              <p className="text-[11px] font-medium text-red-700">
+                거부 사유
+              </p>
+              <p className="mt-1 text-sm text-red-800">
+                {order.reject_reason}
+              </p>
+            </div>
+          )}
+
+          {/* timestamps */}
+          <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 text-[11px] text-neutral-400">
+            <span>
+              생성: {order.created_at ? new Date(order.created_at).toLocaleString("ko-KR") : "--"}
+            </span>
+            {order.updated_at && (
+              <span>
+                수정: {new Date(order.updated_at).toLocaleString("ko-KR")}
+              </span>
+            )}
+          </div>
+        </div>
+      </Expandable>
+    </article>
+  );
 }
 
-function sideBadgeClass(side: string): string {
-  return side === "BUY"
-    ? "bg-neutral-900 text-white"
-    : "border border-neutral-900 text-neutral-900";
-}
-
-function formatTs(ts: string | undefined): string {
-  if (!ts) return "--";
-  try {
-    return new Date(ts).toLocaleString();
-  } catch {
-    return ts;
-  }
-}
-
-function formatNumber(value: number | undefined | null, decimals = 2): string {
-  if (value == null) return "--";
-  return value.toLocaleString(undefined, {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  });
-}
-
+/* ── Main content ────────────────────────────────────────────── */
 function OrdersContent() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,13 +325,14 @@ function OrdersContent() {
   const [filter, setFilter] = useState<StatusFilter>("ALL");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState<Set<string>>(new Set());
-  const filterRef = useRef<HTMLDivElement>(null);
 
   const fetchOrders = useCallback(() => {
     setLoading(true);
     gatewayFetch("/orders")
       .then((data) => {
-        const items = Array.isArray(data) ? data : (data as { orders?: Order[] }).orders ?? [];
+        const items = Array.isArray(data)
+          ? data
+          : (data as { orders?: Order[] }).orders ?? [];
         setOrders(items as Order[]);
         setError(null);
       })
@@ -107,9 +347,10 @@ function OrdersContent() {
     fetchOrders();
   }, [fetchOrders]);
 
-  const filtered = filter === "ALL"
-    ? orders
-    : orders.filter((o) => o.status.toUpperCase() === filter);
+  const filtered =
+    filter === "ALL"
+      ? orders
+      : orders.filter((o) => o.status.toUpperCase() === filter);
 
   async function cancelOrder(orderId: string) {
     setCancelling((prev) => new Set(prev).add(orderId));
@@ -128,200 +369,151 @@ function OrdersContent() {
     }
   }
 
-  const activeIdx = STATUS_FILTERS.indexOf(filter);
-
   return (
     <PageTransition>
       <main className="grid gap-6">
-        <section className="rounded border border-neutral-200 bg-white p-6">
+        {/* Header */}
+        <section className="rounded-xl border border-neutral-200 bg-white p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-sm font-medium uppercase tracking-wider text-neutral-400">ORDERS</p>
-              <h2 className="mt-1 text-2xl font-semibold text-neutral-900">주문</h2>
+              <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">
+                Orders
+              </p>
+              <h2 className="mt-1 text-2xl font-semibold text-neutral-900">
+                주문 내역
+              </h2>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <div ref={filterRef} className="relative flex flex-wrap items-center gap-1">
-                {STATUS_FILTERS.map((f, idx) => (
-                  <button
-                    key={f}
-                    onClick={() => setFilter(f)}
-                    className={`relative px-3 py-1.5 text-xs font-medium transition ${
-                      filter === f
-                        ? "text-neutral-900"
-                        : "text-neutral-400 hover:text-neutral-600"
-                    }`}
-                  >
-                    {f === "ALL" ? "전체" : f === "OPEN" ? "미체결" : f === "FILLED" ? "체결" : f === "CANCELLED" ? "취소됨" : f === "PENDING" ? "대기" : f === "REJECTED" ? "거부" : f}
-                    {filter === f && (
-                      <motion.div
-                        layoutId="order-filter-underline"
-                        className="absolute -bottom-0.5 left-2 right-2 h-px bg-neutral-900"
-                        transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                      />
-                    )}
-                  </button>
-                ))}
-              </div>
+            <div className="flex items-center gap-3">
               <button
                 onClick={fetchOrders}
-                className="btn-secondary ml-2 text-xs"
+                className="rounded-full border border-neutral-200 px-4 py-1.5 text-xs font-medium text-neutral-600 transition hover:border-neutral-400"
               >
                 새로고침
               </button>
             </div>
           </div>
+
+          {/* Filter tabs */}
+          <div className="mt-4 flex flex-wrap items-center gap-1">
+            {STATUS_FILTERS.map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`relative rounded-full px-4 py-1.5 text-xs font-medium transition ${
+                  filter === f
+                    ? "bg-neutral-900 text-white"
+                    : "text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600"
+                }`}
+              >
+                {FILTER_LABELS[f] ?? f}
+                {filter === f && (
+                  <motion.div
+                    layoutId="order-filter-pill"
+                    className="absolute inset-0 rounded-full bg-neutral-900 -z-10"
+                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                  />
+                )}
+              </button>
+            ))}
+          </div>
         </section>
 
+        {/* Summary counts */}
+        {!loading && !error && orders.length > 0 && (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {[
+              {
+                label: "전체",
+                count: orders.length,
+                color: "text-neutral-900",
+              },
+              {
+                label: "체결",
+                count: orders.filter(
+                  (o) => o.status.toUpperCase() === "FILLED"
+                ).length,
+                color: "text-green-600",
+              },
+              {
+                label: "대기/진행",
+                count: orders.filter((o) =>
+                  ["PENDING", "NEW", "OPEN"].includes(o.status.toUpperCase())
+                ).length,
+                color: "text-amber-600",
+              },
+              {
+                label: "취소/거부",
+                count: orders.filter((o) =>
+                  ["CANCELLED", "REJECTED", "EXPIRED"].includes(
+                    o.status.toUpperCase()
+                  )
+                ).length,
+                color: "text-neutral-400",
+              },
+            ].map((s) => (
+              <div
+                key={s.label}
+                className="rounded-xl border border-neutral-200 bg-white p-4 text-center"
+              >
+                <p className="text-xs text-neutral-400">{s.label}</p>
+                <p className={`mt-1 font-mono text-2xl font-bold ${s.color}`}>
+                  <AnimatedNumber value={s.count} decimals={0} />
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Content */}
         {loading ? (
           <StaggerContainer className="space-y-3">
-            {[0, 1, 2, 3, 4].map((i) => (
+            {[0, 1, 2, 3].map((i) => (
               <StaggerItem key={i}>
-                <div className="rounded border border-neutral-200 bg-white p-6 animate-pulse">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="h-4 w-20 rounded bg-neutral-200" />
-                      <div className="h-5 w-12 rounded bg-neutral-100" />
-                      <div className="h-5 w-16 rounded bg-neutral-100" />
+                <div className="rounded-xl border border-neutral-200 bg-white p-5 animate-pulse">
+                  <div className="flex items-center gap-4">
+                    <div className="h-10 w-10 rounded-full bg-neutral-100" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-4 w-32 rounded bg-neutral-100" />
+                      <div className="h-3 w-48 rounded bg-neutral-50" />
                     </div>
-                    <div className="flex items-center gap-4">
-                      <div className="h-4 w-16 rounded bg-neutral-100" />
-                      <div className="h-4 w-24 rounded bg-neutral-100" />
-                    </div>
+                    <div className="h-3 w-16 rounded bg-neutral-50" />
                   </div>
                 </div>
               </StaggerItem>
             ))}
           </StaggerContainer>
         ) : error ? (
-          <div className="rounded border border-neutral-200 bg-white p-6">
+          <div className="rounded-xl border border-neutral-200 bg-white p-8 text-center">
             <p className="text-red-600 text-sm">{error}</p>
-            <p className="mt-2 text-sm text-neutral-500">
+            <p className="mt-2 text-sm text-neutral-400">
               로그인 상태와 주문 서비스 연결을 확인해주세요.
             </p>
           </div>
         ) : filtered.length === 0 ? (
-          <div className="rounded border border-neutral-200 bg-white p-6">
-            <p className="text-neutral-400">
-              {filter === "ALL" ? "주문 없음" : `${filter === "OPEN" ? "미체결" : filter === "FILLED" ? "체결" : filter === "CANCELLED" ? "취소됨" : filter === "PENDING" ? "대기" : filter === "REJECTED" ? "거부" : filter} 주문 없음`}
+          <div className="rounded-xl border border-neutral-200 bg-white p-12 text-center">
+            <p className="text-lg text-neutral-300">
+              {filter === "ALL"
+                ? "아직 주문이 없습니다"
+                : `${FILTER_LABELS[filter] ?? filter} 주문이 없습니다`}
             </p>
           </div>
         ) : (
           <StaggerContainer className="space-y-3">
-            {filtered.map((order) => {
-              const isExpanded = expandedId === order.order_id;
-              const isTerminal = TERMINAL_STATUSES.has(order.status.toUpperCase());
-              const isCancelling = cancelling.has(order.order_id);
-
-              return (
-                <StaggerItem key={order.order_id}>
-                  <article className="rounded border border-neutral-200 bg-white p-6 transition hover:border-neutral-300">
-                    <div
-                      className="flex cursor-pointer flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
-                      onClick={() => setExpandedId(isExpanded ? null : order.order_id)}
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm font-semibold uppercase tracking-wider text-neutral-900">
-                          {order.asset}
-                        </span>
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${sideBadgeClass(order.side)}`}>
-                          {order.side}
-                        </span>
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeClass(order.status)}`}>
-                          {order.status}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-4 text-sm text-neutral-500">
-                        <span className="font-mono">수량: {formatNumber(order.quantity, 4)}</span>
-                        {order.price != null && <span className="font-mono">가격: ${formatNumber(order.price)}</span>}
-                        <span className="text-xs">{formatTs(order.created_at)}</span>
-                        {!isTerminal && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              cancelOrder(order.order_id);
-                            }}
-                            disabled={isCancelling}
-                            className="rounded border border-neutral-200 px-3 py-1 text-xs font-medium text-neutral-600 hover:border-neutral-400 disabled:opacity-40"
-                          >
-                            {isCancelling ? "취소 중..." : "취소"}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    <Expandable open={isExpanded}>
-                      <div className="mt-4 space-y-3 border-t border-neutral-200 pt-4">
-                        <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
-                          <div>
-                            <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">주문 ID</p>
-                            <p className="mt-1 font-mono text-xs text-neutral-600">{order.order_id}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">유형</p>
-                            <p className="mt-1 text-neutral-600">{order.order_type ?? "MARKET"}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">거래소</p>
-                            <p className="mt-1 text-neutral-600">{order.exchange ?? "--"}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">수정일</p>
-                            <p className="mt-1 text-neutral-600">{formatTs(order.updated_at)}</p>
-                          </div>
-                        </div>
-
-                        {order.filled_quantity != null && (
-                          <div className="rounded border border-neutral-200 bg-white p-3 text-sm">
-                            <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">체결 정보</p>
-                            <p className="mt-1 font-mono text-neutral-600">
-                              체결: {formatNumber(order.filled_quantity, 4)} @ ${formatNumber(order.filled_price)}
-                            </p>
-                          </div>
-                        )}
-
-                        {order.reject_reason && (
-                          <div className="rounded border border-neutral-200 bg-white p-3 text-sm">
-                            <p className="text-xs font-medium uppercase tracking-wider text-red-600">거부 사유</p>
-                            <p className="mt-1 text-neutral-600">{order.reject_reason}</p>
-                          </div>
-                        )}
-
-                        {order.protections && order.protections.length > 0 && (
-                          <div>
-                            <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">보호 설정</p>
-                            <div className="mt-2 space-y-1">
-                              {order.protections.map((p, idx) => (
-                                <div key={idx} className="rounded border border-neutral-200 bg-white p-2 font-mono text-xs text-neutral-600">
-                                  {p.type} {p.trigger_price != null ? `| 트리거: $${formatNumber(p.trigger_price)}` : ""}
-                                  {p.limit_price != null ? ` | 지정가: $${formatNumber(p.limit_price)}` : ""}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {order.lifecycle_events && order.lifecycle_events.length > 0 && (
-                          <div>
-                            <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">주문 이력</p>
-                            <div className="mt-2 space-y-1">
-                              {order.lifecycle_events.map((ev, idx) => (
-                                <div key={idx} className="flex items-center gap-3 rounded border border-neutral-200 bg-white p-2 text-xs">
-                                  <span className="font-medium text-neutral-700">{ev.event}</span>
-                                  <span className="text-neutral-400">{formatTs(ev.timestamp)}</span>
-                                  {ev.details && (
-                                    <span className="font-mono text-neutral-500">{JSON.stringify(ev.details)}</span>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </Expandable>
-                  </article>
-                </StaggerItem>
-              );
-            })}
+            {filtered.map((order) => (
+              <StaggerItem key={order.order_id}>
+                <OrderItem
+                  order={order}
+                  isExpanded={expandedId === order.order_id}
+                  onToggle={() =>
+                    setExpandedId(
+                      expandedId === order.order_id ? null : order.order_id
+                    )
+                  }
+                  onCancel={() => cancelOrder(order.order_id)}
+                  isCancelling={cancelling.has(order.order_id)}
+                />
+              </StaggerItem>
+            ))}
           </StaggerContainer>
         )}
       </main>
