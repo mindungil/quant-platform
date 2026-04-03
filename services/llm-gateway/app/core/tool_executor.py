@@ -470,6 +470,103 @@ async def _full_market_analysis(args: dict, user_id: str) -> dict:
     return results
 
 
+# ── Memory Type Handlers (Knowledge / Rule / State) ──────────────────
+
+async def _get_knowledge(args: dict, user_id: str) -> dict:
+    asset = args.get("asset")
+    params = {"limit": "10"}
+    if asset:
+        params["asset"] = asset
+    resp = await _client.get(
+        _url("memory_service", "/memory/type/knowledge"),
+        params=params,
+        headers={"x-user-id": user_id},
+    )
+    resp.raise_for_status()
+    items = resp.json()
+    return {
+        "total": len(items),
+        "knowledge": [
+            {
+                "content": it.get("reasoning", "")[:300],
+                "formula_name": it.get("formula_name"),
+                "regime_label": it.get("regime_label"),
+                "asset": it.get("asset"),
+            }
+            for it in (items if isinstance(items, list) else [])[:10]
+        ],
+    }
+
+
+async def _store_knowledge(args: dict, user_id: str) -> dict:
+    resp = await _client.post(
+        _url("memory_service", "/memory/knowledge"),
+        json={
+            "content": args["content"],
+            "formula_name": args.get("formula_name"),
+            "regime_label": args.get("regime_label"),
+            "asset": args.get("asset", "ALL"),
+        },
+        headers={"x-user-id": user_id},
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+async def _get_rules(args: dict, user_id: str) -> dict:
+    # Combine stored rules from memory + dynamic risk settings
+    rules_from_memory = []
+    try:
+        resp = await _client.get(
+            _url("memory_service", "/memory/type/rule"),
+            params={"limit": "20"},
+            headers={"x-user-id": user_id},
+        )
+        resp.raise_for_status()
+        rules_from_memory = [
+            {"content": r.get("reasoning", ""), "asset": r.get("asset")}
+            for r in (resp.json() if isinstance(resp.json(), list) else [])
+        ]
+    except Exception:
+        pass
+
+    # Also get trading rules (existing runbook)
+    trading_rules = await _get_trading_rules(args, user_id)
+    return {
+        "system_rules": trading_rules.get("rules", []),
+        "custom_rules": rules_from_memory,
+    }
+
+
+async def _get_agent_state(args: dict, user_id: str) -> dict:
+    asset = args.get("asset")
+    states = []
+    try:
+        params = {"limit": "5"}
+        if asset:
+            params["asset"] = asset
+        resp = await _client.get(
+            _url("memory_service", "/memory/type/state"),
+            params=params,
+            headers={"x-user-id": user_id},
+        )
+        resp.raise_for_status()
+        states = [
+            {
+                "content": s.get("reasoning", "")[:200],
+                "asset": s.get("asset"),
+                "regime_label": s.get("regime_label"),
+                "signal_score": s.get("signal_score"),
+                "action": s.get("action"),
+                "timestamp": s.get("timestamp"),
+            }
+            for s in (resp.json() if isinstance(resp.json(), list) else [])[:5]
+        ]
+    except Exception:
+        pass
+    return {"recent_states": states}
+
+
 # ── Sleep helper ─────────────────────────────────────────────────────
 import asyncio
 
@@ -498,6 +595,10 @@ _HANDLERS: dict[str, Any] = {
     "get_trading_rules": _get_trading_rules,
     "get_formula_guide": _get_formula_guide,
     "full_market_analysis": _full_market_analysis,
+    "get_knowledge": _get_knowledge,
+    "store_knowledge": _store_knowledge,
+    "get_rules": _get_rules,
+    "get_agent_state": _get_agent_state,
 }
 
 

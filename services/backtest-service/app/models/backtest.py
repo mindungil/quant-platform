@@ -31,6 +31,7 @@ class BacktestResult(BaseModel):
     max_consecutive_losses: int = 0
     max_favorable_excursion: float = 0.0
     max_adverse_excursion: float = 0.0
+    statistical_validation: dict = Field(default_factory=dict)
     status: str
 
 

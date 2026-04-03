@@ -11,6 +11,7 @@ import {
   AnimatedNumber,
   motion,
 } from "../../components/motion";
+import { MarketChart } from "../../components/market-chart";
 
 /* ── Types ───────────────────────────────────────────────────── */
 
@@ -423,6 +424,11 @@ function DashboardContent() {
             </motion.div>
           </StaggerItem>
         </StaggerContainer>
+
+        {/* ── Market Chart ────────────────────────────────── */}
+        <FadeInView delay={0.1}>
+          <MarketChart asset="BTCUSDT" />
+        </FadeInView>
 
         {/* ── Agent Status + Positions ────────────────────── */}
         <div className="grid gap-6 lg:grid-cols-2">

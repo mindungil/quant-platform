@@ -16,6 +16,7 @@ import empyrical as ep
 
 from app.core.config import settings
 from app.models.backtest import BacktestJob, BacktestRequest, BacktestResult
+from shared.statistics import validate_backtest
 
 logger = logging.getLogger(__name__)
 
@@ -491,6 +492,16 @@ def evaluate_strategy(payload: BacktestRequest) -> BacktestResult:
         and m["profit_factor"] >= 1.2
     ) else "FAILED"
 
+    # --- Statistical validation ---
+    trade_returns = [t["pnl_pct"] for t in trades]
+    # Use buy-and-hold of the asset as a simple benchmark
+    daily_returns = closes.pct_change().dropna().tolist()
+    try:
+        stat_validation = validate_backtest(trade_returns, daily_returns)
+    except Exception:
+        logger.exception("statistical validation failed, continuing without it")
+        stat_validation = {}
+
     return BacktestResult(
         strategy_id=payload.strategy_id,
         sharpe_ratio=m["sharpe"],
@@ -511,6 +522,7 @@ def evaluate_strategy(payload: BacktestRequest) -> BacktestResult:
         max_consecutive_losses=m["max_consecutive_losses"],
         max_favorable_excursion=m["max_favorable_excursion"],
         max_adverse_excursion=m["max_adverse_excursion"],
+        statistical_validation=stat_validation,
         status=status,
     )
 

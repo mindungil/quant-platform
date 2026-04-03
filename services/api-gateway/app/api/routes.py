@@ -17,6 +17,7 @@ from shared.persistence import RedisStore
 from shared.realtime import RealtimeBus
 
 router = APIRouter()
+market_data_client = GatewayClient(settings.market_data_base_url)
 auth_client = GatewayClient(settings.auth_service_base_url)
 memory_client = GatewayClient(settings.memory_service_base_url)
 strategy_client = GatewayClient(settings.strategy_registry_base_url)
@@ -486,6 +487,26 @@ def llm_oauth_status(provider: str, principal: GatewayPrincipal = Depends(requir
 @router.get("/llm/providers")
 def llm_providers(principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
     result = llm_client.get("/providers", headers=principal.forwarded_headers)
+    return JSONResponse(result)
+
+
+# ── Market Data (proxy to market-data service) ───────────────────────
+
+
+@router.get("/market-data/{asset}/history")
+def get_market_data_history(
+    asset: str, request: Request, principal: GatewayPrincipal = Depends(require_principal)
+) -> JSONResponse:
+    params = dict(request.query_params)
+    result = market_data_client.get(f"/candles/{asset}/history", params=params)
+    return JSONResponse(result)
+
+
+@router.get("/market-data/{asset}/latest")
+def get_market_data_latest(
+    asset: str, principal: GatewayPrincipal = Depends(require_principal)
+) -> JSONResponse:
+    result = market_data_client.get(f"/candles/{asset}/latest")
     return JSONResponse(result)
 
 

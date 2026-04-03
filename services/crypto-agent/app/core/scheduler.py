@@ -156,6 +156,10 @@ class AgentScheduler:
             except Exception:
                 pass
 
+        # Shadow promotion check (every 12 cycles = ~1 hour at 5min interval)
+        if self._cycle_count % 12 == 0:
+            await self._check_shadow_promotions()
+
         # Auto-rebalance check (every 12 cycles = ~1 hour at 5min interval)
         if self._cycle_count % 12 == 0:
             await self._check_rebalance(loop)
@@ -165,6 +169,51 @@ class AgentScheduler:
             "cycle": self._cycle_count,
             "elapsed_ms": round(elapsed * 1000),
         })
+
+    async def _check_shadow_promotions(self) -> None:
+        """Check all SHADOW strategies and promote or deprecate them if ready."""
+        try:
+            import httpx
+            registry_url = settings.strategy_registry_base_url.rstrip("/")
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                # Fetch all shadow strategies
+                resp = await client.get(f"{registry_url}/strategies/shadow")
+                if resp.status_code != 200:
+                    return
+                shadow_strategies = resp.json()
+
+            if not shadow_strategies:
+                return
+
+            logger.info("shadow_promotion_check", extra={
+                "shadow_count": len(shadow_strategies),
+            })
+
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                for s in shadow_strategies:
+                    strategy_id = s.get("id")
+                    if not strategy_id:
+                        continue
+                    try:
+                        resp = await client.post(
+                            f"{registry_url}/strategies/{strategy_id}/shadow/promote"
+                        )
+                        if resp.status_code == 200:
+                            result = resp.json()
+                            outcome = result.get("outcome", "unknown")
+                            if outcome in ("promoted", "deprecated"):
+                                logger.info("shadow_promotion_result", extra={
+                                    "strategy_id": strategy_id,
+                                    "outcome": outcome,
+                                    "metrics": result.get("shadow_metrics"),
+                                })
+                    except Exception as exc:
+                        logger.warning("shadow_promote_call_failed", extra={
+                            "strategy_id": strategy_id,
+                            "error": str(exc)[:200],
+                        })
+        except Exception as exc:
+            logger.debug("shadow_promotion_check_skipped", extra={"error": str(exc)[:100]})
 
     async def _check_rebalance(self, loop: asyncio.AbstractEventLoop) -> None:
         """Check portfolio and trigger rebalancing if needed."""

@@ -5,7 +5,7 @@ import os
 from fastapi import APIRouter, Header, HTTPException, Query
 
 from app.db.repository import strategy_repository
-from app.models.strategy import Strategy, StrategyCreate, StrategyStatusUpdate
+from app.models.strategy import Strategy, StrategyCreate, StrategyStatusUpdate, ShadowMetricsUpdate
 from shared.health import check_sql, health_payload
 
 router = APIRouter()
@@ -55,6 +55,12 @@ def get_active_strategy(asset_type: str, x_user_id: str | None = Header(default=
     return strategy
 
 
+@router.get("/strategies/shadow", response_model=list[Strategy])
+def list_shadow_strategies() -> list[Strategy]:
+    """List all strategies currently in SHADOW status with their metrics."""
+    return strategy_repository.get_shadow_strategies()
+
+
 @router.get("/strategies/{strategy_id}", response_model=Strategy)
 def get_strategy(strategy_id: str, x_user_id: str | None = Header(default=None)) -> Strategy:
     strategy = strategy_repository.get(strategy_id)
@@ -82,10 +88,58 @@ def update_status(
                 status_code=409,
                 detail="backtest_not_passed: DRAFT->ACTIVE requires backtest PASSED",
             )
+    if payload.status == "SHADOW" and strategy.status == "TESTED":
+        bt = strategy.backtest_results or {}
+        if bt.get("status") != "PASSED" and bt.get("source") != "bootstrap_seed":
+            raise HTTPException(
+                status_code=409,
+                detail="backtest_not_passed: TESTED->SHADOW requires backtest PASSED",
+            )
     strategy = strategy_repository.update_status(strategy_id, payload.status)
     if strategy is None:
         raise HTTPException(status_code=404, detail="strategy_not_found")
     return strategy
+
+
+# ---------------------------------------------------------------------------
+# Shadow lifecycle endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.post("/strategies/{strategy_id}/shadow/metrics", response_model=Strategy)
+def update_shadow_metrics(
+    strategy_id: str, payload: ShadowMetricsUpdate, x_user_id: str | None = Header(default=None)
+) -> Strategy:
+    """Update shadow metrics for a SHADOW strategy (called by agent after shadow trades)."""
+    strategy = strategy_repository.get(strategy_id)
+    if strategy is None:
+        raise HTTPException(status_code=404, detail="strategy_not_found")
+    if strategy.status != "SHADOW":
+        raise HTTPException(status_code=409, detail="strategy_not_in_shadow")
+    updated = strategy_repository.update_shadow_metrics(strategy_id, payload.model_dump())
+    if updated is None:
+        raise HTTPException(status_code=404, detail="strategy_not_found")
+    return updated
+
+
+@router.post("/strategies/{strategy_id}/shadow/promote")
+def promote_shadow(
+    strategy_id: str,
+    min_days: int = Query(default=14),
+    min_trades: int = Query(default=10),
+    min_sharpe: float = Query(default=0.5),
+) -> dict:
+    """Check if a SHADOW strategy should be promoted to ACTIVE or deprecated."""
+    outcome, strategy = strategy_repository.promote_shadow_if_ready(
+        strategy_id, min_days=min_days, min_trades=min_trades, min_sharpe=min_sharpe
+    )
+    if outcome == "not_found":
+        raise HTTPException(status_code=404, detail="strategy_not_found_or_not_shadow")
+    result = {"outcome": outcome, "strategy_id": strategy_id}
+    if strategy is not None:
+        result["status"] = strategy.status
+        result["shadow_metrics"] = strategy.shadow_metrics
+    return result
 
 
 @router.patch("/strategies/{strategy_id}/backtest", response_model=Strategy)

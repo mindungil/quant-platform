@@ -215,6 +215,28 @@ class MemoryRepository:
         except Exception:
             return []
 
+    def get_by_type(
+        self,
+        memory_type: str,
+        user_id: str | None = None,
+        asset: str | None = None,
+        limit: int = 20,
+    ) -> list[MemoryRecord]:
+        """Query memories by type (episode/knowledge/rule/state)."""
+        where = "WHERE memory_type = :memory_type"
+        params: dict = {"memory_type": memory_type, "limit": limit}
+        if user_id:
+            where += " AND user_id = :user_id"
+            params["user_id"] = user_id
+        if asset:
+            where += " AND (asset = :asset OR asset = 'ALL')"
+            params["asset"] = asset
+        rows = self._store.fetch_all(
+            f"SELECT * FROM memory_records {where} ORDER BY timestamp DESC LIMIT :limit",
+            params,
+        )
+        return [self._hydrate(row) for row in rows] if rows else []
+
     def _hydrate(self, row: dict) -> MemoryRecord:
         payload = dict(row)
         # Remove pgvector column that is not part of the Pydantic model

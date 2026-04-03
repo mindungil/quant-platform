@@ -215,8 +215,11 @@ def _calculate_position_size(
     return notional
 
 
-def _build_order_request(decision: DecisionRecord) -> dict | None:
+def _build_order_request(decision: DecisionRecord, *, shadow_override: bool = False) -> dict | None:
     """Build order request with Kelly-fraction position sizing.
+
+    When *shadow_override* is True the order is forced into shadow_mode
+    regardless of the global default (used for SHADOW-status strategies).
 
     Returns None if the calculated notional is below min_order_notional.
     """
@@ -273,9 +276,9 @@ def _build_order_request(decision: DecisionRecord) -> dict | None:
         "current_exposure": settings.default_current_exposure,
         "exposure_limit": settings.default_exposure_limit,
         "automation_enabled": settings.default_automation_enabled,
-        "shadow_mode": settings.default_shadow_mode,
+        "shadow_mode": True if shadow_override else settings.default_shadow_mode,
         "strategy_id": decision.strategy_id,
-        "strategy_status": "ACTIVE",
+        "strategy_status": decision.components.get("_strategy_status", "ACTIVE") if decision.components else "ACTIVE",
         "correlation_id": decision.correlation_id,
         "stop_loss_pct": settings.default_stop_loss_pct,
         "take_profit_pct": settings.default_take_profit_pct,
@@ -296,9 +299,10 @@ def _risk_pre_check(
     """Run lightweight local risk validations. Returns list of warning/failure messages."""
     issues: list[str] = []
 
-    # 1. Strategy must be ACTIVE
-    if getattr(strategy, "status", "ACTIVE") != "ACTIVE":
-        issues.append(f"strategy status is '{strategy.status}', expected ACTIVE")
+    # 1. Strategy must be ACTIVE or SHADOW
+    strategy_status = getattr(strategy, "status", "ACTIVE")
+    if strategy_status not in ("ACTIVE", "SHADOW"):
+        issues.append(f"strategy status is '{strategy_status}', expected ACTIVE or SHADOW")
 
     # 2. Signal freshness — feature_timestamp within SIGNAL_STALENESS_SECONDS
     now = datetime.now(UTC)
@@ -568,22 +572,63 @@ def _phase_retrieve(
     return memory_response
 
 
+def _fetch_shadow_strategies() -> list[dict]:
+    """Fetch strategies in SHADOW status from strategy-registry."""
+    try:
+        import httpx
+        resp = httpx.get(
+            f"{settings.strategy_registry_base_url}/strategies/shadow",
+            timeout=5.0,
+        )
+        if resp.status_code == 200:
+            return resp.json()
+    except Exception as exc:
+        logger.debug("shadow_strategies_fetch_failed", extra={"error": str(exc)[:100]})
+    return []
+
+
 def _phase_select(
     asset: str,
     signal: SignalSnapshot,
     user_id: str | None,
     phases: list[PhaseResult],
 ) -> tuple[StrategySnapshot, str, str]:
-    """Phase 3 — Select: load active strategy and determine effective user & action."""
+    """Phase 3 — Select: load active strategy and determine effective user & action.
+
+    Also considers SHADOW strategies for the same asset type. When a SHADOW
+    strategy is selected, it will be run in shadow_mode (paper-trading) via
+    the ``_is_shadow_strategy`` flag attached to the returned snapshot.
+    """
     phase = _track_phase("select")
+
+    # Primary: load ACTIVE strategy
     strategy = strategy_client.get_active_strategy(
         "crypto",
         user_id=user_id or getattr(signal, "strategy_user_id", None),
     )
+
+    # Check for SHADOW strategies — they run alongside ACTIVE but in paper-trading mode
+    is_shadow = False
+    shadow_strategies = _fetch_shadow_strategies()
+    for ss in shadow_strategies:
+        if ss.get("asset_type") == "crypto":
+            # Use the SHADOW strategy for this cycle (round-robin style)
+            try:
+                shadow_snap = StrategySnapshot.model_validate(ss)
+                strategy = shadow_snap
+                is_shadow = True
+                break
+            except Exception:
+                pass
+
+    # Attach shadow flag as a dynamic attribute for downstream use
+    strategy._is_shadow = is_shadow  # type: ignore[attr-defined]
+
     strategy_user_id = getattr(signal, "strategy_user_id", None) or strategy.user_id
     effective_user_id = user_id or strategy_user_id or "bootstrap"
     action = signal.direction
-    _complete_phase(phase, detail=f"strategy={strategy.name} action={action}")
+    status_label = "SHADOW" if is_shadow else "ACTIVE"
+    _complete_phase(phase, detail=f"strategy={strategy.name} status={status_label} action={action}")
     phases.append(phase)
     return strategy, effective_user_id, action
 
@@ -663,7 +708,8 @@ def _phase_execute(
 
     # Publish execution action if threshold crossed
     if decision.threshold_crossed and decision.action in {"BUY", "SELL"}:
-        order_request = _build_order_request(decision)
+        is_shadow = (decision.components or {}).get("_strategy_status") == "SHADOW"
+        order_request = _build_order_request(decision, shadow_override=is_shadow)
         if order_request is not None:
             publisher.publish_agent_action(decision, order_request)
 
@@ -784,8 +830,12 @@ def run_decision_loop(asset: str, *, user_id: str | None = None, correlation_id:
     # Store formula info as numeric confidence in components, text in reasoning
     decision.components = decision.components or {}
     decision.components["formula_confidence"] = round(formula_result.confidence, 4)
+    # Propagate shadow flag so _build_order_request can force shadow_mode
+    is_shadow = getattr(strategy, "_is_shadow", False)
+    if is_shadow:
+        decision.components["_strategy_status"] = "SHADOW"
     decision.reasoning = (
-        f"[formula={selected_formula.name} regime={regime.label}] "
+        f"[formula={selected_formula.name} regime={regime.label}{' SHADOW' if is_shadow else ''}] "
         + (decision.reasoning or "")
     )
 

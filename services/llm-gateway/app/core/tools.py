@@ -379,6 +379,54 @@ TOOL_DEFINITIONS: list[dict] = [
             "required": ["asset"],
         },
     },
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # Memory Types: Knowledge / Rule / State
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    {
+        "name": "get_knowledge",
+        "description": "전략 지식을 조회합니다. 어떤 공식이 어떤 시장 상황에서 효과적이었는지, 과거 학습된 패턴 정보를 반환합니다.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "asset": {"type": "string", "description": "자산 심볼 필터 (선택)"},
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "store_knowledge",
+        "description": "새로운 전략 지식을 저장합니다. 공식 성과 패턴, 레짐별 최적 전략 등의 학습 결과를 기록합니다.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "content": {"type": "string", "description": "지식 내용"},
+                "formula_name": {"type": "string", "description": "관련 공식"},
+                "regime_label": {"type": "string", "description": "관련 시장 레짐"},
+                "asset": {"type": "string", "description": "관련 자산"},
+            },
+            "required": ["content"],
+        },
+    },
+    {
+        "name": "get_rules",
+        "description": "고정 매매 규칙을 조회합니다. 리스크 제약, 포지션 한도, 매매 금지 조건 등 변하지 않는 운영 정책을 반환합니다.",
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    },
+    {
+        "name": "get_agent_state",
+        "description": "에이전트의 현재 상태 스냅샷을 조회합니다. 최근 판단 요약, 활성 포지션, 현재 레짐 인식 등을 반환합니다.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "asset": {"type": "string", "description": "자산 심볼 필터 (선택)"},
+            },
+            "required": [],
+        },
+    },
 ]
 
 # Tool name → definition lookup

@@ -1,6 +1,13 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
-from app.models.strategy import Strategy, StrategyCreate, VALID_STATUS_TRANSITIONS
+from app.models.strategy import (
+    Strategy,
+    StrategyCreate,
+    VALID_STATUS_TRANSITIONS,
+    SHADOW_DURATION_DAYS,
+    SHADOW_MIN_TRADES,
+    SHADOW_MIN_SHARPE,
+)
 import os
 from shared.persistence import SqlStore, deserialize_json, serialize_json
 
@@ -31,7 +38,8 @@ class StrategyRepository:
                 version TEXT NOT NULL,
                 status TEXT NOT NULL,
                 backtest_results JSONB NOT NULL DEFAULT '{{}}'::jsonb,
-                shadow_metrics JSONB NOT NULL DEFAULT '{{}}'::jsonb
+                shadow_metrics JSONB NOT NULL DEFAULT '{{}}'::jsonb,
+                shadow_start_at TIMESTAMPTZ
             )
         """
         for table_name in self._table_names():
@@ -41,13 +49,18 @@ class StrategyRepository:
             self._store.execute(
                 f"ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
             )
+        # Add shadow_start_at column if missing (migration for SHADOW lifecycle)
+        for table_name in self._table_names():
+            self._store.execute(
+                f"ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS shadow_start_at TIMESTAMPTZ"
+            )
         self._store.execute(
             """
             INSERT INTO strategy_records (
-                id, user_id, created_at, updated_at, name, asset_type, indicators, weights, thresholds, version, status, backtest_results, shadow_metrics
+                id, user_id, created_at, updated_at, name, asset_type, indicators, weights, thresholds, version, status, backtest_results, shadow_metrics, shadow_start_at
             )
             SELECT
-                id, user_id, created_at, COALESCE(updated_at, created_at), name, asset_type, indicators, weights, thresholds, version, status, backtest_results, shadow_metrics
+                id, user_id, created_at, COALESCE(updated_at, created_at), name, asset_type, indicators, weights, thresholds, version, status, backtest_results, shadow_metrics, shadow_start_at
             FROM strategies
             ON CONFLICT (id) DO NOTHING
             """
@@ -101,10 +114,10 @@ class StrategyRepository:
         }
         query = """
             INSERT INTO {table_name} (
-                id, user_id, created_at, updated_at, name, asset_type, indicators, weights, thresholds, version, status, backtest_results, shadow_metrics
+                id, user_id, created_at, updated_at, name, asset_type, indicators, weights, thresholds, version, status, backtest_results, shadow_metrics, shadow_start_at
             ) VALUES (
                 :id, :user_id, :created_at, :updated_at, :name, :asset_type, CAST(:indicators AS JSONB), CAST(:weights AS JSONB),
-                CAST(:thresholds AS JSONB), :version, :status, CAST(:backtest_results AS JSONB), CAST(:shadow_metrics AS JSONB)
+                CAST(:thresholds AS JSONB), :version, :status, CAST(:backtest_results AS JSONB), CAST(:shadow_metrics AS JSONB), :shadow_start_at
             )
             ON CONFLICT (id) DO UPDATE SET
                 user_id = EXCLUDED.user_id,
@@ -118,7 +131,8 @@ class StrategyRepository:
                 version = EXCLUDED.version,
                 status = EXCLUDED.status,
                 backtest_results = EXCLUDED.backtest_results,
-                shadow_metrics = EXCLUDED.shadow_metrics
+                shadow_metrics = EXCLUDED.shadow_metrics,
+                shadow_start_at = EXCLUDED.shadow_start_at
         """
         for table_name in self._table_names():
             self._store.execute(query.format(table_name=table_name), values)
@@ -250,11 +264,96 @@ class StrategyRepository:
                 ):
                     item.status = "DEPRECATED"
                     self._persist(item)
+        # When entering SHADOW, record the start timestamp
+        if status == "SHADOW":
+            strategy.shadow_start_at = datetime.now(UTC)
+            strategy.shadow_metrics = {
+                "pnl": 0.0,
+                "trade_count": 0,
+                "sharpe": 0.0,
+                "max_drawdown": 0.0,
+                "win_rate": 0.0,
+            }
         strategy.status = status
         strategy.updated_at = datetime.now(UTC)
         self._items[strategy.id] = strategy
         self._persist(strategy)
         return strategy
+
+    # ------------------------------------------------------------------
+    # Shadow lifecycle methods
+    # ------------------------------------------------------------------
+
+    def get_shadow_strategies(self) -> list[Strategy]:
+        """Return all strategies currently in SHADOW status."""
+        rows = self._store.fetch_all(
+            "SELECT * FROM strategy_records WHERE status = 'SHADOW' ORDER BY shadow_start_at ASC"
+        )
+        return [self._hydrate(row) for row in rows]
+
+    def update_shadow_metrics(self, strategy_id: str, metrics: dict) -> Strategy | None:
+        """Merge incoming shadow metrics into the strategy's shadow_metrics field."""
+        strategy = self.get(strategy_id)
+        if strategy is None or strategy.status != "SHADOW":
+            return None
+        existing = strategy.shadow_metrics or {}
+        existing["pnl"] = existing.get("pnl", 0.0) + metrics.get("pnl", 0.0)
+        existing["trade_count"] = existing.get("trade_count", 0) + metrics.get("trade_count", 0)
+        # Overwrite point-in-time metrics (latest snapshot)
+        for key in ("sharpe", "max_drawdown", "win_rate"):
+            if key in metrics:
+                existing[key] = metrics[key]
+        strategy.shadow_metrics = existing
+        strategy.updated_at = datetime.now(UTC)
+        self._items[strategy.id] = strategy
+        self._persist(strategy)
+        return strategy
+
+    def promote_shadow_if_ready(
+        self,
+        strategy_id: str,
+        *,
+        min_days: int = SHADOW_DURATION_DAYS,
+        min_trades: int = SHADOW_MIN_TRADES,
+        min_sharpe: float = SHADOW_MIN_SHARPE,
+    ) -> tuple[str, Strategy | None]:
+        """Check if a SHADOW strategy meets promotion criteria.
+
+        Returns a tuple of (outcome, strategy) where outcome is one of:
+        - "promoted"   — met all criteria, moved to ACTIVE
+        - "deprecated" — shadow period ended but criteria not met, moved to DEPRECATED
+        - "pending"    — still within shadow period
+        - "not_found"  — strategy not found or not in SHADOW
+        """
+        strategy = self.get(strategy_id)
+        if strategy is None or strategy.status != "SHADOW":
+            return ("not_found", None)
+
+        shadow_start = strategy.shadow_start_at
+        if shadow_start is None:
+            # Fallback: use updated_at as approximate shadow start
+            shadow_start = strategy.updated_at
+
+        if shadow_start.tzinfo is None:
+            shadow_start = shadow_start.replace(tzinfo=UTC)
+
+        now = datetime.now(UTC)
+        days_in_shadow = (now - shadow_start).total_seconds() / 86400.0
+
+        if days_in_shadow < min_days:
+            return ("pending", strategy)
+
+        # Shadow period has elapsed — evaluate metrics
+        metrics = strategy.shadow_metrics or {}
+        trade_count = metrics.get("trade_count", 0)
+        sharpe = metrics.get("sharpe", 0.0)
+
+        if trade_count >= min_trades and sharpe >= min_sharpe:
+            promoted = self.update_status(strategy_id, "ACTIVE")
+            return ("promoted", promoted)
+        else:
+            deprecated = self.update_status(strategy_id, "DEPRECATED")
+            return ("deprecated", deprecated)
 
 
 strategy_repository = StrategyRepository()
