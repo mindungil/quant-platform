@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-
 import { clearToken, hasRole } from "../lib/api";
 
 const baseLinks = [
@@ -11,7 +10,7 @@ const baseLinks = [
   ["/chat", "AI 에이전트"],
   ["/agent", "자동매매"],
   ["/performance", "성과"],
-  ["/orders", "주문 이력"],
+  ["/orders", "주문"],
   ["/settings", "설정"],
 ];
 
@@ -23,32 +22,33 @@ export function Navigation() {
   }
 
   return (
-    <nav className="flex flex-wrap items-center gap-1 text-sm">
+    <nav className="flex items-center gap-0.5 text-[13px]">
       {links.map(([href, label]) => {
         const isActive = pathname === href || pathname?.startsWith(href + "/");
         return (
           <Link
             key={href}
             href={href}
-            className={`relative rounded px-3 py-2 transition-colors ${
+            className={`relative rounded-lg px-3 py-1.5 transition-colors ${
               isActive
                 ? "font-medium text-white"
-                : "text-neutral-400 hover:text-white"
+                : "text-neutral-500 hover:text-white"
             }`}
           >
             {label}
             {isActive && (
               <motion.div
-                layoutId="nav-indicator"
-                className="absolute inset-x-1 -bottom-px h-0.5 rounded-full bg-white"
-                transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                layoutId="nav-active"
+                className="absolute inset-0 rounded-lg bg-white/[0.06]"
+                transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                style={{ zIndex: -1 }}
               />
             )}
           </Link>
         );
       })}
       <button
-        className="ml-2 rounded border border-neutral-700 px-3 py-1.5 text-sm text-neutral-400 transition-colors hover:border-red-400/50 hover:text-red-400"
+        className="ml-3 rounded-lg px-2.5 py-1 text-[13px] text-neutral-600 transition-colors hover:text-red-400"
         onClick={() => {
           clearToken();
           window.location.href = "/";
