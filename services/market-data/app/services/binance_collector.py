@@ -22,18 +22,21 @@ from app.models.candle import CandlePayload
 
 logger = logging.getLogger("binance_collector")
 
-WS_URL = os.getenv(
-    "BINANCE_WS_URL",
-    "wss://stream.binance.com:9443/ws/btcusdt@kline_1h",
-)
-LOCAL_INGEST_BASE = os.getenv("LOCAL_INGEST_BASE", "http://127.0.0.1:8002")
-ASSET = os.getenv("BINANCE_COLLECTOR_ASSET", "BTCUSDT")
+LOCAL_INGEST_BASE = os.getenv("LOCAL_INGEST_BASE", "http://127.0.0.1:8001")
+MONITORED_ASSETS = os.getenv("BINANCE_COLLECTOR_ASSETS", "BTCUSDT,ETHUSDT,SOLUSDT")
+INTERVAL = os.getenv("BINANCE_COLLECTOR_INTERVAL", "1h")
 RECONNECT_DELAY_SECONDS = 5
 MAX_RECONNECT_DELAY_SECONDS = 120
 
 
+def _build_ws_url(assets: list[str], interval: str) -> str:
+    """Build combined stream URL for multiple assets."""
+    streams = "/".join(f"{a.lower()}@kline_{interval}" for a in assets)
+    return f"wss://stream.binance.com:9443/stream?streams={streams}"
+
+
 def is_enabled() -> bool:
-    return os.getenv("ENABLE_BINANCE_COLLECTOR", "false").lower() == "true"
+    return os.getenv("ENABLE_BINANCE_COLLECTOR", "true").lower() == "true"
 
 
 def _kline_to_candle(kline: dict) -> CandlePayload:
@@ -48,63 +51,67 @@ def _kline_to_candle(kline: dict) -> CandlePayload:
     )
 
 
-async def _post_candle(candle: CandlePayload) -> None:
+async def _post_candle(asset: str, candle: CandlePayload) -> None:
     """POST a closed candle to the local market-data ingestion API."""
     import httpx
 
-    url = f"{LOCAL_INGEST_BASE}/candles/{ASSET}"
+    url = f"{LOCAL_INGEST_BASE}/candles/{asset}"
     payload = candle.model_dump(mode="json")
     payload["timestamp"] = candle.timestamp.isoformat()
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.post(url, json=payload)
             if response.status_code < 300:
-                logger.info(
-                    "Ingested closed candle for %s at %s",
-                    ASSET,
-                    candle.timestamp.isoformat(),
-                )
+                logger.info("Ingested candle %s at %s", asset, candle.timestamp.isoformat())
             else:
-                logger.warning(
-                    "Ingest rejected (status=%d): %s",
-                    response.status_code,
-                    response.text[:200],
-                )
+                logger.warning("Ingest rejected %s (status=%d)", asset, response.status_code)
     except Exception:
-        logger.exception("Failed to POST candle to local ingestion API")
+        logger.exception("Failed to POST candle for %s", asset)
 
 
 async def _run_ws_loop() -> None:
-    """Main WebSocket loop with exponential-backoff reconnection."""
+    """Multi-asset WebSocket loop with exponential-backoff reconnection."""
+    assets = [a.strip() for a in MONITORED_ASSETS.split(",") if a.strip()]
+    if not assets:
+        logger.warning("No assets configured for Binance collector")
+        return
+
+    ws_url = _build_ws_url(assets, INTERVAL)
     delay = RECONNECT_DELAY_SECONDS
 
     while True:
         try:
-            logger.info("Connecting to Binance WebSocket: %s", WS_URL)
-            async with websockets.connect(WS_URL, ping_interval=20, ping_timeout=10) as ws:
-                delay = RECONNECT_DELAY_SECONDS  # reset on successful connect
-                logger.info("Connected to Binance WebSocket")
+            logger.info("Connecting to Binance WebSocket for %d assets: %s", len(assets), assets)
+            async with websockets.connect(ws_url, ping_interval=20, ping_timeout=10) as ws:
+                delay = RECONNECT_DELAY_SECONDS
+                logger.info("Connected to Binance combined stream")
                 async for raw_message in ws:
                     try:
                         message = json.loads(raw_message)
                     except json.JSONDecodeError:
-                        logger.warning("Non-JSON message received, skipping")
                         continue
 
-                    kline = message.get("k")
+                    # Combined stream wraps data in {"stream": "...", "data": {...}}
+                    data = message.get("data", message)
+                    kline = data.get("k")
                     if kline is None:
                         continue
 
-                    is_closed = kline.get("x", False)
-                    if not is_closed:
+                    if not kline.get("x", False):
                         continue
 
-                    logger.info("Candle closed for %s at kline.t=%s", ASSET, kline.get("t"))
+                    # Extract asset from stream name or kline symbol
+                    asset = kline.get("s", "").upper()
+                    if not asset:
+                        stream = message.get("stream", "")
+                        asset = stream.split("@")[0].upper() if "@" in stream else "UNKNOWN"
+
+                    logger.info("Candle closed: %s at kline.t=%s", asset, kline.get("t"))
                     try:
                         candle = _kline_to_candle(kline)
-                        await _post_candle(candle)
+                        await _post_candle(asset, candle)
                     except Exception:
-                        logger.exception("Error processing closed kline")
+                        logger.exception("Error processing kline for %s", asset)
 
         except asyncio.CancelledError:
             logger.info("Binance collector task cancelled, shutting down")

@@ -29,3 +29,13 @@ class MemoryClient:
         )
         response.raise_for_status()
         return MemoryRecord.model_validate(response.json())
+
+    def reinforce(self, memory_id: str, trade_outcome: float, outcome_sharpe: float = 0.0) -> dict:
+        """Reinforce a memory record with trade outcome."""
+        response = httpx.post(
+            f"{self._base_url}/memory/{memory_id}/reinforce",
+            json={"trade_outcome": trade_outcome, "outcome_sharpe": outcome_sharpe},
+            timeout=5.0,
+        )
+        response.raise_for_status()
+        return response.json()

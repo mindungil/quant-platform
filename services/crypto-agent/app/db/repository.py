@@ -76,4 +76,20 @@ class DecisionRepository:
         return self._items.get(asset, [])
 
 
+    def get_by_correlation_id(self, correlation_id: str) -> dict | None:
+        row = self._store.fetch_one(
+            """
+            SELECT payload
+            FROM crypto_decisions
+            WHERE payload->>'correlation_id' = :cid
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            {"cid": correlation_id},
+        )
+        if row is not None:
+            return deserialize_json(row["payload"]) or {}
+        return None
+
+
 decision_repository = DecisionRepository()

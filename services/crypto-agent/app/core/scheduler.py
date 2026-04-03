@@ -156,11 +156,43 @@ class AgentScheduler:
             except Exception:
                 pass
 
+        # Auto-rebalance check (every 12 cycles = ~1 hour at 5min interval)
+        if self._cycle_count % 12 == 0:
+            await self._check_rebalance(loop)
+
         elapsed = time.monotonic() - cycle_start
         logger.info("agent_cycle_complete", extra={
             "cycle": self._cycle_count,
             "elapsed_ms": round(elapsed * 1000),
         })
+
+    async def _check_rebalance(self, loop: asyncio.AbstractEventLoop) -> None:
+        """Check portfolio and trigger rebalancing if needed."""
+        try:
+            import httpx
+            portfolio_url = settings.portfolio_service_base_url.rstrip("/")
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(f"{portfolio_url}/portfolio/bootstrap")
+                if resp.status_code != 200:
+                    return
+                portfolio = resp.json()
+
+            if portfolio.get("rebalance_needed"):
+                logger.info("auto_rebalance_triggered", extra={
+                    "total_exposure": portfolio.get("total_exposure"),
+                    "largest_position": portfolio.get("largest_position"),
+                })
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    resp = await client.post(
+                        f"{portfolio_url}/portfolio/bootstrap/optimize",
+                        json={"method": "risk_parity"},
+                    )
+                    if resp.status_code == 200:
+                        logger.info("auto_rebalance_complete", extra={"result": resp.json()})
+                    else:
+                        logger.warning("auto_rebalance_failed", extra={"status": resp.status_code})
+        except Exception as exc:
+            logger.debug("rebalance_check_skipped", extra={"error": str(exc)[:100]})
 
 
 scheduler = AgentScheduler()

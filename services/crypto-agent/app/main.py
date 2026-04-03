@@ -7,6 +7,7 @@ from app.core.config import settings
 from app.core.scheduler import scheduler
 from app.services.event_publisher import publisher
 from app.services.nats_consumer import consumer
+from app.services.outcome_consumer import outcome_consumer
 from shared.health import check_redis, check_sql, check_tcp
 from shared.observability import install_http_observability, startup_dependency_guard
 
@@ -23,11 +24,13 @@ async def lifespan(_: FastAPI):
     )
     await publisher.connect()
     await consumer.start()
+    await outcome_consumer.start()
     await scheduler.start()
     try:
         yield
     finally:
         await scheduler.stop()
+        await outcome_consumer.stop()
         await consumer.stop()
         await publisher.close()
 
