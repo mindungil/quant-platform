@@ -26,6 +26,11 @@ class BacktestResult(BaseModel):
     payoff_ratio: float = 0.0
     total_commission: float = 0.0
     out_of_sample_sharpe: float = 0.0
+    # Extended trade metrics
+    max_consecutive_wins: int = 0
+    max_consecutive_losses: int = 0
+    max_favorable_excursion: float = 0.0
+    max_adverse_excursion: float = 0.0
     status: str
 
 

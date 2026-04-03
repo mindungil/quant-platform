@@ -130,67 +130,85 @@ def _fetch_portfolio_balance(user_id: str) -> float:
 def _calculate_position_size(
     signal_score: float,
     portfolio_balance: float,
-    win_rate: float = 0.55,
-    payoff_ratio: float = 1.5,
+    win_rate: float = 0.0,
+    payoff_ratio: float = 0.0,
     realized_vol: float = 0.0,
     recent_returns: list[float] | None = None,
 ) -> float:
-    """Position sizing with Kelly Criterion + scipy optimization.
+    """Position sizing: Kelly Criterion + volatility targeting + signal scaling.
 
-    Two modes:
-    1. If recent_returns provided (30+): use scipy to optimize Kelly from actual return distribution
-    2. Otherwise: use analytical Kelly formula f* = (p*b - q) / b
+    Priority:
+    1. scipy-optimized Kelly from actual return distribution (30+ samples)
+    2. Analytical Kelly from win_rate/payoff_ratio (if provided and valid)
+    3. Conservative fixed fraction fallback (1% of portfolio)
 
-    Always applies fractional Kelly and volatility adjustment.
+    All results go through fractional Kelly, signal scaling, vol adjustment.
     """
+    import numpy as np
+
     kelly_optimal = 0.0
 
     # Mode 1: scipy-optimized Kelly from return distribution
     if recent_returns and len(recent_returns) >= 30:
         try:
-            import numpy as np
             from scipy.optimize import minimize_scalar
-
             returns = np.array(recent_returns)
 
+            # Compute win_rate and payoff from actual data if not provided
+            if win_rate <= 0:
+                wins = returns[returns > 0]
+                losses = returns[returns <= 0]
+                win_rate = len(wins) / max(len(returns), 1)
+                if len(wins) > 0 and len(losses) > 0 and np.mean(np.abs(losses)) > 0:
+                    payoff_ratio = np.mean(wins) / np.mean(np.abs(losses))
+
+            # Autocorrelation adjustment — reduce Kelly if returns are autocorrelated
+            ac_adj = 1.0
+            if len(returns) >= 50:
+                lag1 = np.corrcoef(returns[:-1], returns[1:])[0, 1]
+                if not np.isnan(lag1):
+                    ac_adj = max(0.5, 1.0 - abs(lag1))
+
             def neg_growth_rate(fraction: float) -> float:
-                """Negative geometric growth rate — we minimize this."""
                 if fraction <= 0:
                     return 0.0
-                growth = np.mean(np.log(1 + fraction * returns))
+                growth = np.mean(np.log(np.maximum(1 + fraction * returns, 1e-10)))
                 return -growth
 
             result = minimize_scalar(neg_growth_rate, bounds=(0.001, 0.5), method="bounded")
-            if result.success:
-                kelly_optimal = result.x
+            if result.success and result.x > 0:
+                kelly_optimal = result.x * ac_adj
         except Exception:
             pass
 
-    # Mode 2: Analytical Kelly fallback
-    if kelly_optimal <= 0:
+    # Mode 2: Analytical Kelly (only if valid win_rate/payoff)
+    if kelly_optimal <= 0 and win_rate > 0.1 and payoff_ratio > 0.1:
         p = max(0.01, min(0.99, win_rate))
         q = 1 - p
         b = max(0.01, payoff_ratio)
-        kelly_optimal = (p * b - q) / b
+        kelly_raw = (p * b - q) / b
+        # Cap analytical Kelly at 25% (can be unreliable without data)
+        kelly_optimal = min(max(kelly_raw, 0.0), 0.25)
 
-    # If Kelly is negative, no position
+    # Mode 3: Conservative fallback
     if kelly_optimal <= 0:
-        return 0.0
+        kelly_optimal = 0.02  # 2% fixed fraction
 
-    # Fractional Kelly for safety
+    # Fractional Kelly for safety (half-Kelly standard)
     risk_fraction = kelly_optimal * settings.kelly_fraction
 
-    # Scale by signal strength
-    signal_multiplier = min(abs(signal_score) / 0.6, 1.0)
-    risk_fraction *= signal_multiplier
+    # Signal strength scaling — sigmoid-like curve instead of linear
+    abs_signal = abs(signal_score)
+    signal_multiplier = 1.0 / (1.0 + np.exp(-10 * (abs_signal - 0.4)))  # steep sigmoid around 0.4
+    risk_fraction *= max(signal_multiplier, 0.1)  # minimum 10% of position
 
-    # Volatility adjustment
+    # Volatility targeting — scale position inversely to realized vol
     if realized_vol > 0 and settings.target_vol > 0:
-        vol_scalar = settings.target_vol / max(realized_vol, 0.01)
-        vol_scalar = min(vol_scalar, 1.5)
+        vol_scalar = settings.target_vol / max(realized_vol, 0.005)
+        vol_scalar = max(0.3, min(vol_scalar, 2.0))  # clamp between 0.3x and 2x
         risk_fraction *= vol_scalar
 
-    # Cap at max_position_pct
+    # Hard caps
     risk_fraction = min(risk_fraction, settings.max_position_pct)
 
     notional = portfolio_balance * risk_fraction

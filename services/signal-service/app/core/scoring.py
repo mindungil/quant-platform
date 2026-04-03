@@ -105,13 +105,48 @@ def build_signal_response(
             score_components["fear_greed_index"] = fg_score * external_signal_weight
             external_components.append(fg_score)
 
-    # --- Combine ---
+    # --- Regime-aware weighted combine ---
     if not technical_components and not external_components:
         total_score = 0.0
     else:
-        technical_score = sum(technical_components) / len(technical_components) if technical_components else 0.0
-        # Apply ADX trend filter
+        # Determine regime bias from ADX for weighting
+        adx = features.adx_14 or 20
+        is_trending = adx >= 25
+
+        # Assign weights per component type: momentum indicators get more weight in trends
+        component_keys = list(score_components.keys())
+        momentum_names = {"rsi", "macd", "stochastic"}
+        reversion_names = {"sma_20", "vwap", "bollinger"}
+
+        weighted_sum = 0.0
+        weight_total = 0.0
+        for i, val in enumerate(technical_components):
+            key = component_keys[i] if i < len(component_keys) else ""
+            # Base weight: signal strength (stronger signals get more weight)
+            w = 0.5 + abs(val) * 0.5
+            # Regime adjustment
+            if is_trending and key in momentum_names:
+                w *= 1.4
+            elif is_trending and key in reversion_names:
+                w *= 0.7
+            elif not is_trending and key in reversion_names:
+                w *= 1.4
+            elif not is_trending and key in momentum_names:
+                w *= 0.7
+            weighted_sum += val * w
+            weight_total += w
+
+        technical_score = weighted_sum / max(weight_total, 0.01)
         technical_score *= adx_multiplier
+
+        # Signal agreement bonus: if most signals agree, boost confidence
+        if len(technical_components) >= 3:
+            signs = [1 if v > 0.05 else (-1 if v < -0.05 else 0) for v in technical_components]
+            pos = sum(1 for s in signs if s > 0)
+            neg = sum(1 for s in signs if s < 0)
+            agreement = max(pos, neg) / max(len(signs), 1)
+            if agreement >= 0.8:
+                technical_score *= 1.15
 
         if external_components:
             external_score = sum(external_components) / len(external_components)

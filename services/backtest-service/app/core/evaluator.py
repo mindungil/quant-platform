@@ -49,35 +49,49 @@ def _calc_macd(closes: pd.Series, fast: int = 12, slow: int = 26, signal: int = 
     return (histogram / norm).fillna(0)
 
 
-# ---------------------------------------------------------------------------
-# Synthetic price generator (fallback when market-data unavailable)
-# ---------------------------------------------------------------------------
-
-
-def _generate_synthetic_candles(n: int, seed: int = 42) -> pd.DataFrame:
-    """Generate realistic-looking BTC hourly candles via geometric Brownian motion."""
-    rng = np.random.default_rng(seed)
-    dt = 1 / (365 * 24)  # hourly steps
-    mu, sigma = 0.0, 0.6  # annualised drift and vol
-    log_returns = (mu - 0.5 * sigma**2) * dt + sigma * math.sqrt(dt) * rng.standard_normal(n)
-    prices = 30000 * np.exp(np.cumsum(log_returns))  # start around 30k
-    high = prices * (1 + rng.uniform(0, 0.005, n))
-    low = prices * (1 - rng.uniform(0, 0.005, n))
-    open_ = prices * (1 + rng.uniform(-0.002, 0.002, n))
-    volume = rng.uniform(100, 2000, n)
-    ts = pd.date_range(end=datetime.now(UTC), periods=n, freq="h")
-    return pd.DataFrame(
-        {"timestamp": ts, "open": open_, "high": high, "low": low, "close": prices, "volume": volume}
-    )
+def _calc_atr(highs: pd.Series, lows: pd.Series, closes: pd.Series, period: int = 14) -> pd.Series:
+    """Compute Average True Range."""
+    prev_close = closes.shift(1)
+    tr1 = highs - lows
+    tr2 = (highs - prev_close).abs()
+    tr3 = (lows - prev_close).abs()
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    atr = tr.ewm(span=period, min_periods=period).mean()
+    return atr.fillna(method="bfill").fillna(tr)
 
 
 # ---------------------------------------------------------------------------
-# Fetch candles from market-data service
+# Slippage model
+# ---------------------------------------------------------------------------
+
+
+def _calc_slippage(price: float, base_cost_bps: float, order_size: float, avg_volume: float) -> float:
+    """Volume-impact slippage model.
+
+    Slippage = base_cost + volume_impact
+    volume_impact scales quadratically with order_size / avg_volume ratio,
+    reflecting that larger orders relative to volume cause more market impact.
+    """
+    base = price * (base_cost_bps / 10000)
+    if avg_volume > 0 and order_size > 0:
+        participation_rate = min(order_size / avg_volume, 1.0)
+        # Square-root impact model (common in execution cost literature)
+        impact = price * 0.001 * math.sqrt(participation_rate)
+    else:
+        impact = 0.0
+    return base + impact
+
+
+# ---------------------------------------------------------------------------
+# Fetch candles from market-data service (NO synthetic fallback)
 # ---------------------------------------------------------------------------
 
 
 def _fetch_candles(asset: str, limit: int) -> pd.DataFrame:
-    """Try to fetch historical candles from market-data; fall back to synthetic."""
+    """Fetch historical candles from market-data service.
+
+    Raises ValueError if insufficient real data is available.
+    """
     try:
         url = f"{settings.market_data_base_url}/candles/{asset}/history"
         resp = httpx.get(url, params={"limit": limit}, timeout=10.0)
@@ -91,10 +105,15 @@ def _fetch_candles(asset: str, limit: int) -> pd.DataFrame:
             df = df.sort_values("timestamp").reset_index(drop=True)
             if len(df) >= 50:
                 return df
-            logger.warning("market-data returned only %d candles, using synthetic data", len(df))
-    except Exception as exc:
-        logger.warning("could not fetch candles from market-data (%s), using synthetic data", exc)
-    return _generate_synthetic_candles(limit)
+            raise ValueError(
+                f"market-data returned only {len(df)} candles for {asset}, "
+                f"need at least 50 for a meaningful backtest"
+            )
+    except httpx.HTTPError as exc:
+        raise ValueError(
+            f"Failed to fetch candles from market-data for {asset}: {exc}"
+        ) from exc
+    raise ValueError(f"No candle data returned from market-data for {asset}")
 
 
 # ---------------------------------------------------------------------------
@@ -104,92 +123,185 @@ def _fetch_candles(asset: str, limit: int) -> pd.DataFrame:
 
 def _simulate_trades(
     closes: pd.Series,
+    highs: pd.Series,
+    lows: pd.Series,
+    volumes: pd.Series,
+    atr: pd.Series,
     score: pd.Series,
     start: int,
     end: int,
     entry_threshold: float,
     exit_threshold: float,
-    stop_loss_pct: float,
-    take_profit_pct: float,
-    trailing_stop_pct: float,
-    cost_per_trade: float,
+    atr_stop_mult: float,
+    atr_tp_mult: float,
+    atr_trailing_mult: float,
+    commission_bps: float,
+    slippage_bps: float,
+    order_size: float = 1.0,
 ) -> tuple[list[dict], float]:
-    """Run trade simulation on a slice. Returns (trades, total_commission)."""
-    trades = []
+    """Run trade simulation on a slice with ATR-based stops and volume-impact slippage.
+
+    Returns (trades, total_commission).
+    """
+    trades: list[dict] = []
     total_commission = 0.0
     position = None
 
+    # Pre-compute rolling average volume for slippage model
+    avg_vol = volumes.rolling(20, min_periods=1).mean()
+
     for i in range(max(start, 1), end):
         price = closes.iloc[i]
+        high = highs.iloc[i]
+        low = lows.iloc[i]
         s = score.iloc[i]
+        current_atr = atr.iloc[i]
+        current_avg_vol = avg_vol.iloc[i]
 
         if position is None:
             if s > entry_threshold:
-                effective_entry = price * (1 + cost_per_trade)
-                total_commission += price * cost_per_trade
-                position = {"side": "BUY", "entry_price": effective_entry, "highest": price, "entry_idx": i}
+                slip = _calc_slippage(price, slippage_bps, order_size, current_avg_vol)
+                commission = price * (commission_bps / 10000)
+                total_commission += commission + slip
+                effective_entry = price + slip + commission
+                # ATR-based stops
+                stop_price = price - atr_stop_mult * current_atr
+                tp_price = price + atr_tp_mult * current_atr
+                trailing_stop = price - atr_trailing_mult * current_atr
+                position = {
+                    "side": "BUY", "entry_price": effective_entry, "raw_entry": price,
+                    "highest": high, "entry_idx": i,
+                    "stop_price": stop_price, "tp_price": tp_price,
+                    "trailing_stop": trailing_stop, "atr_at_entry": current_atr,
+                    "max_favorable": 0.0, "max_adverse": 0.0,
+                }
             elif s < -entry_threshold:
-                effective_entry = price * (1 - cost_per_trade)
-                total_commission += price * cost_per_trade
-                position = {"side": "SELL", "entry_price": effective_entry, "lowest": price, "entry_idx": i}
+                slip = _calc_slippage(price, slippage_bps, order_size, current_avg_vol)
+                commission = price * (commission_bps / 10000)
+                total_commission += commission + slip
+                effective_entry = price - slip - commission
+                stop_price = price + atr_stop_mult * current_atr
+                tp_price = price - atr_tp_mult * current_atr
+                trailing_stop = price + atr_trailing_mult * current_atr
+                position = {
+                    "side": "SELL", "entry_price": effective_entry, "raw_entry": price,
+                    "lowest": low, "entry_idx": i,
+                    "stop_price": stop_price, "tp_price": tp_price,
+                    "trailing_stop": trailing_stop, "atr_at_entry": current_atr,
+                    "max_favorable": 0.0, "max_adverse": 0.0,
+                }
         else:
             entry_price = position["entry_price"]
+            raw_entry = position["raw_entry"]
 
             if position["side"] == "BUY":
-                position["highest"] = max(position.get("highest", price), price)
-                effective_exit = price * (1 - cost_per_trade)
+                position["highest"] = max(position.get("highest", high), high)
+                # Track MFE / MAE
+                unrealized = (high - raw_entry) / raw_entry
+                position["max_favorable"] = max(position["max_favorable"], unrealized)
+                adverse = (raw_entry - low) / raw_entry
+                position["max_adverse"] = max(position["max_adverse"], adverse)
+
+                # Update trailing ATR stop
+                new_trailing = position["highest"] - atr_trailing_mult * current_atr
+                position["trailing_stop"] = max(position["trailing_stop"], new_trailing)
+
+                # Exit logic
+                slip = _calc_slippage(price, slippage_bps, order_size, current_avg_vol)
+                commission = price * (commission_bps / 10000)
+                effective_exit = price - slip - commission
                 pnl_pct = (effective_exit - entry_price) / entry_price
 
                 should_exit = False
                 exit_reason = ""
-                if pnl_pct >= take_profit_pct:
+                if high >= position["tp_price"]:
                     should_exit, exit_reason = True, "take_profit"
-                elif pnl_pct <= -stop_loss_pct:
+                    effective_exit = position["tp_price"] - slip - commission
+                    pnl_pct = (effective_exit - entry_price) / entry_price
+                elif low <= position["stop_price"]:
                     should_exit, exit_reason = True, "stop_loss"
-                elif trailing_stop_pct > 0 and price <= position["highest"] * (1 - trailing_stop_pct):
+                    effective_exit = position["stop_price"] - slip - commission
+                    pnl_pct = (effective_exit - entry_price) / entry_price
+                elif low <= position["trailing_stop"]:
                     should_exit, exit_reason = True, "trailing_stop"
+                    effective_exit = position["trailing_stop"] - slip - commission
+                    pnl_pct = (effective_exit - entry_price) / entry_price
                 elif s < -exit_threshold:
                     should_exit, exit_reason = True, "signal_reversal"
 
                 if should_exit:
-                    total_commission += price * cost_per_trade
-                    trades.append({"entry_price": entry_price, "exit_price": effective_exit, "pnl_pct": pnl_pct, "side": "BUY", "reason": exit_reason})
+                    total_commission += commission + slip
+                    trades.append({
+                        "entry_price": entry_price, "exit_price": effective_exit,
+                        "pnl_pct": pnl_pct, "side": "BUY", "reason": exit_reason,
+                        "max_favorable_excursion": position["max_favorable"],
+                        "max_adverse_excursion": position["max_adverse"],
+                    })
                     position = None
 
             else:  # SELL (short)
-                position["lowest"] = min(position.get("lowest", price), price)
-                effective_exit = price * (1 + cost_per_trade)
+                position["lowest"] = min(position.get("lowest", low), low)
+                unrealized = (raw_entry - low) / raw_entry
+                position["max_favorable"] = max(position["max_favorable"], unrealized)
+                adverse = (high - raw_entry) / raw_entry
+                position["max_adverse"] = max(position["max_adverse"], adverse)
+
+                # Update trailing ATR stop (moves down for shorts)
+                new_trailing = position["lowest"] + atr_trailing_mult * current_atr
+                position["trailing_stop"] = min(position["trailing_stop"], new_trailing)
+
+                slip = _calc_slippage(price, slippage_bps, order_size, current_avg_vol)
+                commission = price * (commission_bps / 10000)
+                effective_exit = price + slip + commission
                 pnl_pct = (entry_price - effective_exit) / entry_price
 
                 should_exit = False
                 exit_reason = ""
-                if pnl_pct >= take_profit_pct:
+                if low <= position["tp_price"]:
                     should_exit, exit_reason = True, "take_profit"
-                elif pnl_pct <= -stop_loss_pct:
+                    effective_exit = position["tp_price"] + slip + commission
+                    pnl_pct = (entry_price - effective_exit) / entry_price
+                elif high >= position["stop_price"]:
                     should_exit, exit_reason = True, "stop_loss"
-                elif trailing_stop_pct > 0 and price >= position["lowest"] * (1 + trailing_stop_pct):
+                    effective_exit = position["stop_price"] + slip + commission
+                    pnl_pct = (entry_price - effective_exit) / entry_price
+                elif high >= position["trailing_stop"]:
                     should_exit, exit_reason = True, "trailing_stop"
+                    effective_exit = position["trailing_stop"] + slip + commission
+                    pnl_pct = (entry_price - effective_exit) / entry_price
                 elif s > exit_threshold:
                     should_exit, exit_reason = True, "signal_reversal"
 
                 if should_exit:
-                    total_commission += price * cost_per_trade
-                    trades.append({"entry_price": entry_price, "exit_price": effective_exit, "pnl_pct": pnl_pct, "side": "SELL", "reason": exit_reason})
+                    total_commission += commission + slip
+                    trades.append({
+                        "entry_price": entry_price, "exit_price": effective_exit,
+                        "pnl_pct": pnl_pct, "side": "SELL", "reason": exit_reason,
+                        "max_favorable_excursion": position["max_favorable"],
+                        "max_adverse_excursion": position["max_adverse"],
+                    })
                     position = None
 
     # Close open position at end
     if position is not None:
         price = closes.iloc[end - 1]
         entry_price = position["entry_price"]
-        cost = price * cost_per_trade
-        total_commission += cost
+        avg_v = avg_vol.iloc[end - 1]
+        slip = _calc_slippage(price, slippage_bps, order_size, avg_v)
+        commission = price * (commission_bps / 10000)
+        total_commission += commission + slip
         if position["side"] == "BUY":
-            effective_exit = price * (1 - cost_per_trade)
+            effective_exit = price - slip - commission
             pnl_pct = (effective_exit - entry_price) / entry_price
         else:
-            effective_exit = price * (1 + cost_per_trade)
+            effective_exit = price + slip + commission
             pnl_pct = (entry_price - effective_exit) / entry_price
-        trades.append({"entry_price": entry_price, "exit_price": effective_exit, "pnl_pct": pnl_pct, "side": position["side"], "reason": "end_of_data"})
+        trades.append({
+            "entry_price": entry_price, "exit_price": effective_exit,
+            "pnl_pct": pnl_pct, "side": position["side"], "reason": "end_of_data",
+            "max_favorable_excursion": position.get("max_favorable", 0.0),
+            "max_adverse_excursion": position.get("max_adverse", 0.0),
+        })
 
     return trades, total_commission
 
@@ -197,9 +309,13 @@ def _simulate_trades(
 def _calc_metrics(trades: list[dict], risk_free_daily: float) -> dict:
     """Calculate all performance metrics from a list of trades."""
     if not trades:
-        return {"sharpe": 0.0, "sortino": 0.0, "max_dd": 0.0, "win_rate": 0.0,
-                "total_return": 0.0, "profit_factor": 0.0, "calmar": 0.0,
-                "avg_win": 0.0, "avg_loss": 0.0, "payoff_ratio": 0.0, "mean_pnl": 0.0}
+        return {
+            "sharpe": 0.0, "sortino": 0.0, "max_dd": 0.0, "win_rate": 0.0,
+            "total_return": 0.0, "profit_factor": 0.0, "calmar": 0.0,
+            "avg_win": 0.0, "avg_loss": 0.0, "payoff_ratio": 0.0, "mean_pnl": 0.0,
+            "max_consecutive_wins": 0, "max_consecutive_losses": 0,
+            "max_favorable_excursion": 0.0, "max_adverse_excursion": 0.0,
+        }
 
     returns = np.array([t["pnl_pct"] for t in trades])
     n = len(returns)
@@ -234,6 +350,28 @@ def _calc_metrics(trades: list[dict], risk_free_daily: float) -> dict:
 
     total_return = float(np.prod(1 + returns) - 1)
 
+    # Consecutive wins/losses
+    max_consec_wins = 0
+    max_consec_losses = 0
+    current_wins = 0
+    current_losses = 0
+    for r in returns:
+        if r > 0:
+            current_wins += 1
+            current_losses = 0
+            max_consec_wins = max(max_consec_wins, current_wins)
+        elif r < 0:
+            current_losses += 1
+            current_wins = 0
+            max_consec_losses = max(max_consec_losses, current_losses)
+        else:
+            current_wins = 0
+            current_losses = 0
+
+    # Max favorable / adverse excursion across all trades
+    mfe = max((t.get("max_favorable_excursion", 0.0) for t in trades), default=0.0)
+    mae = max((t.get("max_adverse_excursion", 0.0) for t in trades), default=0.0)
+
     # Clamp ratios to prevent extreme values from tiny samples
     sharpe = max(-10.0, min(10.0, sharpe))
     sortino = max(-10.0, min(10.0, sortino))
@@ -246,13 +384,23 @@ def _calc_metrics(trades: list[dict], risk_free_daily: float) -> dict:
         "calmar": round(calmar, 4), "avg_win": round(avg_win, 6),
         "avg_loss": round(avg_loss, 6), "payoff_ratio": round(payoff_ratio, 4),
         "mean_pnl": round(mean_ret, 6),
+        "max_consecutive_wins": max_consec_wins,
+        "max_consecutive_losses": max_consec_losses,
+        "max_favorable_excursion": round(mfe, 6),
+        "max_adverse_excursion": round(mae, 6),
     }
 
 
 def evaluate_strategy(payload: BacktestRequest) -> BacktestResult:
-    """Run backtest with transaction costs and walk-forward validation."""
+    """Run backtest with ATR-based stops, volume-impact slippage, and walk-forward validation.
+
+    Raises ValueError if real market data is unavailable.
+    """
     df = _fetch_candles(payload.asset, payload.sample_size)
     closes = df["close"]
+    highs = df["high"]
+    lows = df["low"]
+    volumes = df["volume"]
 
     # Compute indicators and weighted signal score
     indicators: dict[str, pd.Series] = {}
@@ -267,15 +415,25 @@ def evaluate_strategy(payload: BacktestRequest) -> BacktestResult:
         else:
             score += indicators["rsi"] * weight
 
-    cost_per_trade = (settings.slippage_bps + settings.commission_bps) / 10000
+    # Compute ATR for adaptive stops
+    atr = _calc_atr(highs, lows, closes)
+
+    commission_bps = settings.commission_bps
+    slippage_bps = settings.slippage_bps
     risk_free_daily = (1 + settings.risk_free_rate_annual) ** (1/252) - 1
+
+    # ATR multipliers for stops
+    atr_stop_mult = 2.0
+    atr_tp_mult = 3.0
+    atr_trailing_mult = 2.5
 
     # --- Full-period simulation ---
     trades, total_commission = _simulate_trades(
-        closes, score, 0, len(df),
+        closes, highs, lows, volumes, atr, score,
+        0, len(df),
         settings.entry_threshold, settings.exit_threshold,
-        settings.stop_loss_pct, settings.take_profit_pct, settings.trailing_stop_pct,
-        cost_per_trade,
+        atr_stop_mult, atr_tp_mult, atr_trailing_mult,
+        commission_bps, slippage_bps,
     )
 
     trade_count = len(trades)
@@ -288,7 +446,7 @@ def evaluate_strategy(payload: BacktestRequest) -> BacktestResult:
 
     m = _calc_metrics(trades, risk_free_daily)
 
-    # --- Walk-forward out-of-sample validation ---
+    # --- Walk-forward out-of-sample validation with adaptive thresholds ---
     n = len(df)
     n_windows = settings.walk_forward_windows
     window_size = n // n_windows if n_windows > 0 else n
@@ -299,11 +457,23 @@ def evaluate_strategy(payload: BacktestRequest) -> BacktestResult:
         split = int(w_start + (w_end - w_start) * settings.train_ratio)
         if split >= w_end - 5:
             continue
+
+        # Adaptive thresholds: optimize entry/exit on the training window
+        train_scores = score.iloc[w_start:split]
+        if len(train_scores) > 10:
+            score_std = train_scores.std()
+            adaptive_entry = max(0.1, score_std * 1.5)
+            adaptive_exit = max(0.05, score_std * 0.8)
+        else:
+            adaptive_entry = settings.entry_threshold
+            adaptive_exit = settings.exit_threshold
+
         oos_trades, _ = _simulate_trades(
-            closes, score, split, w_end,
-            settings.entry_threshold, settings.exit_threshold,
-            settings.stop_loss_pct, settings.take_profit_pct, settings.trailing_stop_pct,
-            cost_per_trade,
+            closes, highs, lows, volumes, atr, score,
+            split, w_end,
+            adaptive_entry, adaptive_exit,
+            atr_stop_mult, atr_tp_mult, atr_trailing_mult,
+            commission_bps, slippage_bps,
         )
         if len(oos_trades) >= 3:  # need minimum trades for meaningful Sharpe
             oos_m = _calc_metrics(oos_trades, risk_free_daily)
@@ -337,6 +507,10 @@ def evaluate_strategy(payload: BacktestRequest) -> BacktestResult:
         payoff_ratio=m["payoff_ratio"],
         total_commission=round(total_commission, 2),
         out_of_sample_sharpe=oos_sharpe,
+        max_consecutive_wins=m["max_consecutive_wins"],
+        max_consecutive_losses=m["max_consecutive_losses"],
+        max_favorable_excursion=m["max_favorable_excursion"],
+        max_adverse_excursion=m["max_adverse_excursion"],
         status=status,
     )
 
@@ -394,6 +568,12 @@ async def _run_job(job_id: str, payload: BacktestRequest) -> None:
                 await _event_callback("backtest.completed", event_data)
             except Exception:
                 logger.exception("failed to publish backtest.completed event for job %s", job_id)
+    except ValueError as exc:
+        # Data unavailability — not an unexpected crash
+        job.status = "FAILED"
+        job.error = str(exc)
+        job.completed_at = datetime.now(UTC)
+        logger.warning("backtest job %s failed (data error): %s", job_id, exc)
     except Exception as exc:
         job.status = "FAILED"
         job.error = str(exc)

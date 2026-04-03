@@ -43,9 +43,15 @@ def optimize_portfolio(user_id: str, payload: dict = {}) -> dict:
     snapshot = portfolio_repository.get(user_id)
     if not snapshot.concentration:
         return {"error": "no_positions", "detail": "No positions to optimize"}
+
     method = payload.get("method", "max_sharpe")
+    risk_free_rate = payload.get("risk_free_rate", 0.05)
+    expected_returns = payload.get("expected_returns")
+
     result = optimize_weights(
         positions=snapshot.concentration,
+        expected_returns=expected_returns,
+        risk_free_rate=risk_free_rate,
         method=method,
     )
     result["current_weights"] = snapshot.concentration
