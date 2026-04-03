@@ -41,10 +41,11 @@ export function LiveFeed() {
   const [events, setEvents] = useState<FeedEvent[]>([]);
 
   useEffect(() => {
-    return connectGatewaySocket((payload) => {
+    return connectGatewaySocket((payload: unknown) => {
+      const p = payload as Record<string, unknown> | null;
       const evt: FeedEvent = {
-        type: payload?.type,
-        data: payload?.data,
+        type: (p?.type as string) || undefined,
+        data: (p?.data as Record<string, unknown>) || undefined,
         raw: JSON.stringify(payload),
       };
       setEvents((current) => [evt, ...current].slice(0, 6));
