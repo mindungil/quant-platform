@@ -8,7 +8,8 @@ import { clearToken, hasRole } from "../lib/api";
 
 const baseLinks = [
   ["/dashboard", "대시보드"],
-  ["/agent", "에이전트"],
+  ["/chat", "AI 에이전트"],
+  ["/agent", "자동매매"],
   ["/performance", "성과"],
   ["/orders", "주문 이력"],
   ["/settings", "설정"],

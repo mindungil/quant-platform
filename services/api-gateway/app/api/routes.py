@@ -26,6 +26,7 @@ credential_client = GatewayClient(settings.credential_store_base_url)
 risk_client = GatewayClient(settings.risk_service_base_url)
 backtest_client = GatewayClient(settings.backtest_service_base_url)
 agent_client = GatewayClient(settings.crypto_agent_base_url)
+llm_client = GatewayClient(settings.llm_gateway_base_url)
 orchestrator_client = GatewayClient(settings.orchestrator_agent_base_url)
 portfolio_client = GatewayClient(settings.portfolio_service_base_url)
 statistics_client = GatewayClient(settings.statistics_service_base_url)
@@ -434,6 +435,57 @@ def get_agent_status(principal: GatewayPrincipal = Depends(require_principal)) -
 @router.get("/recommendations/{asset}")
 def get_recommendations(asset: str, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
     result = agent_client.get(f"/recommendations/{asset}", headers=principal.forwarded_headers)
+    return JSONResponse(result)
+
+
+# ── Agent Chat (proxy to llm-gateway) ────��───────────────────────────
+
+
+@router.post("/chat")
+async def chat(request: Request, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    """에이전트 채팅 — LLM Gateway의 에이전틱 루프 호출."""
+    body = await request.json()
+    response = llm_client.request(
+        "POST", "/chat",
+        headers={**principal.forwarded_headers, "Content-Type": "application/json"},
+        json=body,
+    )
+    return _proxy_json(response)
+
+
+@router.get("/conversations")
+def get_conversations(principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    result = llm_client.get("/conversations", headers=principal.forwarded_headers)
+    return JSONResponse(result)
+
+
+@router.get("/conversations/{conversation_id}/messages")
+def get_conv_messages(conversation_id: str, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    result = llm_client.get(f"/conversations/{conversation_id}/messages", headers=principal.forwarded_headers)
+    return JSONResponse(result)
+
+
+@router.get("/chat/tools")
+def get_agent_tools(principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    result = llm_client.get("/tools", headers=principal.forwarded_headers)
+    return JSONResponse(result)
+
+
+@router.get("/auth/{provider}/login")
+def llm_oauth_login(provider: str, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    result = llm_client.get(f"/auth/{provider}/login", headers=principal.forwarded_headers)
+    return JSONResponse(result)
+
+
+@router.get("/auth/{provider}/status")
+def llm_oauth_status(provider: str, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    result = llm_client.get(f"/auth/{provider}/status", headers=principal.forwarded_headers)
+    return JSONResponse(result)
+
+
+@router.get("/llm/providers")
+def llm_providers(principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    result = llm_client.get("/providers", headers=principal.forwarded_headers)
     return JSONResponse(result)
 
 
