@@ -11,8 +11,8 @@
 
 body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  background: #000;
-  color: #fff;
+  background: #0a0a0a;
+  color: #e5e5e5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   letter-spacing: -0.011em;
@@ -23,36 +23,36 @@ body {
   font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
 }
 
-/* Cards — glass on black */
+/* Cards — glass on dark gray */
 .card {
-  @apply rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6 backdrop-blur-sm;
+  @apply rounded-2xl border border-neutral-800 bg-neutral-900/70 p-6 backdrop-blur-sm;
   transition: border-color 0.2s ease, background-color 0.2s ease;
 }
 .card:hover {
-  border-color: rgba(255, 255, 255, 0.12);
-  background-color: rgba(255, 255, 255, 0.05);
+  border-color: #404040;
+  background-color: rgba(38, 38, 38, 0.8);
 }
 
 /* Buttons */
 .btn-primary {
-  @apply rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-black;
+  @apply rounded-lg bg-neutral-100 px-4 py-2.5 text-sm font-semibold text-neutral-900;
   transition: all 0.15s ease;
 }
-.btn-primary:hover { background-color: #e5e5e5; }
+.btn-primary:hover { background-color: #fff; }
 .btn-primary:active { transform: scale(0.98); }
 .btn-primary:disabled { opacity: 0.3; cursor: not-allowed; }
 
 .btn-secondary {
-  @apply rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white;
+  @apply rounded-lg border border-neutral-700 bg-neutral-800/50 px-4 py-2.5 text-sm font-medium text-neutral-200;
   transition: all 0.15s ease;
 }
-.btn-secondary:hover { border-color: rgba(255, 255, 255, 0.2); background-color: rgba(255, 255, 255, 0.08); }
+.btn-secondary:hover { border-color: #525252; background-color: rgba(64, 64, 64, 0.5); }
 
 .btn-danger {
-  @apply rounded-lg bg-red-500/20 px-4 py-2.5 text-sm font-medium text-red-400;
+  @apply rounded-lg bg-red-500/15 px-4 py-2.5 text-sm font-medium text-red-400;
   transition: all 0.15s ease;
 }
-.btn-danger:hover { background-color: rgba(239, 68, 68, 0.3); }
+.btn-danger:hover { background-color: rgba(239, 68, 68, 0.25); }
 
 .btn-ghost {
   @apply rounded-lg px-3 py-1.5 text-sm text-neutral-500;
@@ -62,11 +62,11 @@ body {
 
 /* Input */
 .input-field {
-  @apply w-full rounded-lg border border-white/10 bg-white/5 px-3.5 py-2.5 text-sm text-white outline-none;
+  @apply w-full rounded-lg border border-neutral-700 bg-neutral-800/50 px-3.5 py-2.5 text-sm text-neutral-100 outline-none;
   transition: border-color 0.15s ease;
 }
 .input-field:focus {
-  border-color: rgba(255, 255, 255, 0.3);
+  border-color: #737373;
 }
 .input-field::placeholder {
   color: #525252;
@@ -93,7 +93,7 @@ body {
 }
 .skeleton {
   @apply rounded-lg;
-  background: linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.03) 75%);
+  background: linear-gradient(90deg, #1a1a1a 25%, #262626 50%, #1a1a1a 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }

@@ -255,7 +255,7 @@ def _build_order_request(decision: DecisionRecord) -> dict | None:
         "current_exposure": settings.default_current_exposure,
         "exposure_limit": settings.default_exposure_limit,
         "automation_enabled": settings.default_automation_enabled,
-        "shadow_mode": True,
+        "shadow_mode": settings.default_shadow_mode,
         "strategy_id": decision.strategy_id,
         "strategy_status": "ACTIVE",
         "correlation_id": decision.correlation_id,

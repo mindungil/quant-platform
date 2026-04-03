@@ -54,11 +54,11 @@ export default function HomePage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-black">
+    <div className="flex min-h-screen items-center justify-center bg-[#0a0a0a]">
       {/* Background glow */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -left-40 -top-40 h-[500px] w-[500px] rounded-full bg-white/[0.03] blur-[120px]" />
-        <div className="absolute -bottom-40 -right-40 h-[400px] w-[400px] rounded-full bg-white/[0.02] blur-[100px]" />
+        <div className="absolute -left-40 -top-40 h-[500px] w-[500px] rounded-full bg-neutral-800/30 blur-[120px]" />
+        <div className="absolute -bottom-40 -right-40 h-[400px] w-[400px] rounded-full bg-neutral-700/20 blur-[100px]" />
       </div>
 
       <motion.div
@@ -87,7 +87,7 @@ export default function HomePage() {
 
         {/* Form */}
         <motion.div
-          className="rounded-2xl border border-neutral-800 bg-neutral-900/50 p-6 backdrop-blur-sm"
+          className="rounded-2xl border border-neutral-800 bg-neutral-900/70 p-6 backdrop-blur-sm"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.25, duration: 0.5 }}

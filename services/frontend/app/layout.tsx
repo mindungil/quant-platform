@@ -13,9 +13,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           rel="stylesheet"
         />
       </head>
-      <body className="bg-black text-white">
+      <body className="bg-[#0a0a0a] text-neutral-200">
         <div className="min-h-screen">
-          <header className="sticky top-0 z-50 border-b border-white/[0.06] bg-black/80 backdrop-blur-xl">
+          <header className="sticky top-0 z-50 border-b border-neutral-800 bg-[#0a0a0a]/90 backdrop-blur-xl">
             <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-6">
               <a href="/dashboard" className="flex h-7 w-7 items-center justify-center rounded-lg bg-white transition-transform hover:scale-105">
                 <span className="text-xs font-bold text-black">Q</span>

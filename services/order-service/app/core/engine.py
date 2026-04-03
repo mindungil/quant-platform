@@ -122,7 +122,8 @@ def process_order(payload: OrderRequest) -> OrderResponse:
     _record_lifecycle(local_order_id, payload.user_id, "APPROVED", {"stage": "risk", "approval": approval})
 
     credential = credential_client.get(payload.user_id, payload.exchange)
-    if credential is None:
+    if credential is None and not payload.shadow_mode:
+        # 실제 매매에서만 credential 필수 — 섀도우는 없어도 통과
         response = OrderResponse(
             order_id=local_order_id,
             user_id=payload.user_id,
@@ -229,10 +230,15 @@ def process_order(payload: OrderRequest) -> OrderResponse:
             _record_order_metrics(response.status, payload.shadow_mode, _start)
             return response
 
-    payload.api_key = credential.get("api_key")
-    payload.api_secret = credential.get("api_secret")
-    payload.credential_label = credential.get("label")
-    payload.credential_sandbox = credential.get("sandbox", True)
+    # 섀도우 모드에서는 실제 API 키를 전달하지 않음 (보안)
+    if credential and not payload.shadow_mode:
+        payload.api_key = credential.get("api_key")
+        payload.api_secret = credential.get("api_secret")
+        payload.credential_label = credential.get("label")
+        payload.credential_sandbox = credential.get("sandbox", True)
+    elif credential:
+        payload.credential_label = credential.get("label")
+        payload.credential_sandbox = credential.get("sandbox", True)
     publisher.publish_order_created(payload, local_order_id)
     logger.info(
         "exchange_submission_started",
