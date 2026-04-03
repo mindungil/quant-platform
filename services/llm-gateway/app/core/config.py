@@ -4,12 +4,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Settings:
-    provider_name: str = os.getenv("LLM_PROVIDER_NAME", "litellm")
-    # API Keys — 하나만 설정하면 됨
-    openai_api_key: str = os.getenv("OPENAI_API_KEY", os.getenv("GRAPHRAG_API_KEY", ""))
-    anthropic_api_key: str = os.getenv("ANTHROPIC_API_KEY", "")
-    # 모델 선택 (LiteLLM 형식)
-    default_model: str = os.getenv("LLM_DEFAULT_MODEL", "gpt-4o-mini")
+    # LLM은 OAuth 기반 — API 키 불필요 (유저가 Claude/Codex 구독으로 인증)
     enable_llm: bool = os.getenv("ENABLE_LLM", "true").lower() == "true"
     max_tokens: int = int(os.getenv("LLM_MAX_TOKENS", "500"))
     agent_max_tokens: int = int(os.getenv("AGENT_MAX_TOKENS", "2000"))
