@@ -204,8 +204,8 @@ def check_pipeline_health() -> dict:
     import time as _time
 
     PIPELINE_STAGES = [
-        ("market-data", "http://localhost:8001"),
-        ("feature-store", "http://localhost:8002"),
+        ("market-data", settings.market_data_base_url),
+        ("feature-store", settings.feature_store_base_url),
         ("signal-service", settings.signal_service_base_url),
         ("crypto-agent", settings.crypto_agent_base_url),
     ]
