@@ -199,6 +199,50 @@ def detect_conflicts(agent_decisions: dict[str, list[dict]]) -> list[dict]:
     return conflicts
 
 
+def run_agent_graph(asset: str, agent_type: str = "crypto") -> dict:
+    """Call the appropriate agent's decision endpoint and return a standardized result.
+
+    Returns a dict with: decision summary, phase_timings, errors, and raw response.
+    """
+    agent_key = f"{agent_type}-agent"
+    agent_info = AGENT_REGISTRY.get(agent_key)
+    if not agent_info:
+        return {"error": f"unknown agent type: {agent_type}", "asset": asset}
+
+    base_url = agent_info["base_url"]
+    result: dict = {"asset": asset, "agent": agent_key, "phase_timings": {}, "errors": []}
+
+    try:
+        r = httpx.post(
+            f"{base_url.rstrip('/')}/decisions/run/{asset}",
+            timeout=30.0,
+        )
+        if r.status_code == 200:
+            data = r.json()
+            result["action"] = data.get("action", "HOLD")
+            result["signal_score"] = data.get("signal_score", 0.0)
+            result["strategy_name"] = data.get("strategy_name", "")
+            result["reasoning"] = (data.get("reasoning") or "")[:200]
+            result["threshold_crossed"] = data.get("threshold_crossed", False)
+            result["decision_id"] = data.get("decision_id")
+            # Extract phase timings from decision phases
+            for phase in data.get("decision_phases", []):
+                if isinstance(phase, dict) and phase.get("name"):
+                    result["phase_timings"][phase["name"]] = phase.get("duration_ms", 0)
+            result["success"] = True
+        else:
+            result["error"] = f"HTTP {r.status_code}"
+            result["success"] = False
+    except Exception as exc:
+        result["error"] = str(exc)[:200]
+        result["success"] = False
+        logger.warning("run_agent_graph_failed", extra={
+            "agent": agent_key, "asset": asset, "error": str(exc)[:100],
+        })
+
+    return result
+
+
 def build_system_summary() -> dict:
     """Build comprehensive system summary for the dashboard."""
     timestamp = datetime.now(UTC)

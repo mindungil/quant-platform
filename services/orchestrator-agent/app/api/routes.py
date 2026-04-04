@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
-from app.core.engine import build_summary, build_system_summary, get_all_agent_statuses, check_pipeline_health
+from app.core.engine import build_summary, build_system_summary, get_all_agent_statuses, check_pipeline_health, run_agent_graph
 from app.db.repository import orchestrator_repository
 
 router = APIRouter()
@@ -44,3 +44,9 @@ def agents():
 def pipeline_health():
     """Check the full signal pipeline health: market-data → feature-store → signal-service → crypto-agent."""
     return check_pipeline_health()
+
+
+@router.post("/orchestrator/agent-graph/{asset}")
+def agent_graph_run(asset: str, agent_type: str = "crypto"):
+    """Trigger the agent graph for a specific asset and return execution summary."""
+    return run_agent_graph(asset, agent_type)

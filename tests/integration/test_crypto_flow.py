@@ -226,7 +226,7 @@ class TestCryptoAgentDecision:
                     threshold=signal.threshold,
                     threshold_crossed=signal.threshold_crossed,
                     direction=signal.direction, components=signal.components,
-                    feature_timestamp=signal.feature_timestamp,
+                    feature_timestamp=datetime.now(UTC),
                     reference_price=signal.reference_price,
                 )
 
@@ -427,7 +427,7 @@ class TestFullCryptoE2E:
                     threshold=signal.threshold,
                     threshold_crossed=signal.threshold_crossed,
                     direction=signal.direction, components=signal.components,
-                    feature_timestamp=signal.feature_timestamp,
+                    feature_timestamp=datetime.now(UTC),
                     reference_price=signal.reference_price,
                 )
 

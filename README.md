@@ -68,6 +68,7 @@ Docker Compose productionization runtime for the startup-club autonomous trading
 - Backtest auto-promotion: strategies auto-transition (PENDING→TESTED→SHADOW) based on Sharpe thresholds; `POST /strategies/backtest-callback` endpoint for external triggers
 - Shadow strategy tracker subscribes to `order.filled` and maintains running shadow metrics (Sharpe, win_rate, drawdown) per strategy
 - Drift detection → auto-deprecation: statistics-service publishes `strategy.drift_alert`; strategy-registry consumes it and transitions ACTIVE → DEPRECATED on critical drift
+- `crypto-agent` decision loop is now a LangGraph StateGraph with 8 nodes (gather → detect → recall → select → score → check → execute → record), conditional abort edges, phase timing observability, and full MAB/ML formula selection integration
 
 ## What Is Not Included Yet
 

@@ -182,6 +182,24 @@ Tasks:
 - [x] extract FormulaMAB to mab_state.py to resolve circular import between engine and outcome_consumer
 - [x] update outcome_consumer to call formula_mab.update() after reinforcement for MAB feedback loop closure
 
+### Milestone 10: LangGraph StateGraph 에이전트 오케스트레이션
+
+Tasks:
+
+- [x] add `langgraph>=0.2.0` dependency to crypto-agent requirements
+- [x] define `AgentState` TypedDict in `graph_state.py` for full state tracking across 8 phases
+- [x] build LangGraph `StateGraph` in `graph.py` with gather/detect/recall/select/score/check/execute/record nodes
+- [x] add conditional edges: stale signal → abort, low confidence → skip to record, risk issues → force HOLD
+- [x] integrate recall_node with memory-service formula-outcomes API and FormulaMAB `load_from_memory`
+- [x] integrate score_node with ML formula selection, MAB Thompson Sampling, and regime-default fallback chain
+- [x] integrate execute_node with Kelly sizing, order publishing, and LLM reasoning generation
+- [x] replace `run_decision_loop` in engine.py with thin graph wrapper preserving all Prometheus metrics
+- [x] add `run_agent_graph()` to orchestrator engine for standardized agent execution with phase_timings
+- [x] add `POST /orchestrator/agent-graph/{asset}` endpoint to orchestrator routes
+- [x] update scheduler to log `phase_timings` from graph execution for observability
+- [x] update test stubs to use fresh `feature_timestamp` for graph staleness checks
+- [x] verify all 42 integration tests pass with LangGraph-based decision loop
+
 ## Definition Of Done
 
 A milestone is complete only when:

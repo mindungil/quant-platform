@@ -23,6 +23,8 @@ import httpx
 from app.core.config import settings
 from app.core.engine import run_decision_loop
 from app.core.recommender import recommend_strategies
+from app.core.graph import agent_graph
+from app.core.graph_state import AgentState
 
 logger = logging.getLogger("crypto-agent")
 
@@ -149,20 +151,26 @@ class AgentScheduler:
         })
 
     async def _run_crypto_asset(self, loop: asyncio.AbstractEventLoop, asset: str) -> None:
-        """Run decision loop for a single crypto asset."""
+        """Run decision loop for a single crypto asset via LangGraph StateGraph."""
         if self._should_skip_asset(asset):
             return
         try:
             decision = await loop.run_in_executor(None, run_decision_loop, asset)
+            phase_timings = {}
+            for phase in (decision.decision_phases or []):
+                if phase.name and phase.duration_ms is not None:
+                    phase_timings[phase.name] = phase.duration_ms
             self._last_decisions[asset] = {
                 "action": decision.action,
                 "signal_score": decision.signal_score,
                 "threshold_crossed": decision.threshold_crossed,
                 "timestamp": decision.timestamp.isoformat() if decision.timestamp else None,
                 "reasoning": (decision.reasoning or "")[:200],
+                "phase_timings": phase_timings,
             }
             logger.info("agent_cycle_decision", extra={
                 "asset": asset, "action": decision.action, "score": decision.signal_score,
+                "phase_timings": phase_timings,
             })
             self._record_asset_success(asset)
         except Exception as exc:

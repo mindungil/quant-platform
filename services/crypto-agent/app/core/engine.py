@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import time
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+UTC = timezone.utc
 
 from prometheus_client import Counter, Histogram
 
@@ -66,6 +68,10 @@ strategy_client = StrategyClient(settings.strategy_registry_base_url)
 llm_gateway_client = LlmGatewayClient(settings.llm_gateway_base_url)
 realtime_bus = RealtimeBus(RedisStore(settings.redis_url))
 logger = get_logger("crypto-agent")
+
+# LangGraph StateGraph — imported AFTER clients so graph.py can capture them
+from app.core.graph import agent_graph  # noqa: E402
+from app.core.graph_state import AgentState  # noqa: E402
 
 # FormulaMAB is imported from app.core.mab_state (shared with outcome_consumer)
 
@@ -797,83 +803,80 @@ def _phase_record(
 # ---------------------------------------------------------------------------
 
 def run_decision_loop(asset: str, *, user_id: str | None = None, correlation_id: str | None = None) -> DecisionRecord:
-    """Execute the full 8-phase adaptive decision loop:
-    gather -> detect -> recall -> select -> score -> retrieve -> check -> execute (+record).
+    """Execute the full 8-phase adaptive decision loop via LangGraph StateGraph.
+
+    Phases: gather -> detect -> recall -> select -> score -> check -> execute -> record
     """
     _loop_start = time.monotonic()
+
+    # Build initial state
+    initial_state: AgentState = {
+        "asset": asset,
+        "user_id": user_id,
+        "correlation_id": correlation_id,
+        "signal": None,
+        "signal_age_seconds": None,
+        "regime": None,
+        "suggested_formula_type": None,
+        "features": None,
+        "formula_scores": None,
+        "mab_stats": None,
+        "strategy": None,
+        "effective_user_id": user_id or "bootstrap",
+        "is_shadow": False,
+        "selected_formula": None,
+        "formula_score": None,
+        "formula_confidence": None,
+        "risk_issues": [],
+        "action": "HOLD",
+        "threshold_crossed": False,
+        "decision_id": None,
+        "order_request": None,
+        "order_submitted": False,
+        "reasoning": None,
+        "recorded": False,
+        "errors": [],
+        "phase_timings": {},
+        "abort": False,
+    }
+
+    # Invoke graph
+    final_state = agent_graph.invoke(initial_state)
+
+    # Reconstruct DecisionRecord from final state
+    signal_dict = final_state.get("signal") or {}
+    strategy_dict = final_state.get("strategy") or {}
+    components = dict(signal_dict.get("components") or {})
+    components["formula_confidence"] = round(final_state.get("formula_confidence") or 0.0, 4)
+
+    decision_id = final_state.get("decision_id") or str(__import__("uuid").uuid4())
+    decision = DecisionRecord(
+        decision_id=decision_id,
+        timestamp=datetime.now(UTC),
+        user_id=final_state.get("effective_user_id", "bootstrap"),
+        asset=asset,
+        asset_type="crypto",
+        signal_score=final_state.get("formula_score") or signal_dict.get("signal_score", 0.0),
+        strategy_id=strategy_dict.get("id", "unknown"),
+        strategy_name=strategy_dict.get("name", "unknown"),
+        action=final_state.get("action", "HOLD"),
+        threshold_crossed=final_state.get("threshold_crossed", False),
+        reasoning=final_state.get("reasoning") or "",
+        memory_refs=[],
+        components=components,
+        correlation_id=final_state.get("correlation_id") or decision_id,
+        reference_price=signal_dict.get("reference_price"),
+    )
+
+    # Build phase results from timings
     phases: list[PhaseResult] = []
-
-    # Phase 1 — Gather
-    signal = _phase_gather(asset, user_id, phases)
-
-    # Phase 2 — Detect market regime (NEW)
-    detection = _phase_detect(signal, phases)
-    regime = detection["regime"]
-
-    # Phase 3 — Recall formula performance from memory (NEW)
-    formula_outcomes = _phase_recall(
-        asset, regime.label, user_id or "bootstrap", phases
-    )
-
-    # Phase 4 — Select strategy (existing, renamed from phase 3)
-    strategy, effective_user_id, action = _phase_select(asset, signal, user_id, phases)
-
-    # Phase 5 — Score with adaptive formula (NEW)
-    selected_formula, formula_result = _phase_score(
-        detection["features"], formula_outcomes, detection["suggested_type"], phases
-    )
-
-    # Override signal score with formula result if formula has high confidence
-    if formula_result.confidence >= 0.3:
-        # Use formula score instead of fixed signal score
-        signal_score = formula_result.score
-        # Re-determine action based on formula score
-        pos_threshold = abs(strategy.thresholds.get("entry", 0.6) if isinstance(strategy.thresholds, dict) else 0.6)
-        neg_threshold = pos_threshold
-        if signal_score >= pos_threshold:
-            action = "BUY"
-            threshold_crossed = True
-        elif signal_score <= -neg_threshold:
-            action = "SELL"
-            threshold_crossed = True
-        else:
-            action = "HOLD"
-            threshold_crossed = False
-    else:
-        signal_score = signal.signal_score
-        threshold_crossed = signal.threshold_crossed
-
-    # Phase 6 — Retrieve memory (existing)
-    memory_response = _phase_retrieve(effective_user_id, asset, signal, strategy, phases)
-
-    # Phase 7 — Check (existing)
-    _phase_check(strategy, signal, asset, action, phases)
-
-    # Phase 8 — Execute (modified to include formula info)
-    decision = _phase_execute(
-        asset, signal, strategy, memory_response, action,
-        effective_user_id, correlation_id, phases,
-    )
-
-    # Attach formula metadata to decision
-    decision.signal_score = signal_score
-    decision.threshold_crossed = threshold_crossed
-    # Store formula info as numeric confidence in components, text in reasoning
-    decision.components = decision.components or {}
-    decision.components["formula_confidence"] = round(formula_result.confidence, 4)
-    # Propagate shadow flag so _build_order_request can force shadow_mode
-    is_shadow = getattr(strategy, "_is_shadow", False)
-    if is_shadow:
-        decision.components["_strategy_status"] = "SHADOW"
-    decision.reasoning = (
-        f"[formula={selected_formula.name} regime={regime.label}{' SHADOW' if is_shadow else ''}] "
-        + (decision.reasoning or "")
-    )
-
+    for phase_name, duration_ms in (final_state.get("phase_timings") or {}).items():
+        phases.append(PhaseResult(
+            name=phase_name,
+            status="completed",
+            duration_ms=duration_ms,
+        ))
     decision.decision_phases = phases
-
-    # Phase 9 — Record (existing)
-    _phase_record(asset, decision, phases)
 
     # Record metrics
     decision_outcome_total.labels(outcome=decision.action.lower()).inc()
@@ -883,5 +886,12 @@ def run_decision_loop(asset: str, *, user_id: str | None = None, correlation_id:
         threshold_crossed=str(decision.threshold_crossed).lower(),
     ).inc()
     agent_decision_latency_seconds.observe(time.monotonic() - _loop_start)
+
+    # Log errors if any
+    graph_errors = final_state.get("errors") or []
+    if graph_errors:
+        logger.warning("graph_completed_with_errors", extra={
+            "asset": asset, "errors": graph_errors[:5],
+        })
 
     return decision
