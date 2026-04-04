@@ -159,11 +159,22 @@ def detect_node(state: AgentState) -> dict:
                 features["sentiment_composite"] = comps["sentiment_composite"]
             if ext.get("volume_score") is not None:
                 features["volume_score"] = ext["volume_score"]
+            # Binance Futures derivatives fields
+            if ext.get("funding_rate_score") is not None:
+                features["funding_rate_score"] = ext["funding_rate_score"]
+            if ext.get("long_short_score") is not None:
+                features["long_short_score"] = ext["long_short_score"]
+            if ext.get("taker_buy_sell_score") is not None:
+                features["taker_buy_sell_score"] = ext["taker_buy_sell_score"]
+            if ext.get("derivatives_sentiment") is not None:
+                features["derivatives_sentiment"] = ext["derivatives_sentiment"]
             external_used = True
             available_fields = [
                 k for k in ("fear_greed_index", "news_sentiment", "onchain_score",
                             "macro_risk_score", "btc_dominance", "volume_score",
-                            "price_change_24h", "altcoin_season")
+                            "price_change_24h", "altcoin_season",
+                            "funding_rate_score", "long_short_score",
+                            "taker_buy_sell_score", "derivatives_sentiment")
                 if ext.get(k) is not None
             ]
             logger.info("graph_detect_external_context", extra={

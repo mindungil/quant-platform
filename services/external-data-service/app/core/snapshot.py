@@ -229,6 +229,157 @@ def _fetch_coinpaprika_volume(asset: str) -> tuple[float, float | None]:
 
 
 # ---------------------------------------------------------------------------
+# 6. Binance Futures — Funding Rate, Open Interest, Long/Short, Taker Buy/Sell
+# ---------------------------------------------------------------------------
+
+_OI_BASELINE = {
+    "BTC": 80_000,
+    "ETH": 1_500_000,
+    "SOL": 20_000_000,
+}
+
+
+def _is_usdt_pair(asset: str) -> bool:
+    return asset.upper().endswith("USDT")
+
+
+def _fetch_funding_rate(asset: str) -> tuple[float | None, float | None]:
+    """Returns (raw_funding_rate, normalized_score) or (None, None)."""
+    if not _is_usdt_pair(asset):
+        return (None, None)
+    symbol = asset.upper()
+    cache_key = f"binance_fr_{symbol}"
+    cached = _get_cached(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        resp = httpx.get(
+            "https://fapi.binance.com/fapi/v1/fundingRate",
+            params={"symbol": symbol, "limit": 1},
+            timeout=5.0,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if not data:
+            return (None, None)
+        fr = float(data[0]["fundingRate"])
+        score = _clamp(fr / 0.001)
+        result = (fr, score)
+        _set_cached(cache_key, result, 300)  # 5 min
+        return result
+    except Exception as exc:
+        logger.warning("Binance funding rate fetch failed: %s", exc)
+        return (None, None)
+
+
+def _fetch_open_interest(asset: str) -> float | None:
+    """Returns normalized OI score or None."""
+    if not _is_usdt_pair(asset):
+        return None
+    symbol = asset.upper()
+    cache_key = f"binance_oi_{symbol}"
+    cached = _get_cached(cache_key)
+    if cached is not None:
+        return cached
+
+    base = _extract_symbol(asset)
+    baseline = _OI_BASELINE.get(base)
+    if baseline is None:
+        return None
+
+    try:
+        resp = httpx.get(
+            "https://fapi.binance.com/fapi/v1/openInterest",
+            params={"symbol": symbol},
+            timeout=5.0,
+        )
+        resp.raise_for_status()
+        oi = float(resp.json()["openInterest"])
+        score = _clamp(min(oi / baseline, 2.0) - 1)
+        _set_cached(cache_key, score, 180)  # 3 min
+        return score
+    except Exception as exc:
+        logger.warning("Binance open interest fetch failed: %s", exc)
+        return None
+
+
+def _fetch_long_short_ratio(asset: str) -> tuple[float | None, float | None]:
+    """Returns (raw_long_ratio, normalized_score) or (None, None)."""
+    if not _is_usdt_pair(asset):
+        return (None, None)
+    symbol = asset.upper()
+    cache_key = f"binance_ls_{symbol}"
+    cached = _get_cached(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        resp = httpx.get(
+            "https://fapi.binance.com/futures/data/globalLongShortAccountRatio",
+            params={"symbol": symbol, "period": "1h", "limit": 1},
+            timeout=5.0,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if not data:
+            return (None, None)
+        long_account = float(data[0]["longAccount"])
+        score = _clamp((long_account - 0.5) * 2)
+        result = (long_account, score)
+        _set_cached(cache_key, result, 300)  # 5 min
+        return result
+    except Exception as exc:
+        logger.warning("Binance long/short ratio fetch failed: %s", exc)
+        return (None, None)
+
+
+def _fetch_taker_buy_sell_ratio(asset: str) -> tuple[float | None, float | None]:
+    """Returns (raw_ratio, normalized_score) or (None, None)."""
+    if not _is_usdt_pair(asset):
+        return (None, None)
+    symbol = asset.upper()
+    cache_key = f"binance_taker_{symbol}"
+    cached = _get_cached(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        resp = httpx.get(
+            "https://fapi.binance.com/futures/data/takerlongshortRatio",
+            params={"symbol": symbol, "period": "1h", "limit": 1},
+            timeout=5.0,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if not data:
+            return (None, None)
+        ratio = float(data[0]["buySellRatio"])
+        score = _clamp((ratio - 1.0) / 0.5)
+        result = (ratio, score)
+        _set_cached(cache_key, result, 300)  # 5 min
+        return result
+    except Exception as exc:
+        logger.warning("Binance taker buy/sell ratio fetch failed: %s", exc)
+        return (None, None)
+
+
+def _derivatives_weighted_avg(
+    pairs: list[tuple[float | None, float]],
+) -> float | None:
+    """Weighted average of non-None values, renormalized weights."""
+    total_w = 0.0
+    total_v = 0.0
+    for val, w in pairs:
+        if val is not None:
+            total_w += w
+            total_v += val * w
+    if total_w == 0:
+        return None
+    return _clamp(total_v / total_w)
+
+
+# ---------------------------------------------------------------------------
 # Composite builder
 # ---------------------------------------------------------------------------
 
@@ -279,13 +430,52 @@ def build_external_context(asset: str) -> ExternalContextSnapshot:
         volume_score, paprika_pct_chg = 0.0, None
         missing.append("coinpaprika")
 
+    # 6. Binance Futures derivatives data
+    funding_rate_raw, funding_rate_score = None, None
+    oi_score = None
+    ls_ratio_raw, ls_score = None, None
+    taker_ratio_raw, taker_score = None, None
+    derivatives_sentiment = None
+
+    try:
+        funding_rate_raw, funding_rate_score = _fetch_funding_rate(asset)
+    except Exception as exc:
+        logger.warning("binance_funding_rate source failed: %s", exc)
+        missing.append("binance_funding_rate")
+
+    try:
+        oi_score = _fetch_open_interest(asset)
+    except Exception as exc:
+        logger.warning("binance_open_interest source failed: %s", exc)
+        missing.append("binance_open_interest")
+
+    try:
+        ls_ratio_raw, ls_score = _fetch_long_short_ratio(asset)
+    except Exception as exc:
+        logger.warning("binance_long_short source failed: %s", exc)
+        missing.append("binance_long_short")
+
+    try:
+        taker_ratio_raw, taker_score = _fetch_taker_buy_sell_ratio(asset)
+    except Exception as exc:
+        logger.warning("binance_taker source failed: %s", exc)
+        missing.append("binance_taker")
+
+    derivatives_sentiment = _derivatives_weighted_avg([
+        (funding_rate_score, 0.3),
+        (ls_score, 0.3),
+        (taker_score, 0.25),
+        (oi_score, 0.15),
+    ])
+
     # --- Composite scores ---
 
-    # Sentiment composite: FG 40%, CoinGecko 40%, (legacy news placeholder 20% → 0)
+    # Sentiment composite: FG 35%, CoinGecko 35%, news placeholder 15%, derivatives 15%
     sentiment_composite = _clamp(
-        fear_greed_norm * 0.4
-        + coingecko_sentiment * 0.4
-        + 0.0 * 0.2  # news_sentiment placeholder
+        fear_greed_norm * 0.35
+        + coingecko_sentiment * 0.35
+        + 0.0 * 0.15  # news_sentiment placeholder
+        + (derivatives_sentiment or 0.0) * 0.15
     )
 
     # On-chain composite (BTC only)
@@ -302,6 +492,8 @@ def build_external_context(asset: str) -> ExternalContextSnapshot:
         macro_risk_score += 0.2
     if market_cap_change_24h is not None and market_cap_change_24h < -3:
         macro_risk_score += 0.3
+    if derivatives_sentiment is not None and derivatives_sentiment > 0.5:
+        macro_risk_score += 0.2  # overleveraged longs = higher risk
     macro_risk_score = _clamp(macro_risk_score)
 
     return ExternalContextSnapshot(
@@ -316,6 +508,14 @@ def build_external_context(asset: str) -> ExternalContextSnapshot:
         volume_score=round(volume_score, 4),
         price_change_24h=round(price_change_24h, 4) if price_change_24h is not None else None,
         altcoin_season=altcoin_season,
+        funding_rate=funding_rate_raw,
+        funding_rate_score=round(funding_rate_score, 4) if funding_rate_score is not None else None,
+        open_interest_score=round(oi_score, 4) if oi_score is not None else None,
+        long_short_ratio=ls_ratio_raw,
+        long_short_score=round(ls_score, 4) if ls_score is not None else None,
+        taker_buy_sell_ratio=taker_ratio_raw,
+        taker_buy_sell_score=round(taker_score, 4) if taker_score is not None else None,
+        derivatives_sentiment=round(derivatives_sentiment, 4) if derivatives_sentiment is not None else None,
         components={
             "fear_greed_raw": float(fear_greed_int),
             "fear_greed_norm": round(fear_greed_norm, 4),
@@ -329,6 +529,7 @@ def build_external_context(asset: str) -> ExternalContextSnapshot:
             "sentiment_composite": round(sentiment_composite, 4),
             "onchain_composite": round(onchain_composite, 4),
             "macro_risk_adjusted": round(macro_risk_score, 4),
+            "derivatives_sentiment": round(derivatives_sentiment, 4) if derivatives_sentiment is not None else 0.0,
         },
         missing_fields=missing,
     )
