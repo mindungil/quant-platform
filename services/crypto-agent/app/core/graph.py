@@ -151,11 +151,26 @@ def detect_node(state: AgentState) -> dict:
                 features["onchain_score"] = ext["onchain_score"]
             if ext.get("macro_risk_score") is not None:
                 features["macro_risk_score"] = ext["macro_risk_score"]
+            # New composite fields
+            if ext.get("btc_dominance") is not None:
+                features["btc_dominance"] = ext["btc_dominance"]
+            comps = ext.get("components", {})
+            if comps.get("sentiment_composite") is not None:
+                features["sentiment_composite"] = comps["sentiment_composite"]
+            if ext.get("volume_score") is not None:
+                features["volume_score"] = ext["volume_score"]
             external_used = True
+            available_fields = [
+                k for k in ("fear_greed_index", "news_sentiment", "onchain_score",
+                            "macro_risk_score", "btc_dominance", "volume_score",
+                            "price_change_24h", "altcoin_season")
+                if ext.get(k) is not None
+            ]
             logger.info("graph_detect_external_context", extra={
                 "asset": state["asset"],
                 "fear_greed": fg,
                 "news_sentiment": ext.get("news_sentiment"),
+                "available_fields": available_fields,
             })
     except Exception as exc:
         logger.warning("graph_detect_external_skipped", extra={
@@ -171,14 +186,23 @@ def detect_node(state: AgentState) -> dict:
         regime_label = "unknown"
         suggested_type = "composite_adaptive"
 
-    # Override regime with fear label when Extreme Fear detected
-    fear_greed_val = features.get("fear_greed_index")
-    if fear_greed_val is not None and fear_greed_val < -0.6:
+    # Override regime with extreme sentiment labels
+    fg_raw = features.get("fear_greed_index")
+    fear_greed_raw = ext.get("fear_greed_index") if external_used else None
+    if fear_greed_raw is not None:
+        if fear_greed_raw < 20 and "_extreme_fear" not in regime_label:
+            regime_label = f"{regime_label}_extreme_fear"
+            logger.info("graph_detect_extreme_fear", extra={
+                "regime": regime_label, "fear_greed_raw": fear_greed_raw,
+            })
+        elif fear_greed_raw > 80 and "_extreme_greed" not in regime_label:
+            regime_label = f"{regime_label}_extreme_greed"
+            logger.info("graph_detect_extreme_greed", extra={
+                "regime": regime_label, "fear_greed_raw": fear_greed_raw,
+            })
+    elif fg_raw is not None and fg_raw < -0.6:
         if "fear" not in regime_label:
             regime_label = f"{regime_label}+fear"
-            logger.info("graph_detect_fear_override", extra={
-                "regime": regime_label, "fear_greed": fear_greed_val,
-            })
 
     duration = round((time.monotonic() - t0) * 1000, 2)
     timings = dict(state.get("phase_timings") or {})
