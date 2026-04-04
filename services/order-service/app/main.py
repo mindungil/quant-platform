@@ -6,6 +6,7 @@ from app.core.config import settings
 from app.core.recovery import recover_stuck_orders
 from app.services.event_publisher import publisher
 from app.services.nats_consumer import consumer
+from app.services import position_monitor
 from shared.health import check_redis, check_sql, check_tcp
 from shared.logging import get_logger
 from shared.observability import install_http_observability, startup_dependency_guard
@@ -38,9 +39,11 @@ async def lifespan(_: FastAPI):
         )
     await publisher.connect()
     await consumer.start()
+    await position_monitor.start()
     try:
         yield
     finally:
+        await position_monitor.stop()
         await consumer.stop()
         await publisher.close()
 

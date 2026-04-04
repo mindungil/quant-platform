@@ -50,6 +50,39 @@ def interpolate_gaps(candles: list[CandlePayload], interval_minutes: int = 60) -
     return result
 
 
+RESAMPLE_HOURS = {"4h": 4, "1d": 24}
+
+
+def resample_candles(candles: list[CandlePayload], target_interval: str) -> list[CandlePayload]:
+    """Resample candles to a larger timeframe using OHLCV aggregation.
+
+    Supports: "4h", "1d" (from 1h base candles).
+    Returns the original list unchanged for "1h" or unrecognized intervals.
+    """
+    hours = RESAMPLE_HOURS.get(target_interval)
+    if hours is None:
+        return candles
+
+    sorted_candles = sorted(candles, key=lambda c: c.timestamp)
+    result: list[CandlePayload] = []
+
+    for i in range(0, len(sorted_candles), hours):
+        group = sorted_candles[i : i + hours]
+        if not group:
+            break
+        result.append(
+            CandlePayload(
+                timestamp=group[0].timestamp,
+                open=group[0].open,
+                high=max(c.high for c in group),
+                low=min(c.low for c in group),
+                close=group[-1].close,
+                volume=sum(c.volume for c in group),
+            )
+        )
+    return result
+
+
 def calculate_features(asset: str, candles: list[CandlePayload]) -> FeatureResponse:
     df = pd.DataFrame([candle.model_dump(mode="python") for candle in candles]).sort_values("timestamp")
     close = df["close"]

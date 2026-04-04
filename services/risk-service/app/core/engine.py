@@ -171,3 +171,71 @@ def approve_order(payload: RiskApprovalRequest) -> RiskApprovalResponse:
         )
 
     return _make_response(True, "approved", "OK")
+
+
+# ---------------------------------------------------------------------------
+# Portfolio-Level Circuit Breaker
+# ---------------------------------------------------------------------------
+
+PORTFOLIO_MAX_DRAWDOWN = 0.15
+CONSEC_LOSS_THRESHOLD = 3
+CONSEC_LOSS_POSITION_REDUCTION = 0.5
+
+_redis_store = None
+
+
+def _get_redis():
+    global _redis_store
+    if _redis_store is None:
+        from shared.persistence import RedisStore
+        import os
+        _redis_store = RedisStore(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
+    return _redis_store
+
+
+def _get_consecutive_losses(user_id: str) -> int:
+    redis = _get_redis()
+    val = redis.get(f"consec_losses:{user_id}")
+    if val is None:
+        return 0
+    return int(val)
+
+
+def _set_consecutive_losses(user_id: str, count: int) -> None:
+    redis = _get_redis()
+    redis.set(f"consec_losses:{user_id}", str(count))
+
+
+def record_trade_outcome(user_id: str, pnl: float) -> None:
+    """Track consecutive losses in Redis. Reset on win."""
+    if pnl >= 0:
+        _set_consecutive_losses(user_id, 0)
+    else:
+        current = _get_consecutive_losses(user_id)
+        _set_consecutive_losses(user_id, current + 1)
+
+
+def check_portfolio_risk(user_id: str, total_drawdown: float = 0.0) -> dict:
+    """Portfolio-level risk check. Returns {approved, reason, restrictions}."""
+    restrictions: list[str] = []
+    approved = True
+    reason = "portfolio_ok"
+
+    # Check 1: Total drawdown halt
+    if total_drawdown > PORTFOLIO_MAX_DRAWDOWN:
+        approved = False
+        reason = f"portfolio_drawdown_halt (dd={total_drawdown:.3f} > {PORTFOLIO_MAX_DRAWDOWN})"
+        restrictions.append("ALL_TRADING_HALTED")
+
+        # Publish halt event (best effort)
+        risk_halt_publications_total.inc()
+
+        return {"approved": approved, "reason": reason, "restrictions": restrictions}
+
+    # Check 2: Consecutive losses → reduce position size
+    consec_losses = _get_consecutive_losses(user_id)
+    if consec_losses >= CONSEC_LOSS_THRESHOLD:
+        restrictions.append(f"max_position_reduced_by_{int(CONSEC_LOSS_POSITION_REDUCTION * 100)}pct")
+        reason = f"consecutive_losses ({consec_losses} >= {CONSEC_LOSS_THRESHOLD})"
+
+    return {"approved": approved, "reason": reason, "restrictions": restrictions}

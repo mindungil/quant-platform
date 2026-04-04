@@ -162,6 +162,16 @@ class ProtectionManager:
         with self._lock:
             return list(self._active_orders.get(order_id, []))
 
+    def get_all_active(self) -> list[ProtectiveOrder]:
+        """Return all ACTIVE protective orders across all parent orders."""
+        result: list[ProtectiveOrder] = []
+        with self._lock:
+            for protections in self._active_orders.values():
+                for p in protections:
+                    if p.status == "ACTIVE":
+                        result.append(p)
+        return result
+
     def cancel_protections(self, order_id: str) -> list[ProtectiveOrder]:
         """Cancel all active protections for a given parent order."""
         cancelled: list[ProtectiveOrder] = []

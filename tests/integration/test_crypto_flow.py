@@ -255,12 +255,32 @@ class TestCryptoAgentDecision:
             def publish_agent_action(self, d, o):
                 self.published.append((d, o))
 
+        stub_signal = StubSignal()
+        stub_strategy = StubStrategy()
+        stub_memory = StubMemory()
+        stub_llm = StubLlm()
         stub_pub = StubPub()
-        monkeypatch.setattr(agent_engine, "signal_client", StubSignal())
-        monkeypatch.setattr(agent_engine, "strategy_client", StubStrategy())
-        monkeypatch.setattr(agent_engine, "memory_client", StubMemory())
-        monkeypatch.setattr(agent_engine, "llm_gateway_client", StubLlm())
+        monkeypatch.setattr(agent_engine, "signal_client", stub_signal)
+        monkeypatch.setattr(agent_engine, "strategy_client", stub_strategy)
+        monkeypatch.setattr(agent_engine, "memory_client", stub_memory)
+        monkeypatch.setattr(agent_engine, "llm_gateway_client", stub_llm)
         monkeypatch.setattr(agent_engine, "publisher", stub_pub)
+
+        # Also patch graph._clients to avoid `import app.core.engine` at runtime
+        agent_graph = _isolate_load("crypto-agent", "app.core.graph")
+        monkeypatch.setattr(agent_graph, "_clients", lambda: (stub_signal, stub_memory, stub_strategy, stub_llm, stub_pub))
+
+        def _stub_build_order(decision, shadow_override=False):
+            return {"user_id": decision.user_id, "exchange": "binance", "asset": decision.asset,
+                    "side": decision.action, "quantity": 0.01, "price": 82000,
+                    "requested_notional": 820, "max_notional": 5000,
+                    "current_drawdown": 0.01, "current_exposure": 0, "exposure_limit": 50000}
+
+        monkeypatch.setattr(agent_graph, "_get_engine_helpers", lambda: (
+            _stub_build_order,
+            lambda *a, **kw: "integration reasoning",  # _fallback_reasoning
+            lambda *a, **kw: [],    # _risk_pre_check
+        ))
 
         decision = agent_engine.run_decision_loop(
             "BTCUSDT", user_id="test-user", correlation_id="corr-int",
@@ -454,12 +474,32 @@ class TestFullCryptoE2E:
             def publish_agent_action(self, d, o):
                 self.published.append((d, o))
 
+        stub_signal = StubSignal()
+        stub_strategy = StubStrategy()
+        stub_memory = StubMemory()
+        stub_llm = StubLlm()
         apub = StubAgentPub()
-        monkeypatch.setattr(agent_engine, "signal_client", StubSignal())
-        monkeypatch.setattr(agent_engine, "strategy_client", StubStrategy())
-        monkeypatch.setattr(agent_engine, "memory_client", StubMemory())
-        monkeypatch.setattr(agent_engine, "llm_gateway_client", StubLlm())
+        monkeypatch.setattr(agent_engine, "signal_client", stub_signal)
+        monkeypatch.setattr(agent_engine, "strategy_client", stub_strategy)
+        monkeypatch.setattr(agent_engine, "memory_client", stub_memory)
+        monkeypatch.setattr(agent_engine, "llm_gateway_client", stub_llm)
         monkeypatch.setattr(agent_engine, "publisher", apub)
+
+        # Patch graph._clients to avoid `import app.core.engine` at runtime
+        agent_graph = _isolate_load("crypto-agent", "app.core.graph")
+        monkeypatch.setattr(agent_graph, "_clients", lambda: (stub_signal, stub_memory, stub_strategy, stub_llm, apub))
+
+        def _stub_build_order_e2e(decision, shadow_override=False):
+            return {"user_id": decision.user_id, "exchange": "binance", "asset": decision.asset,
+                    "side": decision.action, "quantity": 0.01, "price": 82000,
+                    "requested_notional": 820, "max_notional": 5000,
+                    "current_drawdown": 0.01, "current_exposure": 0, "exposure_limit": 50000}
+
+        monkeypatch.setattr(agent_graph, "_get_engine_helpers", lambda: (
+            _stub_build_order_e2e,
+            lambda *a, **kw: "e2e",  # _fallback_reasoning
+            lambda *a, **kw: [],    # _risk_pre_check
+        ))
 
         decision = agent_engine.run_decision_loop(
             "BTCUSDT", user_id="e2e", correlation_id="e2e-corr",

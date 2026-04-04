@@ -234,6 +234,35 @@ Tasks:
 - [x] llm-gateway: add `regime` and `formula_name` fields to ReasoningRequest model
 - [x] market-data: confirmed `GET /candles/{asset}/latest` endpoint already exists
 
+## Milestone 14 — 실전 트레이딩 프로덕션화
+
+**Goal:** Harden trading services for production: stop-loss monitoring, portfolio snapshots, multi-timeframe candles, equity curves, and portfolio-level circuit breakers.
+
+- [x] order-service: background position monitor polling active positions every 30s for stop-loss/trailing-stop triggers
+- [x] order-service: `ProtectionManager.get_all_active()` for monitor to enumerate all active protections
+- [x] order-service: trailing stop state tracked in Redis (`trailing:{order_id}` → highest_price, fill_price, stop_pct)
+- [x] order-service: shadow_mode orders log-only on stop trigger (no real cancel)
+- [x] order-service: position monitor start/stop wired into `main.py` lifespan
+- [x] portfolio-service: `portfolio_snapshots` table with `save_snapshot()` and `get_snapshot_history()`
+- [x] portfolio-service: `realized_pnl_total` cumulative sum of all closed trade PnLs (FIFO matching)
+- [x] portfolio-service: `get_positions()` returns per-asset net_quantity, avg_entry, current_price, unrealized_pnl, side (LONG/SHORT/FLAT)
+- [x] portfolio-service: `GET /portfolio/{user_id}/history` and `GET /portfolio/{user_id}/positions` endpoints
+- [x] market-data: multi-timeframe candle support via `interval` query param (1m, 5m, 15m, 1h, 4h, 1d)
+- [x] market-data: OHLCV resampling (1h → 4h, 1d) with proper aggregation (open=first, high=max, low=min, close=last, volume=sum)
+- [x] market-data: sub-hour interval error response with `insufficient_resolution` detail
+- [x] feature-store: `resample_candles()` function for multi-timeframe signal generation
+- [x] statistics-service: `GET /statistics/{user_id}/equity-curve` with cumulative_return, drawdown, rolling_sharpe_7d
+- [x] statistics-service: `GET /statistics/{user_id}/strategy-comparison` ranked by Sharpe with win_rate, trade_count, avg_return
+- [x] risk-service: portfolio-level circuit breaker — HALT all trading if total_drawdown > 15%
+- [x] risk-service: consecutive loss tracking in Redis — reduce max position size by 50% after 3+ losses
+- [x] risk-service: `POST /risk/portfolio-check` endpoint returning {approved, reason, restrictions}
+- [x] integration test: full candle→feature→signal→agent→order→fill→statistics→memory cycle
+- [x] integration test: stop-loss and trailing-stop trigger verification
+- [x] integration test: drift detection and Kelly parameter flow
+- [x] integration test: multi-timeframe candle resampling (1h → 4h, 1d)
+- [x] fix: `test_crypto_flow.py` — patch `graph._clients` and `_get_engine_helpers` to avoid `ModuleNotFoundError` for isolated module loading
+- [x] all 51 tests passing
+
 ## Definition Of Done
 
 A milestone is complete only when:

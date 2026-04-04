@@ -65,11 +65,59 @@ def get_latest_candle(asset: str) -> CandlePayload:
     return candle
 
 
+VALID_INTERVALS = {"1m", "5m", "15m", "1h", "4h", "1d"}
+INTERVAL_HOURS = {"4h": 4, "1d": 24}
+SUB_HOUR_INTERVALS = {"1m", "5m", "15m"}
+
+
+def _resample_candles(candles: list[CandlePayload], target_interval: str) -> list[CandlePayload]:
+    """Resample 1h candles to a larger timeframe using OHLCV aggregation."""
+    hours = INTERVAL_HOURS.get(target_interval)
+    if hours is None or hours < 2:
+        return candles
+
+    result: list[CandlePayload] = []
+    for i in range(0, len(candles), hours):
+        group = candles[i : i + hours]
+        if not group:
+            break
+        result.append(
+            CandlePayload(
+                timestamp=group[0].timestamp,
+                open=group[0].open,
+                high=max(c.high for c in group),
+                low=min(c.low for c in group),
+                close=group[-1].close,
+                volume=sum(c.volume for c in group),
+            )
+        )
+    return result
+
+
 @router.get("/candles/{asset}/history", response_model=list[CandlePayload])
-def get_candle_history(asset: str, limit: int = 500) -> list[CandlePayload]:
-    candles = market_data_repository.get_history(asset, limit=limit)
+def get_candle_history(asset: str, limit: int = 500, interval: str = "1h") -> list[CandlePayload]:
+    if interval not in VALID_INTERVALS:
+        raise HTTPException(status_code=400, detail=f"invalid_interval: must be one of {sorted(VALID_INTERVALS)}")
+
+    if interval in SUB_HOUR_INTERVALS:
+        raise HTTPException(
+            status_code=422,
+            detail="insufficient_resolution: only 1h base candles available, cannot produce sub-hour intervals",
+        )
+
+    # Fetch more candles if resampling to larger timeframe
+    fetch_limit = limit
+    if interval in INTERVAL_HOURS:
+        fetch_limit = limit * INTERVAL_HOURS[interval]
+
+    candles = market_data_repository.get_history(asset, limit=fetch_limit)
     if not candles:
         raise HTTPException(status_code=404, detail="no_candles_found")
+
+    if interval != "1h":
+        candles = _resample_candles(candles, interval)
+        candles = candles[-limit:]  # trim to requested limit
+
     return candles
 
 

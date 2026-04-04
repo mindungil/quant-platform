@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Response
+from pydantic import BaseModel
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
-from app.core.engine import approve_order
+from app.core.engine import approve_order, check_portfolio_risk
 from app.core.config import settings
 from app.db.repository import risk_repository
 from app.models.risk import RiskApprovalRequest, RiskApprovalResponse, RiskIncident, RiskSettings
@@ -45,3 +46,20 @@ def update_risk_settings(user_id: str, payload: dict) -> dict:
 @router.get("/risk/incidents/{user_id}", response_model=list[RiskIncident])
 def incidents(user_id: str, limit: int = 50) -> list[RiskIncident]:
     return risk_repository.list_for_user(user_id, limit=limit)
+
+
+class PortfolioCheckRequest(BaseModel):
+    user_id: str
+    total_drawdown: float = 0.0
+
+
+class PortfolioCheckResponse(BaseModel):
+    approved: bool
+    reason: str
+    restrictions: list[str] = []
+
+
+@router.post("/risk/portfolio-check", response_model=PortfolioCheckResponse)
+def portfolio_check(payload: PortfolioCheckRequest) -> PortfolioCheckResponse:
+    result = check_portfolio_risk(payload.user_id, total_drawdown=payload.total_drawdown)
+    return PortfolioCheckResponse(**result)

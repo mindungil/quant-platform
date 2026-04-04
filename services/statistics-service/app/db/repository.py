@@ -139,4 +139,58 @@ class StatisticsRepository:
         )
 
 
+    def get_trade_history(self, user_id: str, *, strategy_id: str | None = None, limit: int = 90) -> list[dict]:
+        """Return raw trade PnL rows for equity curve generation."""
+        rows = self._store.fetch_all(
+            """
+            SELECT pnl, expected_return, created_at, order_id, asset
+            FROM statistics_trades
+            WHERE user_id = :user_id
+            ORDER BY created_at ASC
+            LIMIT :limit
+            """,
+            {"user_id": user_id, "limit": limit},
+        )
+        return [dict(row) for row in rows]
+
+    def get_strategy_stats(self, user_id: str) -> list[dict]:
+        """Compute per-strategy stats for comparison. Groups by asset as proxy for strategy."""
+        rows = self._store.fetch_all(
+            """
+            SELECT asset, pnl
+            FROM statistics_trades
+            WHERE user_id = :user_id
+            ORDER BY created_at ASC
+            """,
+            {"user_id": user_id},
+        )
+        # Group by asset (used as strategy proxy)
+        from collections import defaultdict
+        groups: dict[str, list[float]] = defaultdict(list)
+        for row in rows:
+            key = row.get("asset") or "unknown"
+            groups[key].append(row["pnl"])
+
+        import numpy as np
+        result = []
+        for strategy_id, pnls in groups.items():
+            arr = np.array(pnls)
+            trade_count = len(pnls)
+            wins = arr[arr > 0]
+            win_rate = round(float(len(wins) / trade_count), 4) if trade_count > 0 else 0.0
+            avg_return = round(float(np.mean(arr)), 6) if trade_count > 0 else 0.0
+            std = float(np.std(arr, ddof=1)) if trade_count > 1 else 0.0
+            sharpe = round(float(np.mean(arr)) / std, 4) if std > 0 else 0.0
+
+            result.append({
+                "strategy_id": strategy_id,
+                "sharpe": sharpe,
+                "win_rate": win_rate,
+                "trade_count": trade_count,
+                "avg_return": avg_return,
+                "total_return": round(float(np.sum(arr)), 4),
+            })
+        return result
+
+
 statistics_repository = StatisticsRepository()

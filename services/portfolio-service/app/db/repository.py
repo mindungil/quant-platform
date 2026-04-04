@@ -79,6 +79,23 @@ class PortfolioRepository:
             )
             """
         )
+        self._store.execute(
+            """
+            CREATE TABLE IF NOT EXISTS portfolio_snapshots (
+                id BIGSERIAL PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                positions JSONB NOT NULL DEFAULT '{}'::jsonb,
+                average_entry_prices JSONB NOT NULL DEFAULT '{}'::jsonb,
+                total_exposure DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+                unrealized_pnl DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+                realized_pnl DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+                total_pnl DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+                realized_pnl_total DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+                daily_return_pct DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+            """
+        )
 
     def apply(self, payload: PositionUpdate) -> PortfolioSnapshot:
         self._items.setdefault(payload.user_id, {})
@@ -266,6 +283,172 @@ class PortfolioRepository:
             rebalance_needed=rebalance_needed,
             updated_at=updated_at,
         )
+
+
+    def save_snapshot(self, user_id: str, snapshot: PortfolioSnapshot) -> None:
+        """Persist a portfolio snapshot with timestamp."""
+        from shared.persistence import serialize_json
+        # Calculate cumulative realized PnL from all closed trades
+        realized_pnl_total = self._compute_realized_pnl_total(user_id)
+
+        self._store.execute(
+            """
+            INSERT INTO portfolio_snapshots
+                (user_id, positions, average_entry_prices, total_exposure,
+                 unrealized_pnl, realized_pnl, total_pnl, realized_pnl_total, daily_return_pct)
+            VALUES
+                (:user_id, CAST(:positions AS JSONB), CAST(:prices AS JSONB), :total_exposure,
+                 :unrealized_pnl, :realized_pnl, :total_pnl, :realized_pnl_total, :daily_return_pct)
+            """,
+            {
+                "user_id": user_id,
+                "positions": serialize_json(snapshot.positions),
+                "prices": serialize_json(snapshot.average_entry_prices),
+                "total_exposure": snapshot.total_exposure,
+                "unrealized_pnl": snapshot.unrealized_pnl,
+                "realized_pnl": snapshot.realized_pnl,
+                "total_pnl": snapshot.total_pnl,
+                "realized_pnl_total": realized_pnl_total,
+                "daily_return_pct": snapshot.daily_return_pct,
+            },
+        )
+
+    def get_snapshot_history(self, user_id: str, limit: int = 30) -> list[dict]:
+        """Return list of snapshots with timestamps."""
+        rows = self._store.fetch_all(
+            """
+            SELECT user_id, positions, average_entry_prices, total_exposure,
+                   unrealized_pnl, realized_pnl, total_pnl, realized_pnl_total,
+                   daily_return_pct, created_at
+            FROM portfolio_snapshots
+            WHERE user_id = :user_id
+            ORDER BY created_at DESC
+            LIMIT :limit
+            """,
+            {"user_id": user_id, "limit": limit},
+        )
+        from shared.persistence import deserialize_json
+        return [
+            {
+                "user_id": row["user_id"],
+                "positions": deserialize_json(row["positions"]) if isinstance(row["positions"], str) else row["positions"],
+                "average_entry_prices": deserialize_json(row["average_entry_prices"]) if isinstance(row["average_entry_prices"], str) else row["average_entry_prices"],
+                "total_exposure": row["total_exposure"],
+                "unrealized_pnl": row["unrealized_pnl"],
+                "realized_pnl": row["realized_pnl"],
+                "total_pnl": row["total_pnl"],
+                "realized_pnl_total": row["realized_pnl_total"],
+                "daily_return_pct": row["daily_return_pct"],
+                "created_at": row["created_at"],
+            }
+            for row in rows
+        ]
+
+    def _compute_realized_pnl_total(self, user_id: str) -> float:
+        """Cumulative sum of all closed trade PnLs."""
+        # Match sells against buys for realized PnL
+        rows = self._store.fetch_all(
+            """
+            SELECT asset, side, quantity, price
+            FROM portfolio_fills
+            WHERE user_id = :user_id
+            ORDER BY created_at ASC
+            """,
+            {"user_id": user_id},
+        )
+        # Track cost basis per asset
+        cost_basis: dict[str, list[tuple[float, float]]] = {}  # asset -> [(qty, price)]
+        realized = 0.0
+
+        for row in rows:
+            asset = row["asset"]
+            side = row["side"]
+            qty = row["quantity"]
+            price = row["price"]
+            cost_basis.setdefault(asset, [])
+
+            if side == "BUY":
+                cost_basis[asset].append((qty, price))
+            elif side == "SELL":
+                remaining = qty
+                while remaining > 0 and cost_basis[asset]:
+                    entry_qty, entry_price = cost_basis[asset][0]
+                    match_qty = min(remaining, entry_qty)
+                    realized += match_qty * (price - entry_price)
+                    remaining -= match_qty
+                    if match_qty >= entry_qty:
+                        cost_basis[asset].pop(0)
+                    else:
+                        cost_basis[asset][0] = (entry_qty - match_qty, entry_price)
+
+        return round(realized, 4)
+
+    def get_positions(self, user_id: str) -> list[dict]:
+        """Return per-asset net positions with side, qty, avg_entry, unrealized PnL."""
+        fills = self._store.fetch_all(
+            """
+            SELECT asset, side, quantity, price
+            FROM portfolio_fills
+            WHERE user_id = :user_id
+            ORDER BY created_at ASC
+            """,
+            {"user_id": user_id},
+        )
+
+        # Compute net quantity per asset
+        net: dict[str, float] = {}
+        cost_basis: dict[str, float] = {}  # weighted avg entry
+        total_cost: dict[str, float] = {}
+
+        for row in fills:
+            asset = row["asset"]
+            qty = row["quantity"]
+            price = row["price"]
+            signed = qty if row["side"] == "BUY" else -qty
+
+            prev_net = net.get(asset, 0.0)
+            new_net = prev_net + signed
+
+            # Update cost basis for entries
+            if row["side"] == "BUY" and new_net > 0:
+                total_cost[asset] = total_cost.get(asset, 0.0) + qty * price
+                if abs(new_net) > 0:
+                    cost_basis[asset] = total_cost.get(asset, 0.0) / max(abs(new_net), 1e-12)
+            elif row["side"] == "SELL" and abs(new_net) < abs(prev_net):
+                # Closing position — reduce cost basis proportionally
+                if abs(prev_net) > 0:
+                    ratio = abs(new_net) / abs(prev_net)
+                    total_cost[asset] = total_cost.get(asset, 0.0) * ratio
+
+            net[asset] = round(new_net, 8)
+
+        # Fetch current prices
+        assets_with_positions = [a for a, q in net.items() if abs(q) > 1e-12]
+        current_prices = _fetch_current_prices(assets_with_positions)
+
+        result = []
+        for asset, quantity in net.items():
+            if abs(quantity) < 1e-12:
+                side = "FLAT"
+            elif quantity > 0:
+                side = "LONG"
+            else:
+                side = "SHORT"
+
+            avg_entry = cost_basis.get(asset, 0.0)
+            current_price = current_prices.get(asset, avg_entry)
+            unrealized_pnl = round((current_price - avg_entry) * quantity, 4) if avg_entry > 0 else 0.0
+
+            result.append({
+                "asset": asset,
+                "quantity": quantity,
+                "avg_entry": round(avg_entry, 4),
+                "current_price": current_price,
+                "unrealized_pnl": unrealized_pnl,
+                "side": side,
+            })
+
+        return result
 
 
 portfolio_repository = PortfolioRepository()

@@ -36,6 +36,16 @@ def get_portfolio(user_id: str) -> PortfolioSnapshot:
     return portfolio_repository.get(user_id)
 
 
+@router.get("/portfolio/{user_id}/history")
+def get_portfolio_history(user_id: str, limit: int = 30) -> list[dict]:
+    return portfolio_repository.get_snapshot_history(user_id, limit=limit)
+
+
+@router.get("/portfolio/{user_id}/positions")
+def get_positions(user_id: str) -> list[dict]:
+    return portfolio_repository.get_positions(user_id)
+
+
 @router.post("/portfolio/{user_id}/optimize")
 def optimize_portfolio(user_id: str, payload: dict = {}) -> dict:
     from app.core.optimizer import optimize_weights
