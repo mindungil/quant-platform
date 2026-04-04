@@ -56,12 +56,15 @@ Docker Compose productionization runtime for the startup-club autonomous trading
 - ETF and stock agents now have market-hours-guarded decision endpoints with exchange calendars (KR/US holidays)
 - `orchestrator-agent` now performs real downstream health checks and cross-agent conflict detection
 - Full integration test suite covers the market→feature→signal→agent→order chain (12 tests)
+- Domain-level Prometheus metrics now cover risk denials, drawdown breaches, order fills/lifecycle, strategy drift score/alerts, agent decision phases/outcomes, and JetStream consumer health
+- Event reliability integration tests cover duplicate delivery idempotency, event replay with past timestamps, and DLQ envelope handling (14 tests)
+- Strategy analysis page with backtest baseline vs live performance comparison and drift indicator badges (red/yellow/green)
+- Settings page now includes execution config panel (live_trading_enabled, shadow_mode, allowed_exchanges)
+- Reusable ErrorBoundary, EmptyState, and LoadingSkeleton components for improved UX polish
 
 ## What Is Not Included Yet
 
 - Full provider-complete live exchange connectivity beyond the current Binance adapter (Upbit and Alpaca are stubs)
-- Richer business-level metrics for fills, risk denials, and strategy performance on top of the shared HTTP observability layer
-- Full event-backed replay coverage for every product event type and every non-critical service
 - Deeper RLS-style row isolation beyond current user-scoped API behavior
 
 ## Services

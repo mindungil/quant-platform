@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 import logging
 import sys
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+
+UTC = timezone.utc
 from typing import Any
 
 from shared.request_context import current_correlation_id, current_request_id, current_user_id

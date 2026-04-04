@@ -9,6 +9,7 @@ const baseLinks = [
   ["/dashboard", "대시보드"],
   ["/chat", "AI 에이전트"],
   ["/agent", "자동매매"],
+  ["/strategies", "전략"],
   ["/performance", "성과"],
   ["/orders", "주문"],
   ["/settings", "설정"],

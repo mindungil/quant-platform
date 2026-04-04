@@ -7,7 +7,29 @@ if not hasattr(np, "PINF"):
     np.PINF = np.inf  # type: ignore[attr-defined]
 import empyrical as ep
 
+from prometheus_client import Counter, Gauge
+
 from app.models.statistics import StatisticsInput, StatisticsSnapshot
+
+strategy_drift_score = Gauge(
+    "strategy_drift_score",
+    "Strategy drift score vs backtest baseline",
+    ["strategy_id"],
+)
+strategy_drift_alert = Gauge(
+    "strategy_drift_alert",
+    "Strategy drift alert level (0=green, 1=yellow, 2=red)",
+    ["strategy_id"],
+)
+drift_alert_threshold = Gauge(
+    "drift_alert_threshold",
+    "Current drift alert threshold value",
+    ["strategy_id"],
+)
+statistics_computations_total = Counter(
+    "statistics_computations_total",
+    "Total statistics computation events",
+)
 
 
 def compute_statistics(payload: StatisticsInput) -> StatisticsSnapshot:
@@ -60,6 +82,21 @@ def compute_statistics(payload: StatisticsInput) -> StatisticsSnapshot:
 
     # Drift detection
     drift = total_return < payload.expected_return
+
+    statistics_computations_total.inc()
+    # Update drift gauges
+    drift_score = abs(total_return - payload.expected_return)
+    sid = payload.strategy_id or "default"
+    strategy_drift_score.labels(strategy_id=sid).set(round(drift_score, 4))
+    if drift_score > 0.1:
+        strategy_drift_alert.labels(strategy_id=sid).set(2)  # red
+        drift_alert_threshold.labels(strategy_id=sid).set(0.1)
+    elif drift_score > 0.05:
+        strategy_drift_alert.labels(strategy_id=sid).set(1)  # yellow
+        drift_alert_threshold.labels(strategy_id=sid).set(0.05)
+    else:
+        strategy_drift_alert.labels(strategy_id=sid).set(0)  # green
+        drift_alert_threshold.labels(strategy_id=sid).set(0.05)
 
     return StatisticsSnapshot(
         user_id=payload.user_id,

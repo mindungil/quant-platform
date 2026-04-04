@@ -29,6 +29,12 @@ interface RiskSettings {
   [key: string]: unknown;
 }
 
+interface ExecutionConfig {
+  live_trading_enabled: boolean;
+  allowed_exchanges: string[];
+  default_shadow_mode: boolean;
+}
+
 interface UserProfile {
   email: string;
   plan?: string;
@@ -67,6 +73,8 @@ function SettingsContent() {
   const [riskLoading, setRiskLoading] = useState(true);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [showGuide, setShowGuide] = useState(false);
+  const [execConfig, setExecConfig] = useState<ExecutionConfig | null>(null);
+  const [execLoading, setExecLoading] = useState(true);
 
   const fetchCredentials = useCallback(() => {
     setCredLoading(true);
@@ -87,14 +95,39 @@ function SettingsContent() {
       .finally(() => setRiskLoading(false));
   }, []);
 
+  const fetchExecConfig = useCallback(() => {
+    setExecLoading(true);
+    gatewayFetch("/admin/execution/config")
+      .then((data) => setExecConfig(data as ExecutionConfig))
+      .catch(() => setExecConfig(null))
+      .finally(() => setExecLoading(false));
+  }, []);
+
+  const isAdmin = profile?.roles?.includes("admin") ?? false;
+
+  async function updateExecConfig(patch: Partial<ExecutionConfig>) {
+    if (!execConfig) return;
+    const updated = { ...execConfig, ...patch };
+    setExecConfig(updated);
+    try {
+      await gatewayFetch("/admin/execution/config", {
+        method: "PUT",
+        body: JSON.stringify(updated),
+      });
+    } catch {
+      fetchExecConfig();
+    }
+  }
+
   useEffect(() => {
     fetchCredentials();
     fetchRisk();
+    fetchExecConfig();
     const claims = readTokenClaims();
     if (claims) {
       setProfile({ email: claims.email ?? claims.sub ?? "", roles: claims.roles });
     }
-  }, [fetchCredentials, fetchRisk]);
+  }, [fetchCredentials, fetchRisk, fetchExecConfig]);
 
   async function saveCredential() {
     if (!apiKey.trim() || !apiSecret.trim()) {
@@ -384,6 +417,90 @@ function SettingsContent() {
                   </div>
                 ) : (
                   <p className="text-sm text-neutral-600">리스크 설정을 불러올 수 없습니다</p>
+                )}
+              </section>
+            </FadeInView>
+
+            {/* Execution Config */}
+            <FadeInView delay={0.12}>
+              <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6 space-y-4">
+                <h3 className="text-lg font-semibold text-white">실행 설정</h3>
+                {execLoading ? (
+                  <div className="space-y-2">
+                    {[0, 1, 2].map((i) => (
+                      <div key={i} className="skeleton h-14 rounded-xl" />
+                    ))}
+                  </div>
+                ) : execConfig ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                      <div>
+                        <p className="text-[11px] font-medium uppercase tracking-widest text-neutral-500">실시간 트레이딩</p>
+                        <p className={`mt-1 text-sm font-semibold ${execConfig.live_trading_enabled ? "text-emerald-400" : "text-red-400"}`}>
+                          {execConfig.live_trading_enabled ? "활성" : "비활성"}
+                        </p>
+                      </div>
+                      {isAdmin && (
+                        <button
+                          className={`relative h-6 w-11 rounded-full transition-colors ${execConfig.live_trading_enabled ? "bg-emerald-500" : "bg-neutral-700"}`}
+                          onClick={() => updateExecConfig({ live_trading_enabled: !execConfig.live_trading_enabled })}
+                        >
+                          <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${execConfig.live_trading_enabled ? "left-[22px]" : "left-0.5"}`} />
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                      <div>
+                        <p className="text-[11px] font-medium uppercase tracking-widest text-neutral-500">섀도우 모드</p>
+                        <p className={`mt-1 text-sm font-semibold ${execConfig.default_shadow_mode ? "text-blue-400" : "text-neutral-400"}`}>
+                          {execConfig.default_shadow_mode ? "기본 활성" : "비활성"}
+                        </p>
+                      </div>
+                      {isAdmin && (
+                        <button
+                          className={`relative h-6 w-11 rounded-full transition-colors ${execConfig.default_shadow_mode ? "bg-blue-500" : "bg-neutral-700"}`}
+                          onClick={() => updateExecConfig({ default_shadow_mode: !execConfig.default_shadow_mode })}
+                        >
+                          <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${execConfig.default_shadow_mode ? "left-[22px]" : "left-0.5"}`} />
+                        </button>
+                      )}
+                    </div>
+                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                      <p className="text-[11px] font-medium uppercase tracking-widest text-neutral-500">허용 거래소</p>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {EXCHANGES.map((ex) => {
+                          const enabled = execConfig.allowed_exchanges.map((e) => e.toLowerCase()).includes(ex.id);
+                          return (
+                            <button
+                              key={ex.id}
+                              disabled={!isAdmin}
+                              onClick={() => {
+                                if (!isAdmin) return;
+                                const updated = enabled
+                                  ? execConfig.allowed_exchanges.filter((e) => e.toLowerCase() !== ex.id)
+                                  : [...execConfig.allowed_exchanges, ex.id];
+                                updateExecConfig({ allowed_exchanges: updated });
+                              }}
+                              className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors ${
+                                enabled
+                                  ? "bg-white/10 text-neutral-300"
+                                  : "bg-white/[0.03] text-neutral-600"
+                              } ${isAdmin ? "cursor-pointer hover:bg-white/20" : ""}`}
+                            >
+                              {ex.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    {isAdmin && (
+                      <p className="text-[10px] text-neutral-600">
+                        관리자 권한으로 위 설정을 직접 변경할 수 있습니다
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-neutral-600">실행 설정을 불러올 수 없습니다</p>
                 )}
               </section>
             </FadeInView>

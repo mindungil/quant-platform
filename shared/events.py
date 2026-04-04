@@ -2,14 +2,46 @@ from __future__ import annotations
 
 import json
 from asyncio import sleep
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable
 from uuid import uuid4
 
 from nats.aio.client import Client as NATS
 from nats.js.api import ConsumerConfig, StreamConfig
+from prometheus_client import Counter, Gauge
 
 from shared.logging import get_logger
+
+jetstream_messages_received_total = Counter(
+    "jetstream_messages_received_total",
+    "Total JetStream messages received by consumer",
+    ["consumer"],
+)
+jetstream_messages_dlq_total = Counter(
+    "jetstream_messages_dlq_total",
+    "Total JetStream messages sent to DLQ",
+    ["consumer"],
+)
+jetstream_consumer_connected = Gauge(
+    "jetstream_consumer_connected",
+    "JetStream consumer connection status (1=connected, 0=disconnected)",
+    ["consumer"],
+)
+jetstream_duplicate_messages_total = Counter(
+    "jetstream_duplicate_messages_total",
+    "Total duplicate messages detected via idempotency check",
+    ["consumer"],
+)
+jetstream_consumer_pending = Gauge(
+    "jetstream_consumer_pending",
+    "Number of pending messages for JetStream consumer",
+    ["subject"],
+)
+jetstream_redelivery_count = Gauge(
+    "jetstream_redelivery_count",
+    "Number of redelivered messages for JetStream consumer",
+    ["subject"],
+)
 from shared.persistence import RedisStore
 from shared.request_context import reset_request_context, set_request_context
 
@@ -29,7 +61,7 @@ class EventEnvelope:
     ) -> None:
         self.event_id = event_id or str(uuid4())
         self.event_type = event_type
-        self.occurred_at = datetime.now(UTC).isoformat()
+        self.occurred_at = datetime.now(timezone.utc).isoformat()
         self.source = source
         self.correlation_id = correlation_id or self.event_id
         self.user_id = user_id
@@ -120,9 +152,17 @@ class JetStreamBus:
 
         async def _wrapped(message) -> None:
             payload = json.loads(message.data.decode("utf-8"))
+            jetstream_messages_received_total.labels(consumer=durable).inc()
+            try:
+                info = await self._js.consumer_info(stream, durable)
+                jetstream_consumer_pending.labels(subject=subject).set(info.num_pending)
+                jetstream_redelivery_count.labels(subject=subject).set(info.num_redelivered)
+            except Exception:
+                pass
             event_id = payload["event_id"]
             idempotency_key = f"events:{durable}"
             if self._redis.sismember(idempotency_key, event_id):
+                jetstream_duplicate_messages_total.labels(consumer=durable).inc()
                 await message.ack()
                 return
             tokens = set_request_context(
@@ -154,6 +194,7 @@ class JetStreamBus:
                         data=payload,
                     ),
                 )
+                jetstream_messages_dlq_total.labels(consumer=durable).inc()
                 await message.ack()
             finally:
                 reset_request_context(tokens)
@@ -161,13 +202,15 @@ class JetStreamBus:
         last_error: Exception | None = None
         for attempt in range(1, self._connect_attempts + 1):
             try:
-                return await self._js.subscribe(
+                sub = await self._js.subscribe(
                     subject,
                     durable=durable,
                     stream=stream,
                     cb=_wrapped,
                     config=ConsumerConfig(deliver_policy="all"),
                 )
+                jetstream_consumer_connected.labels(consumer=durable).set(1)
+                return sub
             except Exception as exc:  # pragma: no cover - exercised in compose runtime
                 last_error = exc
                 if attempt == self._connect_attempts:

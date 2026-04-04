@@ -2,6 +2,11 @@ FROM python:3.11-slim
 
 WORKDIR /code
 
+# Install build tools for native extensions (ecos, scipy, etc.)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential cmake gfortran libopenblas-dev liblapack-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy all requirements first for layer caching
 COPY services/market-data/requirements.txt        /tmp/reqs/market-data.txt
 COPY services/feature-store/requirements.txt      /tmp/reqs/feature-store.txt

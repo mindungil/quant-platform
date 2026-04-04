@@ -42,19 +42,19 @@ What remains for full Notion parity:
 - [x] missing gateway/auth boundaries required for multi-user isolation
 - [x] missing external data inputs required by Notion signal scoring
 
-### Tier 2: Product blockers — MOSTLY RESOLVED
+### Tier 2: Product blockers — RESOLVED
 
 - [x] frontend product UI via Next.js
 - [x] websocket replay with Redis-backed delivery
 - [x] strategy validation via async backtest jobs
-- [ ] settings and strategy UX depth improvements
+- [x] settings and strategy UX depth improvements
 
 ### Tier 3: Hardening blockers
 
 - [x] shared request metrics and structured JSON logs
 - [x] Prometheus/Grafana observability profile
-- [ ] richer domain-level metrics for risk, fills, strategy drift, and JetStream consumer health
-- [ ] duplicate-delivery and replay-path integration coverage
+- [x] richer domain-level metrics for risk, fills, strategy drift, and JetStream consumer health
+- [x] duplicate-delivery and replay-path integration coverage
 
 ## Delivery Order
 
@@ -145,7 +145,9 @@ Tasks:
 - [x] add compose smoke tests and dependency probes
 - [x] add CI workflow for tests and linting
 - [x] add full crypto execution flow integration tests
-- [ ] add richer domain metrics for risk, fills, strategy drift, and JetStream consumer health
+- [x] add richer domain metrics for risk, fills, strategy drift, and JetStream consumer health
+- [x] add duplicate-delivery and replay-path integration tests
+- [x] add settings and strategy UX depth improvements
 
 ## Definition Of Done
 

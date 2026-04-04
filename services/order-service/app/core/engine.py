@@ -25,6 +25,16 @@ order_fill_latency_seconds = Histogram(
     "End-to-end order processing latency",
     buckets=(0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
 )
+order_fills_total = Counter(
+    "order_fills_total",
+    "Total order fill events",
+    ["exchange", "asset"],
+)
+order_lifecycle_total = Counter(
+    "order_lifecycle_total",
+    "Order lifecycle state transitions",
+    ["status"],
+)
 
 risk_client = RiskClient(settings.risk_service_base_url)
 exchange_client = ExchangeClient(settings.exchange_adapter_base_url)
@@ -35,13 +45,16 @@ logger = get_logger("order-service")
 
 
 def _record_lifecycle(order_id: str, user_id: str, status: str, detail: dict) -> None:
+    order_lifecycle_total.labels(status=status).inc()
     if hasattr(order_repository, "record_lifecycle"):
         order_repository.record_lifecycle(order_id, user_id, status, detail=detail)
 
 
-def _record_order_metrics(status: str, shadow_mode: bool, start: float) -> None:
+def _record_order_metrics(status: str, shadow_mode: bool, start: float, exchange: str = "", asset: str = "") -> None:
     orders_total.labels(status=status, shadow_mode=str(shadow_mode).lower()).inc()
     order_fill_latency_seconds.observe(time.monotonic() - start)
+    if status == "FILLED":
+        order_fills_total.labels(exchange=exchange, asset=asset).inc()
 
 
 def process_order(payload: OrderRequest) -> OrderResponse:
@@ -368,5 +381,5 @@ def process_order(payload: OrderRequest) -> OrderResponse:
                 },
             )
 
-    _record_order_metrics(response.status, payload.shadow_mode, _start)
+    _record_order_metrics(response.status, payload.shadow_mode, _start, exchange=payload.exchange, asset=payload.asset)
     return response

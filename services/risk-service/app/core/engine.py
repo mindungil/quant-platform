@@ -16,6 +16,20 @@ risk_approval_latency_seconds = Histogram(
     "Latency of risk approval evaluation",
     buckets=(0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0),
 )
+risk_denials_total = Counter(
+    "risk_denials_total",
+    "Total risk denial events by reason",
+    ["reason"],
+)
+risk_drawdown_breaches_total = Counter(
+    "risk_drawdown_breaches_total",
+    "Drawdown threshold breach events",
+    ["level"],
+)
+risk_halt_publications_total = Counter(
+    "risk_halt_publications_total",
+    "Risk halt publication events",
+)
 
 # Normal distribution quantiles
 Z_95 = 1.6449
@@ -117,6 +131,12 @@ def approve_order(payload: RiskApprovalRequest) -> RiskApprovalResponse:
         )
         risk_repository.record(payload, result)
         _record_metrics(result, _start)
+        if not approved:
+            risk_denials_total.labels(reason=reason).inc()
+            if "threshold_reached" in reason:
+                risk_drawdown_breaches_total.labels(level=level).inc()
+            if level == "HALT":
+                risk_halt_publications_total.inc()
         return result
 
     if not payload.automation_enabled:

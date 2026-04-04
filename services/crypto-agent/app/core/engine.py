@@ -35,6 +35,26 @@ agent_decision_latency_seconds = Histogram(
     "Total decision loop latency",
     buckets=(0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0),
 )
+agent_phase_total = Counter(
+    "agent_phase_total",
+    "Counters per decision phase",
+    ["phase", "status"],
+)
+decision_phase_total = Counter(
+    "decision_phase_total",
+    "Decision phase execution count",
+    ["phase"],
+)
+agent_decision_outcomes_total = Counter(
+    "agent_decision_outcomes_total",
+    "Decision outcomes by action",
+    ["action"],
+)
+decision_outcome_total = Counter(
+    "decision_outcome_total",
+    "Decision outcomes by buy/sell/hold",
+    ["outcome"],
+)
 
 signal_client = SignalClient(settings.signal_service_base_url)
 memory_client = MemoryClient(settings.memory_service_base_url)
@@ -76,6 +96,8 @@ def _complete_phase(phase: PhaseResult, *, detail: str | None = None) -> PhaseRe
     if phase.started_at:
         phase.duration_ms = round((now - phase.started_at).total_seconds() * 1000, 2)
     phase.detail = detail
+    agent_phase_total.labels(phase=phase.name, status="completed").inc()
+    decision_phase_total.labels(phase=phase.name).inc()
     return phase
 
 
@@ -86,6 +108,7 @@ def _fail_phase(phase: PhaseResult, *, detail: str | None = None) -> PhaseResult
     if phase.started_at:
         phase.duration_ms = round((now - phase.started_at).total_seconds() * 1000, 2)
     phase.detail = detail
+    agent_phase_total.labels(phase=phase.name, status="failed").inc()
     return phase
 
 
@@ -845,6 +868,8 @@ def run_decision_loop(asset: str, *, user_id: str | None = None, correlation_id:
     _phase_record(asset, decision, phases)
 
     # Record metrics
+    decision_outcome_total.labels(outcome=decision.action.lower()).inc()
+    agent_decision_outcomes_total.labels(action=decision.action).inc()
     agent_decisions_total.labels(
         action=decision.action,
         threshold_crossed=str(decision.threshold_crossed).lower(),
