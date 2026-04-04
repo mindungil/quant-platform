@@ -1,15 +1,20 @@
 import math
 import numpy as np
-# Patch numpy for empyrical compatibility with NumPy 2.x
-if not hasattr(np, "NINF"):
-    np.NINF = -np.inf  # type: ignore[attr-defined]
-if not hasattr(np, "PINF"):
-    np.PINF = np.inf  # type: ignore[attr-defined]
-import empyrical as ep
+import pandas as pd
+import quantstats as qs
 
 from prometheus_client import Counter, Gauge
 
 from app.models.statistics import StatisticsInput, StatisticsSnapshot
+
+
+def _safe_float(val, default: float = 0.0) -> float:
+    """Convert quantstats result to float, returning *default* for NaN/Inf."""
+    try:
+        v = float(val)
+        return v if math.isfinite(v) else default
+    except (TypeError, ValueError):
+        return default
 
 strategy_drift_score = Gauge(
     "strategy_drift_score",
@@ -62,27 +67,65 @@ def compute_statistics(payload: StatisticsInput) -> StatisticsSnapshot:
     losses = returns[returns < 0]
     win_rate = round(float(len(wins) / trade_count), 4)
 
-    # --- empyrical: production-grade performance metrics ---
-    sharpe = round(float(ep.sharpe_ratio(returns)), 4) if trade_count > 1 else 0.0
-    sortino = round(float(ep.sortino_ratio(returns)), 4) if trade_count > 1 else 0.0
-    max_drawdown = round(float(abs(ep.max_drawdown(returns))), 4)
-    calmar = round(float(ep.calmar_ratio(returns)), 4) if max_drawdown > 0 and trade_count > 1 else 0.0
+    # Build a dated Series for quantstats (requires DatetimeIndex)
+    ret_series = pd.Series(
+        returns,
+        index=pd.date_range("2020-01-01", periods=len(returns), freq="D"),
+    )
+
+    # --- quantstats: production-grade performance metrics ---
+    try:
+        sharpe = round(_safe_float(qs.stats.sharpe(ret_series)), 4) if trade_count > 1 else 0.0
+    except Exception:
+        sharpe = 0.0
+    try:
+        sortino = round(_safe_float(qs.stats.sortino(ret_series)), 4) if trade_count > 1 else 0.0
+    except Exception:
+        sortino = 0.0
+    try:
+        max_drawdown = round(abs(_safe_float(qs.stats.max_drawdown(ret_series))), 4)
+    except Exception:
+        max_drawdown = 0.0
+    try:
+        calmar = round(_safe_float(qs.stats.calmar(ret_series)), 4) if max_drawdown > 0 and trade_count > 1 else 0.0
+    except Exception:
+        calmar = 0.0
 
     # Clamp extreme values from small samples
     sharpe = max(-10.0, min(10.0, sharpe))
     sortino = max(-10.0, min(10.0, sortino))
     calmar = max(-100.0, min(100.0, calmar))
 
-    # --- Additional metrics (not in empyrical) ---
-    # Profit factor
-    gross_profit = float(np.sum(wins)) if len(wins) > 0 else 0.0
-    gross_loss = float(np.abs(np.sum(losses))) if len(losses) > 0 else 0.0
-    profit_factor = round(gross_profit / gross_loss, 4) if gross_loss > 0 else 999.0
+    # --- quantstats additional metrics ---
+    try:
+        profit_factor = round(_safe_float(qs.stats.profit_factor(ret_series)), 4)
+    except Exception:
+        gross_profit = float(np.sum(wins)) if len(wins) > 0 else 0.0
+        gross_loss = float(np.abs(np.sum(losses))) if len(losses) > 0 else 0.0
+        profit_factor = round(gross_profit / gross_loss, 4) if gross_loss > 0 else 999.0
 
-    # Win/loss averages and payoff ratio
-    avg_win = round(float(np.mean(wins)), 6) if len(wins) > 0 else 0.0
-    avg_loss = round(float(np.mean(losses)), 6) if len(losses) > 0 else 0.0
-    payoff_ratio = round(avg_win / abs(avg_loss), 4) if avg_loss != 0 else 999.0
+    try:
+        avg_win = round(_safe_float(qs.stats.avg_win(ret_series)), 6)
+    except Exception:
+        avg_win = round(float(np.mean(wins)), 6) if len(wins) > 0 else 0.0
+    try:
+        avg_loss = round(_safe_float(qs.stats.avg_loss(ret_series)), 6)
+    except Exception:
+        avg_loss = round(float(np.mean(losses)), 6) if len(losses) > 0 else 0.0
+    try:
+        payoff_ratio = round(_safe_float(qs.stats.payoff_ratio(ret_series)), 4)
+    except Exception:
+        payoff_ratio = round(avg_win / abs(avg_loss), 4) if avg_loss != 0 else 999.0
+
+    # VaR / CVaR (new — not available in empyrical)
+    try:
+        value_at_risk = round(_safe_float(qs.stats.value_at_risk(ret_series)), 6)
+    except Exception:
+        value_at_risk = 0.0
+    try:
+        cvar = round(_safe_float(qs.stats.conditional_value_at_risk(ret_series)), 6)
+    except Exception:
+        cvar = 0.0
 
     # Expectancy
     loss_rate = 1 - win_rate
@@ -96,7 +139,14 @@ def compute_statistics(payload: StatisticsInput) -> StatisticsSnapshot:
 
     if trade_count >= recent_window and payload.baseline_sharpe is not None:
         recent_returns = returns[-recent_window:]
-        recent_sharpe_val = float(ep.sharpe_ratio(recent_returns)) if len(recent_returns) > 1 else 0.0
+        try:
+            recent_ret_series = pd.Series(
+                recent_returns,
+                index=pd.date_range("2020-01-01", periods=len(recent_returns), freq="D"),
+            )
+            recent_sharpe_val = _safe_float(qs.stats.sharpe(recent_ret_series)) if len(recent_returns) > 1 else 0.0
+        except Exception:
+            recent_sharpe_val = 0.0
         recent_sharpe_val = max(-10.0, min(10.0, recent_sharpe_val))
 
         drift_score = abs(recent_sharpe_val - payload.baseline_sharpe)
@@ -164,6 +214,8 @@ def compute_statistics(payload: StatisticsInput) -> StatisticsSnapshot:
         avg_loss=avg_loss,
         payoff_ratio=payoff_ratio,
         expectancy=expectancy,
+        value_at_risk=value_at_risk,
+        conditional_value_at_risk=cvar,
         drift_score=round(drift_score, 4),
         recent_sharpe=round(recent_sharpe_val, 4) if recent_sharpe_val is not None else None,
         recent_trade_pnls=payload.trade_pnls[-10:],

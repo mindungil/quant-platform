@@ -7,19 +7,23 @@ from uuid import uuid4
 
 import httpx
 import numpy as np
-# Patch numpy for empyrical compatibility with NumPy 2.x
-if not hasattr(np, "NINF"):
-    np.NINF = -np.inf  # type: ignore[attr-defined]
-if not hasattr(np, "PINF"):
-    np.PINF = np.inf  # type: ignore[attr-defined]
 import pandas as pd
-import empyrical as ep
+import quantstats as qs
 
 from app.core.config import settings
 from app.models.backtest import BacktestJob, BacktestRequest, BacktestResult
 from shared.statistics import validate_backtest
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_float(val, default: float = 0.0) -> float:
+    """Convert quantstats result to float, returning *default* for NaN/Inf."""
+    try:
+        v = float(val)
+        return v if math.isfinite(v) else default
+    except (TypeError, ValueError):
+        return default
 
 
 # ---------------------------------------------------------------------------
@@ -327,28 +331,58 @@ def _calc_metrics(trades: list[dict], risk_free_daily: float) -> dict:
     win_rate = float(len(wins) / n)
     mean_ret = float(np.mean(returns))
 
-    # Sharpe (empyrical - annualized, risk-free adjusted)
-    sharpe = float(ep.sharpe_ratio(returns, risk_free=risk_free_daily))
+    # Build a dated Series for quantstats (requires DatetimeIndex)
+    ret_series = pd.Series(
+        returns,
+        index=pd.date_range("2020-01-01", periods=len(returns), freq="D"),
+    )
 
-    # Sortino (empyrical)
-    sortino = float(ep.sortino_ratio(returns, required_return=risk_free_daily))
+    # Sharpe (quantstats - annualized)
+    try:
+        sharpe = _safe_float(qs.stats.sharpe(ret_series))
+    except Exception:
+        sharpe = 0.0
 
-    # Max drawdown (empyrical)
-    max_dd = float(abs(ep.max_drawdown(returns)))
+    # Sortino (quantstats)
+    try:
+        sortino = _safe_float(qs.stats.sortino(ret_series))
+    except Exception:
+        sortino = 0.0
 
-    # Profit factor
-    gross_profit = float(np.sum(wins)) if len(wins) > 0 else 0.0
-    gross_loss = float(np.abs(np.sum(losses))) if len(losses) > 0 else 0.0
-    profit_factor = gross_profit / gross_loss if gross_loss > 0 else 999.0
+    # Max drawdown (quantstats)
+    try:
+        max_dd = abs(_safe_float(qs.stats.max_drawdown(ret_series)))
+    except Exception:
+        max_dd = 0.0
 
-    # Calmar
-    ann_return = mean_ret * 252
-    calmar = ann_return / max_dd if max_dd > 0 else 0.0
+    # Profit factor (quantstats)
+    try:
+        profit_factor = _safe_float(qs.stats.profit_factor(ret_series))
+    except Exception:
+        gross_profit = float(np.sum(wins)) if len(wins) > 0 else 0.0
+        gross_loss = float(np.abs(np.sum(losses))) if len(losses) > 0 else 0.0
+        profit_factor = gross_profit / gross_loss if gross_loss > 0 else 999.0
 
-    # Win/loss averages
-    avg_win = float(np.mean(wins)) if len(wins) > 0 else 0.0
-    avg_loss = float(np.mean(losses)) if len(losses) > 0 else 0.0
-    payoff_ratio = avg_win / abs(avg_loss) if avg_loss != 0 else 999.0
+    # Calmar (quantstats)
+    try:
+        calmar = _safe_float(qs.stats.calmar(ret_series))
+    except Exception:
+        ann_return = mean_ret * 252
+        calmar = ann_return / max_dd if max_dd > 0 else 0.0
+
+    # Win/loss averages (quantstats)
+    try:
+        avg_win = _safe_float(qs.stats.avg_win(ret_series))
+    except Exception:
+        avg_win = float(np.mean(wins)) if len(wins) > 0 else 0.0
+    try:
+        avg_loss = _safe_float(qs.stats.avg_loss(ret_series))
+    except Exception:
+        avg_loss = float(np.mean(losses)) if len(losses) > 0 else 0.0
+    try:
+        payoff_ratio = _safe_float(qs.stats.payoff_ratio(ret_series))
+    except Exception:
+        payoff_ratio = avg_win / abs(avg_loss) if avg_loss != 0 else 999.0
 
     total_return = float(np.prod(1 + returns) - 1)
 
