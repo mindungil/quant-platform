@@ -133,6 +133,35 @@ def detect_node(state: AgentState) -> dict:
         if val is not None:
             features[field_name] = val
 
+    # Fetch external context (non-fatal)
+    external_used = False
+    try:
+        ext_resp = httpx.get(
+            f"{settings.external_data_service_base_url}/external/context/{state['asset']}",
+            timeout=5.0,
+        )
+        if ext_resp.status_code == 200:
+            ext = ext_resp.json()
+            fg = ext.get("fear_greed_index")
+            if fg is not None:
+                features["fear_greed_index"] = round((fg - 50) / 50, 4)
+            if ext.get("news_sentiment") is not None:
+                features["news_sentiment"] = ext["news_sentiment"]
+            if ext.get("onchain_score") is not None:
+                features["onchain_score"] = ext["onchain_score"]
+            if ext.get("macro_risk_score") is not None:
+                features["macro_risk_score"] = ext["macro_risk_score"]
+            external_used = True
+            logger.info("graph_detect_external_context", extra={
+                "asset": state["asset"],
+                "fear_greed": fg,
+                "news_sentiment": ext.get("news_sentiment"),
+            })
+    except Exception as exc:
+        logger.warning("graph_detect_external_skipped", extra={
+            "asset": state["asset"], "error": str(exc)[:100],
+        })
+
     try:
         regime = detect_regime(features)
         regime_label = regime.label
@@ -142,12 +171,22 @@ def detect_node(state: AgentState) -> dict:
         regime_label = "unknown"
         suggested_type = "composite_adaptive"
 
+    # Override regime with fear label when Extreme Fear detected
+    fear_greed_val = features.get("fear_greed_index")
+    if fear_greed_val is not None and fear_greed_val < -0.6:
+        if "fear" not in regime_label:
+            regime_label = f"{regime_label}+fear"
+            logger.info("graph_detect_fear_override", extra={
+                "regime": regime_label, "fear_greed": fear_greed_val,
+            })
+
     duration = round((time.monotonic() - t0) * 1000, 2)
     timings = dict(state.get("phase_timings") or {})
     timings["detect"] = duration
 
     logger.info("graph_detect", extra={
         "regime": regime_label, "suggested": suggested_type,
+        "external_context": external_used,
     })
 
     return {

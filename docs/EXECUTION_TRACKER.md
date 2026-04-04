@@ -200,6 +200,22 @@ Tasks:
 - [x] update test stubs to use fresh `feature_timestamp` for graph staleness checks
 - [x] verify all 42 integration tests pass with LangGraph-based decision loop
 
+### Milestone 11: External Data Service 실데이터 연결
+
+Tasks:
+
+- [x] replace fake hash-based data in `external-data-service/snapshot.py` with real public API calls
+- [x] integrate Fear & Greed Index via `api.alternative.me/fng` with 10-min cache and sentiment mapping
+- [x] integrate CryptoPanic public news feed for per-asset news sentiment with 5-min cache
+- [x] integrate Blockchain.info on-chain tx count for BTC with 15-min cache, fallback for non-BTC assets
+- [x] derive macro risk score from Fear & Greed (inverse relationship)
+- [x] add `httpx==0.28.1` to external-data-service requirements
+- [x] add `external_data_service_base_url` to crypto-agent config
+- [x] update `detect_node` in crypto-agent graph to fetch external context and inject into features
+- [x] add Extreme Fear regime override in detect_node when fear_greed < -0.6
+- [x] add 12 unit tests covering mocked HTTP responses, cache behavior, and fallback on API failure
+- [x] all HTTP calls use httpx with timeout=5.0 and graceful fallback on failure
+
 ## Definition Of Done
 
 A milestone is complete only when:

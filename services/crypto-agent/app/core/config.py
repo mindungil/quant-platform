@@ -24,6 +24,7 @@ class Settings:
     default_shadow_mode: bool = os.getenv("DEFAULT_SHADOW_MODE", "true").lower() == "true"
     statistics_service_base_url: str = os.getenv("STATISTICS_SERVICE_BASE_URL", "http://localhost:8013")
     portfolio_service_base_url: str = os.getenv("PORTFOLIO_SERVICE_BASE_URL", "http://localhost:8007")
+    external_data_service_base_url: str = os.getenv("EXTERNAL_DATA_SERVICE_BASE_URL", "http://localhost:8010")
     max_position_pct: float = float(os.getenv("MAX_POSITION_PCT", "0.05"))
     kelly_factor: float = float(os.getenv("KELLY_FACTOR", "0.5"))
     kelly_fraction: float = float(os.getenv("KELLY_FRACTION", "0.5"))
