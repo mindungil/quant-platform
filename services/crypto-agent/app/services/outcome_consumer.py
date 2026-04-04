@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 
 from app.core.config import settings
+from app.core.mab_state import formula_mab
 from app.db.repository import decision_repository
 from app.services.memory_client import MemoryClient
 from shared.events import JetStreamBus
@@ -156,6 +157,42 @@ class OutcomeReinforcementConsumer:
                         )
                     except Exception:
                         logger.debug("reinforce_failed_event_publish_error")
+
+            # Update MAB with trade outcome for formula learning
+            components = decision_data.get("components", {})
+            formula_name = (
+                decision_data.get("formula_name")
+                or components.get("formula_name")
+            )
+            regime_label = (
+                decision_data.get("regime_label")
+                or components.get("regime_label")
+            )
+            # Extract formula name from reasoning prefix if not in components
+            reasoning = decision_data.get("reasoning", "")
+            if not formula_name and reasoning.startswith("[formula="):
+                try:
+                    formula_name = reasoning.split("formula=")[1].split(" ")[0].split("]")[0]
+                except (IndexError, ValueError):
+                    pass
+            if not regime_label and "regime=" in reasoning:
+                try:
+                    regime_label = reasoning.split("regime=")[1].split(" ")[0].split("]")[0]
+                except (IndexError, ValueError):
+                    pass
+
+            if formula_name:
+                try:
+                    formula_mab.update(formula_name, trade_outcome, regime=regime_label)
+                    logger.info("mab_updated_from_outcome", extra={
+                        "formula_name": formula_name,
+                        "regime": regime_label,
+                        "trade_outcome": f"{trade_outcome:.4f}",
+                    })
+                except Exception as exc:
+                    logger.warning("mab_update_failed", extra={
+                        "formula_name": formula_name, "error": str(exc)[:100],
+                    })
 
             logger.info("outcome_reinforced", extra={
                 "correlation_id": correlation_id,

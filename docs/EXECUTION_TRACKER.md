@@ -162,6 +162,26 @@ Tasks:
 - [x] create shadow strategy tracker (`shadow_tracker.py`) — NATS consumer on `order.filled` that updates running shadow metrics (Sharpe, win_rate, max_drawdown, PnL)
 - [x] add drift detection → strategy deprecation: statistics-service publishes `strategy.drift_alert` on critical drift; strategy-registry `drift_consumer.py` transitions ACTIVE → DEPRECATED
 
+### Milestone 9: Agent-Service Integration Hardening
+
+Tasks:
+
+- [x] add retry with exponential backoff to signal_client (3 attempts, 0.5→1→2s) with 429 Retry-After support
+- [x] add Prometheus counter `signal_client_requests_total` with status labels
+- [x] add retry (3 attempts, 0.5s) to memory_client search/record/reinforce with HTTP vs connection error categorization
+- [x] add Prometheus counter `memory_client_requests_total` with method+status labels
+- [x] add fallback bootstrap strategy to strategy_client on network/404 errors
+- [x] add Prometheus counter `strategy_client_requests_total` with status labels
+- [x] fix hardcoded localhost:8013 URL in engine._build_order_request to use settings.statistics_service_base_url
+- [x] add statistics_service_base_url to crypto-agent config
+- [x] parallelize scheduler asset processing with asyncio.gather instead of sequential loop
+- [x] add per-asset exponential backoff (skip 2^N cycles, max 8) for failing assets
+- [x] add etf-agent and stock-agent decide calls to scheduler cycle (MONITORED_ETF_ASSETS, MONITORED_STOCK_ASSETS)
+- [x] add etf-agent and stock-agent to orchestrator AGENT_REGISTRY
+- [x] add conflict resolution with win_rate lookup and resolve_conflict() override call
+- [x] extract FormulaMAB to mab_state.py to resolve circular import between engine and outcome_consumer
+- [x] update outcome_consumer to call formula_mab.update() after reinforcement for MAB feedback loop closure
+
 ## Definition Of Done
 
 A milestone is complete only when:

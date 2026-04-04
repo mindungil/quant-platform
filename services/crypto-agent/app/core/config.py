@@ -22,6 +22,7 @@ class Settings:
     default_current_exposure: float = float(os.getenv("DEFAULT_AGENT_CURRENT_EXPOSURE", "0"))
     default_automation_enabled: bool = os.getenv("DEFAULT_AGENT_AUTOMATION_ENABLED", "true").lower() == "true"
     default_shadow_mode: bool = os.getenv("DEFAULT_SHADOW_MODE", "true").lower() == "true"
+    statistics_service_base_url: str = os.getenv("STATISTICS_SERVICE_BASE_URL", "http://localhost:8013")
     portfolio_service_base_url: str = os.getenv("PORTFOLIO_SERVICE_BASE_URL", "http://localhost:8007")
     max_position_pct: float = float(os.getenv("MAX_POSITION_PCT", "0.05"))
     kelly_factor: float = float(os.getenv("KELLY_FACTOR", "0.5"))

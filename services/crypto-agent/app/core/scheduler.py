@@ -14,8 +14,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from datetime import UTC, datetime
+
+import httpx
 
 from app.core.config import settings
 from app.core.engine import run_decision_loop
@@ -25,11 +28,20 @@ logger = logging.getLogger("crypto-agent")
 
 # Assets to monitor
 MONITORED_ASSETS = list(
-    filter(None, __import__("os").getenv("MONITORED_ASSETS", "BTCUSDT,ETHUSDT,SOLUSDT").split(","))
+    filter(None, os.getenv("MONITORED_ASSETS", "BTCUSDT,ETHUSDT,SOLUSDT").split(","))
+)
+MONITORED_ETF_ASSETS = list(
+    filter(None, os.getenv("MONITORED_ETF_ASSETS", "SPY,QQQ").split(","))
+)
+MONITORED_STOCK_ASSETS = list(
+    filter(None, os.getenv("MONITORED_STOCK_ASSETS", "AAPL,NVDA").split(","))
 )
 
 # Interval between analysis cycles (seconds)
-CYCLE_INTERVAL = int(__import__("os").getenv("AGENT_CYCLE_INTERVAL", "300"))  # 5 min default
+CYCLE_INTERVAL = int(os.getenv("AGENT_CYCLE_INTERVAL", "300"))  # 5 min default
+
+# Max backoff cycles for failing assets
+_MAX_BACKOFF_CYCLES = 8  # ~40 minutes at 5-min intervals
 
 
 class AgentScheduler:
@@ -43,6 +55,9 @@ class AgentScheduler:
         self._last_decisions: dict[str, dict] = {}
         self._last_recommendations: dict[str, list] = {}
         self._errors: list[dict] = []
+        # Per-asset failure tracking for exponential backoff
+        self._asset_failures: dict[str, int] = {}
+        self._asset_skip_until: dict[str, int] = {}
 
     @property
     def status(self) -> dict:
@@ -71,6 +86,8 @@ class AgentScheduler:
         logger.info("agent_scheduler_started", extra={
             "interval": CYCLE_INTERVAL,
             "assets": MONITORED_ASSETS,
+            "etf_assets": MONITORED_ETF_ASSETS,
+            "stock_assets": MONITORED_STOCK_ASSETS,
         })
 
     async def stop(self) -> None:
@@ -102,6 +119,78 @@ class AgentScheduler:
             # Wait for next cycle
             await asyncio.sleep(CYCLE_INTERVAL)
 
+    def _should_skip_asset(self, asset: str) -> bool:
+        """Check if asset should be skipped due to backoff."""
+        skip_until = self._asset_skip_until.get(asset, 0)
+        if self._cycle_count < skip_until:
+            logger.info("asset_skipped_backoff", extra={
+                "asset": asset,
+                "skip_until_cycle": skip_until,
+                "current_cycle": self._cycle_count,
+            })
+            return True
+        return False
+
+    def _record_asset_success(self, asset: str) -> None:
+        """Reset failure counter on success."""
+        self._asset_failures.pop(asset, None)
+        self._asset_skip_until.pop(asset, None)
+
+    def _record_asset_failure(self, asset: str) -> None:
+        """Increment failure counter and set backoff."""
+        failures = self._asset_failures.get(asset, 0) + 1
+        self._asset_failures[asset] = failures
+        backoff_cycles = min(2 ** failures, _MAX_BACKOFF_CYCLES)
+        self._asset_skip_until[asset] = self._cycle_count + backoff_cycles
+        logger.warning("asset_backoff_set", extra={
+            "asset": asset,
+            "consecutive_failures": failures,
+            "backoff_cycles": backoff_cycles,
+        })
+
+    async def _run_crypto_asset(self, loop: asyncio.AbstractEventLoop, asset: str) -> None:
+        """Run decision loop for a single crypto asset."""
+        if self._should_skip_asset(asset):
+            return
+        try:
+            decision = await loop.run_in_executor(None, run_decision_loop, asset)
+            self._last_decisions[asset] = {
+                "action": decision.action,
+                "signal_score": decision.signal_score,
+                "threshold_crossed": decision.threshold_crossed,
+                "timestamp": decision.timestamp.isoformat() if decision.timestamp else None,
+                "reasoning": (decision.reasoning or "")[:200],
+            }
+            logger.info("agent_cycle_decision", extra={
+                "asset": asset, "action": decision.action, "score": decision.signal_score,
+            })
+            self._record_asset_success(asset)
+        except Exception as exc:
+            self._last_decisions[asset] = {
+                "action": "ERROR",
+                "error": str(exc)[:200],
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
+            logger.warning("agent_cycle_asset_error", extra={"asset": asset, "error": str(exc)})
+            self._record_asset_failure(asset)
+
+    async def _call_agent_decide(self, agent_base_url: str, asset: str, agent_name: str) -> None:
+        """Call POST /agent/decide on an external agent (etf/stock). Non-fatal."""
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(
+                    f"{agent_base_url.rstrip('/')}/agent/decide",
+                    json={"asset": asset},
+                )
+                logger.info("external_agent_decide", extra={
+                    "agent": agent_name, "asset": asset,
+                    "status_code": resp.status_code,
+                })
+        except Exception as exc:
+            logger.warning("external_agent_decide_failed", extra={
+                "agent": agent_name, "asset": asset, "error": str(exc)[:100],
+            })
+
     async def _run_cycle(self) -> None:
         cycle_start = time.monotonic()
         self._cycle_count += 1
@@ -114,34 +203,29 @@ class AgentScheduler:
 
         loop = asyncio.get_event_loop()
 
-        for asset in MONITORED_ASSETS:
-            try:
-                # Run decision loop in thread (it's synchronous)
-                decision = await loop.run_in_executor(
-                    None, run_decision_loop, asset
-                )
-                self._last_decisions[asset] = {
-                    "action": decision.action,
-                    "signal_score": decision.signal_score,
-                    "threshold_crossed": decision.threshold_crossed,
-                    "timestamp": decision.timestamp.isoformat() if decision.timestamp else None,
-                    "reasoning": (decision.reasoning or "")[:200],
-                }
-                logger.info("agent_cycle_decision", extra={
-                    "asset": asset,
-                    "action": decision.action,
-                    "score": decision.signal_score,
-                })
-            except Exception as exc:
-                self._last_decisions[asset] = {
-                    "action": "ERROR",
-                    "error": str(exc)[:200],
-                    "timestamp": datetime.now(UTC).isoformat(),
-                }
-                logger.warning("agent_cycle_asset_error", extra={
-                    "asset": asset,
-                    "error": str(exc),
-                })
+        # --- Crypto assets: parallel processing with asyncio.gather ---
+        crypto_tasks = [
+            self._run_crypto_asset(loop, asset) for asset in MONITORED_ASSETS
+        ]
+        await asyncio.gather(*crypto_tasks, return_exceptions=True)
+
+        # --- ETF agent decisions ---
+        etf_base_url = os.getenv("ETF_AGENT_BASE_URL", "http://localhost:8021")
+        etf_tasks = [
+            self._call_agent_decide(etf_base_url, asset, "etf-agent")
+            for asset in MONITORED_ETF_ASSETS
+        ]
+        if etf_tasks:
+            await asyncio.gather(*etf_tasks, return_exceptions=True)
+
+        # --- Stock agent decisions ---
+        stock_base_url = os.getenv("STOCK_AGENT_BASE_URL", "http://localhost:8022")
+        stock_tasks = [
+            self._call_agent_decide(stock_base_url, asset, "stock-agent")
+            for asset in MONITORED_STOCK_ASSETS
+        ]
+        if stock_tasks:
+            await asyncio.gather(*stock_tasks, return_exceptions=True)
 
         # Also update recommendations
         for asset in MONITORED_ASSETS:
@@ -173,7 +257,6 @@ class AgentScheduler:
     async def _check_shadow_promotions(self) -> None:
         """Check all SHADOW strategies and promote or deprecate them if ready."""
         try:
-            import httpx
             registry_url = settings.strategy_registry_base_url.rstrip("/")
             async with httpx.AsyncClient(timeout=10.0) as client:
                 # Fetch all shadow strategies
@@ -218,7 +301,6 @@ class AgentScheduler:
     async def _check_rebalance(self, loop: asyncio.AbstractEventLoop) -> None:
         """Check portfolio and trigger rebalancing if needed."""
         try:
-            import httpx
             portfolio_url = settings.portfolio_service_base_url.rstrip("/")
             async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.get(f"{portfolio_url}/portfolio/bootstrap")

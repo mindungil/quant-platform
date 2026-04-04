@@ -26,6 +26,16 @@ AGENT_REGISTRY = {
         "asset_types": ["crypto"],
         "enabled": True,
     },
+    "etf-agent": {
+        "base_url": settings.etf_agent_base_url,
+        "asset_types": ["etf"],
+        "enabled": True,
+    },
+    "stock-agent": {
+        "base_url": settings.stock_agent_base_url,
+        "asset_types": ["stock"],
+        "enabled": True,
+    },
 }
 
 
@@ -81,28 +91,109 @@ def _get_recent_decisions(agent_url: str, asset: str = "BTCUSDT") -> list[dict]:
     return []
 
 
+def _fetch_agent_win_rate(agent_name: str) -> float | None:
+    """Fetch win_rate for an agent from statistics-service."""
+    try:
+        r = httpx.get(
+            f"{settings.statistics_service_base_url}/statistics/agent/{agent_name}",
+            timeout=3.0,
+        )
+        if r.status_code == 200:
+            data = r.json()
+            wr = data.get("win_rate")
+            if wr is not None:
+                return float(wr)
+    except Exception:
+        pass
+    return None
+
+
+def resolve_conflict(losing_agent_url: str, asset: str, reason: str) -> bool:
+    """Tell the losing agent to HOLD on the conflicting asset."""
+    try:
+        r = httpx.post(
+            f"{losing_agent_url.rstrip('/')}/agent/override",
+            json={"asset": asset, "force_action": "HOLD", "reason": reason},
+            timeout=5.0,
+        )
+        return r.status_code == 200
+    except Exception as exc:
+        logger.warning("resolve_conflict_failed", extra={
+            "asset": asset, "error": str(exc)[:100],
+        })
+        return False
+
+
 def detect_conflicts(agent_decisions: dict[str, list[dict]]) -> list[dict]:
     """Detect when agents make conflicting decisions on the same asset."""
     conflicts = []
-    asset_actions: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    asset_actions: dict[str, list[tuple[str, str, str]]] = defaultdict(list)
 
     for agent_name, decisions in agent_decisions.items():
         for d in decisions:
             asset = d.get("asset", "")
             action = d.get("action", "HOLD")
+            timestamp = d.get("timestamp", "")
             if action != "HOLD":
-                asset_actions[asset].append((agent_name, action))
+                asset_actions[asset].append((agent_name, action, timestamp))
 
     for asset, actions in asset_actions.items():
-        buys = [a for a, act in actions if act == "BUY"]
-        sells = [a for a, act in actions if act == "SELL"]
+        buys = [(a, ts) for a, act, ts in actions if act == "BUY"]
+        sells = [(a, ts) for a, act, ts in actions if act == "SELL"]
         if buys and sells:
+            # --- Conflict resolution: pick winner by win_rate or recency ---
+            buy_agents = [a for a, _ in buys]
+            sell_agents = [a for a, _ in sells]
+
+            winner = None
+            loser = None
+            resolution_method = "none"
+
+            # Try win_rate from statistics-service
+            all_conflicting = buy_agents + sell_agents
+            win_rates: dict[str, float] = {}
+            for agent_name in all_conflicting:
+                wr = _fetch_agent_win_rate(agent_name)
+                if wr is not None:
+                    win_rates[agent_name] = wr
+
+            if len(win_rates) >= 2:
+                best_agent = max(win_rates, key=win_rates.get)  # type: ignore[arg-type]
+                worst_agent = min(win_rates, key=win_rates.get)  # type: ignore[arg-type]
+                winner = best_agent
+                loser = worst_agent
+                resolution_method = "win_rate"
+            else:
+                # Fallback: prefer more recent decision
+                all_with_ts = [(a, ts) for a, _, ts in actions if _ != "HOLD"]
+                if all_with_ts:
+                    all_with_ts.sort(key=lambda x: x[1], reverse=True)
+                    winner = all_with_ts[0][0]
+                    loser = all_with_ts[-1][0] if len(all_with_ts) > 1 else None
+                    resolution_method = "recency"
+
+            # Execute resolution
+            resolution_result = None
+            if loser and loser in AGENT_REGISTRY:
+                loser_url = AGENT_REGISTRY[loser]["base_url"]
+                ok = resolve_conflict(loser_url, asset, "orchestrator_conflict_resolution")
+                resolution_result = {
+                    "winner": winner,
+                    "loser": loser,
+                    "method": resolution_method,
+                    "override_sent": ok,
+                }
+                logger.info("conflict_resolved", extra={
+                    "asset": asset, **resolution_result,
+                })
+
             conflicts.append({
                 "asset": asset,
-                "buy_agents": buys,
-                "sell_agents": sells,
+                "buy_agents": buy_agents,
+                "sell_agents": sell_agents,
                 "severity": "high",
                 "recommendation": "두 에이전트가 상반된 의사결정. 오케스트레이터가 최근 성과가 더 좋은 에이전트의 결정을 우선합니다.",
+                "resolution": resolution_result,
             })
 
     return conflicts

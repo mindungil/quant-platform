@@ -17,7 +17,7 @@ from shared.logging import get_logger
 from shared.persistence import RedisStore
 from shared.realtime import RealtimeBus
 from shared.regime import detect_regime, suggest_formula_type
-from app.core.bandit import FormulaMAB
+from app.core.mab_state import formula_mab
 from app.core.formula_selector import rank_formulas_ml
 from shared.formulas import formula_registry
 import shared.formulas.momentum
@@ -67,8 +67,7 @@ llm_gateway_client = LlmGatewayClient(settings.llm_gateway_base_url)
 realtime_bus = RealtimeBus(RedisStore(settings.redis_url))
 logger = get_logger("crypto-agent")
 
-# Initialize Multi-Armed Bandit for formula selection
-formula_mab = FormulaMAB(formula_registry.list_names())
+# FormulaMAB is imported from app.core.mab_state (shared with outcome_consumer)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -259,7 +258,7 @@ def _build_order_request(decision: DecisionRecord, *, shadow_override: bool = Fa
     realized_vol = 0.0
     try:
         import httpx
-        stats_url = f"http://localhost:8013/statistics/{decision.user_id}"
+        stats_url = f"{settings.statistics_service_base_url}/statistics/{decision.user_id}"
         resp = httpx.get(stats_url, timeout=3.0)
         if resp.status_code == 200:
             stats = resp.json()
