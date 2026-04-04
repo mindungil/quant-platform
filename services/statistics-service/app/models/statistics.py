@@ -30,6 +30,8 @@ class StatisticsSnapshot(BaseModel):
     avg_loss: float = 0.0
     payoff_ratio: float = 0.0
     expectancy: float = 0.0
+    value_at_risk: float = 0.0
+    conditional_value_at_risk: float = 0.0
     drift_score: float | None = None
     recent_sharpe: float | None = None
     recent_trade_pnls: list[float] = Field(default_factory=list)
