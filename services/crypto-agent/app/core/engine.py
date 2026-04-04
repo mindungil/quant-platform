@@ -55,6 +55,10 @@ decision_outcome_total = Counter(
     "Decision outcomes by buy/sell/hold",
     ["outcome"],
 )
+stale_signal_skipped_total = Counter(
+    "stale_signal_skipped_total",
+    "Total signals skipped due to staleness",
+)
 
 signal_client = SignalClient(settings.signal_service_base_url)
 memory_client = MemoryClient(settings.memory_service_base_url)
@@ -201,8 +205,8 @@ def _calculate_position_size(
             result = minimize_scalar(neg_growth_rate, bounds=(0.001, 0.5), method="bounded")
             if result.success and result.x > 0:
                 kelly_optimal = result.x * ac_adj
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("scipy_kelly_optimization_failed", extra={"error": str(exc)[:100]})
 
     # Mode 2: Analytical Kelly (only if valid win_rate/payoff)
     if kelly_optimal <= 0 and win_rate > 0.1 and payoff_ratio > 0.1:
@@ -263,8 +267,8 @@ def _build_order_request(decision: DecisionRecord, *, shadow_override: bool = Fa
                 win_rate = stats["win_rate"]
             if stats.get("payoff_ratio", 0) > 0 and stats.get("trade_count", 0) >= 30:
                 payoff_ratio = stats["payoff_ratio"]
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("stats_fetch_failed_for_kelly", extra={"error": str(exc)[:100]})
 
     requested_notional = _calculate_position_size(
         decision.signal_score, portfolio_balance, win_rate, payoff_ratio, realized_vol
@@ -335,6 +339,11 @@ def _risk_pre_check(
         feature_ts = feature_ts.replace(tzinfo=UTC)
     staleness = (now - feature_ts).total_seconds()
     if staleness > SIGNAL_STALENESS_SECONDS:
+        stale_signal_skipped_total.inc()
+        logger.warning(
+            "signal_stale_skipped",
+            extra={"asset": asset, "staleness_seconds": round(staleness), "limit_seconds": SIGNAL_STALENESS_SECONDS},
+        )
         issues.append(f"signal is stale ({staleness:.0f}s old, limit {SIGNAL_STALENESS_SECONDS}s)")
 
     # 3. Duplicate decision guard — same asset+action within DUPLICATE_WINDOW_SECONDS
@@ -525,8 +534,8 @@ def _phase_score(
                 items = resp.json().get("items", [])
                 if items:
                     formula_mab.load_from_memory(items)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("mab_memory_fetch_failed", extra={"error": str(exc)[:100]})
 
         mab_choice = formula_mab.select(
             regime=suggested_type,
@@ -641,8 +650,8 @@ def _phase_select(
                 strategy = shadow_snap
                 is_shadow = True
                 break
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("shadow_strategy_parse_failed", extra={"strategy_id": ss.get("id", "?"), "error": str(exc)[:80]})
 
     # Attach shadow flag as a dynamic attribute for downstream use
     strategy._is_shadow = is_shadow  # type: ignore[attr-defined]
@@ -707,8 +716,8 @@ def _phase_execute(
             memory_count=len(memory_response.items),
             components=signal.components,
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("llm_reasoning_failed_using_fallback", extra={"error": str(exc)[:100]})
 
     decision = DecisionRecord(
         timestamp=datetime.now(UTC),

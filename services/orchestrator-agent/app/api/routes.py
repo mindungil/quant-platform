@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
-from app.core.engine import build_summary, build_system_summary, get_all_agent_statuses
+from app.core.engine import build_summary, build_system_summary, get_all_agent_statuses, check_pipeline_health
 from app.db.repository import orchestrator_repository
 
 router = APIRouter()
@@ -38,3 +38,9 @@ def check_conflicts():
 def agents():
     """Return the health/availability status of all registered agent services."""
     return get_all_agent_statuses()
+
+
+@router.get("/pipeline/health")
+def pipeline_health():
+    """Check the full signal pipeline health: market-data → feature-store → signal-service → crypto-agent."""
+    return check_pipeline_health()

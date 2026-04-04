@@ -153,6 +153,48 @@ def attach_backtest(strategy_id: str, payload: dict, x_user_id: str | None = Hea
     return strategy
 
 
+@router.post("/strategies/backtest-callback")
+def backtest_callback(payload: dict) -> dict:
+    """Receive backtest results and apply auto-transition rules.
+
+    Rules:
+    - PENDING → TESTED if sharpe > 0.5
+    - TESTED → SHADOW if sharpe > 1.0
+    """
+    strategy_id = payload.get("strategy_id")
+    sharpe = float(payload.get("sharpe_ratio", 0))
+
+    if not strategy_id:
+        raise HTTPException(status_code=400, detail="strategy_id required")
+
+    strategy = strategy_repository.get(strategy_id)
+    if strategy is None:
+        raise HTTPException(status_code=404, detail="strategy_not_found")
+
+    new_status = None
+    if strategy.status == "PENDING" and sharpe > 0.5:
+        new_status = "TESTED"
+    elif strategy.status == "TESTED" and sharpe > 1.0:
+        new_status = "SHADOW"
+
+    if new_status and strategy_repository.validate_transition(strategy.status, new_status):
+        updated = strategy_repository.update_status(strategy_id, new_status)
+        return {
+            "strategy_id": strategy_id,
+            "previous_status": strategy.status,
+            "new_status": new_status,
+            "sharpe_ratio": sharpe,
+            "auto_transitioned": True,
+        }
+
+    return {
+        "strategy_id": strategy_id,
+        "status": strategy.status,
+        "sharpe_ratio": sharpe,
+        "auto_transitioned": False,
+    }
+
+
 @router.delete("/strategies/{strategy_id}", response_model=Strategy)
 def delete_strategy(strategy_id: str, x_user_id: str | None = Header(default=None)) -> Strategy:
     strategy = strategy_repository.get(strategy_id)

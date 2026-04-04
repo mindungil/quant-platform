@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import math
+import os
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -568,7 +569,7 @@ async def _run_job(job_id: str, payload: BacktestRequest) -> None:
         job.completed_at = datetime.now(UTC)
         logger.info("backtest job %s completed: %s", job_id, result.status)
 
-        # Publish event if a callback is registered
+        # Publish backtest.completed event with full metrics
         if _event_callback is not None:
             try:
                 event_data = {
@@ -576,10 +577,46 @@ async def _run_job(job_id: str, payload: BacktestRequest) -> None:
                     "strategy_id": payload.strategy_id,
                     "backtest_status": result.status,
                     "sharpe_ratio": result.sharpe_ratio,
+                    "total_return": result.total_return,
+                    "max_drawdown": result.max_drawdown,
+                    "win_rate": result.win_rate,
                 }
                 await _event_callback("backtest.completed", event_data)
             except Exception:
                 logger.exception("failed to publish backtest.completed event for job %s", job_id)
+
+        # Auto-promote strategy based on backtest results
+        if payload.strategy_id:
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    registry_url = os.getenv("STRATEGY_REGISTRY_BASE_URL", "http://localhost:8005")
+                    if result.sharpe_ratio > 0.5:
+                        new_status = "TESTED"
+                    elif result.sharpe_ratio < 0:
+                        new_status = "ARCHIVED"
+                    else:
+                        new_status = None
+                    if new_status:
+                        resp = await client.patch(
+                            f"{registry_url}/strategies/{payload.strategy_id}/status",
+                            json={"status": new_status},
+                        )
+                        if resp.status_code == 200:
+                            logger.info(
+                                "strategy_auto_transitioned",
+                                extra={
+                                    "strategy_id": payload.strategy_id,
+                                    "new_status": new_status,
+                                    "sharpe": result.sharpe_ratio,
+                                },
+                            )
+                        else:
+                            logger.debug(
+                                "strategy_auto_transition_skipped",
+                                extra={"status_code": resp.status_code, "detail": resp.text[:200]},
+                            )
+            except Exception as exc:
+                logger.warning("strategy_auto_promotion_failed", extra={"error": str(exc)[:200]})
     except ValueError as exc:
         # Data unavailability — not an unexpected crash
         job.status = "FAILED"

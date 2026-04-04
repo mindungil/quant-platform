@@ -16,8 +16,23 @@ from app.db.repository import decision_repository
 from app.services.memory_client import MemoryClient
 from shared.events import JetStreamBus
 from shared.persistence import RedisStore
+from prometheus_client import Counter, Gauge
 
 logger = logging.getLogger("outcome-consumer")
+
+outcome_reinforcement_total = Counter(
+    "outcome_reinforcement_total",
+    "Total outcome reinforcement attempts",
+    ["status"],
+)
+outcome_reinforcement_skipped_total = Counter(
+    "outcome_reinforcement_skipped_total",
+    "Total outcome reinforcements skipped",
+)
+outcome_reinforcement_pnl_total = Gauge(
+    "outcome_reinforcement_pnl_total",
+    "Cumulative PnL from reinforced outcomes",
+)
 
 memory_client = MemoryClient(settings.memory_service_base_url)
 
@@ -34,7 +49,7 @@ class OutcomeReinforcementConsumer:
         await self._bus.connect()
         await self._bus.ensure_stream(
             settings.execution_jetstream_stream,
-            ["order.filled", "order.filled.dlq"],
+            ["order.filled", "order.filled.dlq", "memory.reinforce.failed"],
         )
         await self._bus.subscribe(
             stream=settings.execution_jetstream_stream,
@@ -62,12 +77,14 @@ class OutcomeReinforcementConsumer:
 
             if not correlation_id:
                 logger.debug("order_filled_no_correlation", extra={"order_id": order_id})
+                outcome_reinforcement_skipped_total.inc()
                 return
 
             # Find the decision that created this order
             decision = decision_repository.get_by_correlation_id(correlation_id)
             if not decision:
                 logger.debug("order_filled_no_decision", extra={"correlation_id": correlation_id})
+                outcome_reinforcement_skipped_total.inc()
                 return
 
             decision_data = decision.get("payload", decision)
@@ -92,13 +109,23 @@ class OutcomeReinforcementConsumer:
             # Reinforce each linked memory record
             reinforced = 0
             for mem_id in memory_refs:
-                try:
-                    memory_client.reinforce(mem_id, trade_outcome, outcome_sharpe)
-                    reinforced += 1
-                except Exception as exc:
-                    logger.warning("reinforce_failed", extra={
-                        "memory_id": mem_id, "error": str(exc)[:100],
-                    })
+                success = False
+                for attempt in range(1, 4):  # 3 attempts
+                    try:
+                        memory_client.reinforce(mem_id, trade_outcome, outcome_sharpe)
+                        reinforced += 1
+                        success = True
+                        break
+                    except Exception as exc:
+                        if attempt < 3:
+                            import time
+                            time.sleep(1)
+                        else:
+                            logger.warning("reinforce_failed_after_retries", extra={
+                                "memory_id": mem_id, "error": str(exc)[:100], "attempts": 3,
+                            })
+                if not success:
+                    outcome_reinforcement_total.labels(status="failed").inc()
 
             # Also reinforce the decision's own memory record if it has one
             decision_memory_id = decision_data.get("decision_id")
@@ -106,8 +133,29 @@ class OutcomeReinforcementConsumer:
                 try:
                     memory_client.reinforce(decision_memory_id, trade_outcome, outcome_sharpe)
                     reinforced += 1
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.warning("reinforce_decision_memory_failed", extra={
+                        "memory_id": decision_memory_id,
+                        "error": str(exc)[:100],
+                        "correlation_id": correlation_id,
+                    })
+                    # Publish failure event for observability
+                    try:
+                        await self._bus.publish(
+                            "memory.reinforce.failed",
+                            __import__("shared.events", fromlist=["EventEnvelope"]).EventEnvelope(
+                                event_type="memory.reinforce.failed",
+                                source="outcome-consumer",
+                                correlation_id=correlation_id,
+                                data={
+                                    "memory_id": decision_memory_id,
+                                    "error": str(exc)[:100],
+                                    "correlation_id": correlation_id,
+                                },
+                            ),
+                        )
+                    except Exception:
+                        logger.debug("reinforce_failed_event_publish_error")
 
             logger.info("outcome_reinforced", extra={
                 "correlation_id": correlation_id,
@@ -115,6 +163,8 @@ class OutcomeReinforcementConsumer:
                 "trade_outcome": f"{trade_outcome:.4f}",
                 "reinforced_count": reinforced,
             })
+            outcome_reinforcement_total.labels(status="success").inc()
+            outcome_reinforcement_pnl_total.inc(trade_outcome)
 
         except Exception as exc:
             logger.error("outcome_handle_error", extra={"error": str(exc)[:200]})

@@ -31,6 +31,14 @@ statistics_computations_total = Counter(
     "Total statistics computation events",
 )
 
+# Optional async callback for publishing drift events (set at startup)
+_drift_event_callback = None
+
+
+def set_drift_event_callback(cb):
+    global _drift_event_callback
+    _drift_event_callback = cb
+
 
 def compute_statistics(payload: StatisticsInput) -> StatisticsSnapshot:
     trade_count = len(payload.trade_pnls)
@@ -97,6 +105,26 @@ def compute_statistics(payload: StatisticsInput) -> StatisticsSnapshot:
     else:
         strategy_drift_alert.labels(strategy_id=sid).set(0)  # green
         drift_alert_threshold.labels(strategy_id=sid).set(0.05)
+
+    # Publish drift alert event for critical drift
+    if drift_score > 0.1 and _drift_event_callback is not None:
+        try:
+            import asyncio
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                loop.create_task(_drift_event_callback(
+                    "strategy.drift_alert",
+                    {
+                        "strategy_id": sid,
+                        "asset": getattr(payload, "asset", ""),
+                        "drift_score": round(drift_score, 4),
+                        "threshold": 0.1,
+                        "total_return": total_return,
+                        "expected_return": payload.expected_return,
+                    },
+                ))
+        except Exception:
+            pass  # drift event is best-effort
 
     return StatisticsSnapshot(
         user_id=payload.user_id,

@@ -149,6 +149,19 @@ Tasks:
 - [x] add duplicate-delivery and replay-path integration tests
 - [x] add settings and strategy UX depth improvements
 
+### Milestone 8: Feedback Loop Hardening
+
+Tasks:
+
+- [x] harden Binance collector with Prometheus metrics (`candle_ingest_total`), exponential backoff logging, and NATS `market.candle.ingested` event publishing
+- [x] enforce signal staleness checks in crypto-agent with `stale_signal_skipped_total` counter and replace all bare `pass` blocks with structured logging
+- [x] add `/pipeline/health` endpoint in orchestrator for full-chain health (market-data → feature-store → signal-service → crypto-agent)
+- [x] harden outcome consumer with 3-attempt retry, `outcome_reinforcement_total` / `outcome_reinforcement_skipped_total` / `outcome_reinforcement_pnl_total` metrics, and `memory.reinforce.failed` NATS event
+- [x] add backtest completion auto-promotion: publish enriched `backtest.completed` events and auto-transition strategies (PENDING → TESTED if sharpe > 0.5, TESTED → SHADOW if sharpe > 1.0)
+- [x] add `POST /strategies/backtest-callback` endpoint for external backtest result ingestion with auto-transition rules
+- [x] create shadow strategy tracker (`shadow_tracker.py`) — NATS consumer on `order.filled` that updates running shadow metrics (Sharpe, win_rate, max_drawdown, PnL)
+- [x] add drift detection → strategy deprecation: statistics-service publishes `strategy.drift_alert` on critical drift; strategy-registry `drift_consumer.py` transitions ACTIVE → DEPRECATED
+
 ## Definition Of Done
 
 A milestone is complete only when:

@@ -61,6 +61,13 @@ Docker Compose productionization runtime for the startup-club autonomous trading
 - Strategy analysis page with backtest baseline vs live performance comparison and drift indicator badges (red/yellow/green)
 - Settings page now includes execution config panel (live_trading_enabled, shadow_mode, allowed_exchanges)
 - Reusable ErrorBoundary, EmptyState, and LoadingSkeleton components for improved UX polish
+- Binance collector publishes `market.candle.ingested` NATS events with Prometheus `candle_ingest_total` metrics
+- Signal staleness enforcement in crypto-agent with `stale_signal_skipped_total` counter; all silent `pass` exception blocks replaced with structured logging
+- Orchestrator `/pipeline/health` endpoint checks the full signal chain: market-data → feature-store → signal-service → crypto-agent
+- Outcome consumer hardened with 3-attempt retry, `outcome_reinforcement_total`/`skipped`/`pnl` metrics, and `memory.reinforce.failed` failure events
+- Backtest auto-promotion: strategies auto-transition (PENDING→TESTED→SHADOW) based on Sharpe thresholds; `POST /strategies/backtest-callback` endpoint for external triggers
+- Shadow strategy tracker subscribes to `order.filled` and maintains running shadow metrics (Sharpe, win_rate, drawdown) per strategy
+- Drift detection → auto-deprecation: statistics-service publishes `strategy.drift_alert`; strategy-registry consumes it and transitions ACTIVE → DEPRECATED on critical drift
 
 ## What Is Not Included Yet
 

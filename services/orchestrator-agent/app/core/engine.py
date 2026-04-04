@@ -197,3 +197,57 @@ def get_all_agent_statuses() -> dict:
             "enabled": info["enabled"],
         }
     return statuses
+
+
+def check_pipeline_health() -> dict:
+    """Check the full signal pipeline: market-data → feature-store → signal-service → crypto-agent."""
+    import time as _time
+
+    PIPELINE_STAGES = [
+        ("market-data", "http://localhost:8001"),
+        ("feature-store", "http://localhost:8002"),
+        ("signal-service", settings.signal_service_base_url),
+        ("crypto-agent", settings.crypto_agent_base_url),
+    ]
+    EVENT_FRESHNESS_SECONDS = 600  # 10 minutes
+
+    stages = []
+    overall = "healthy"
+
+    for name, base_url in PIPELINE_STAGES:
+        stage: dict = {"name": name, "status": "healthy", "last_event_age_seconds": None}
+        # (a) HTTP health check
+        health = _probe(name, base_url)
+        if health.get("status") != "ok":
+            stage["status"] = "broken"
+            stage["detail"] = health.get("detail", "health check failed")
+            overall = "broken"
+            stages.append(stage)
+            continue
+
+        # (b) Check last event freshness via service-specific endpoints
+        try:
+            r = httpx.get(f"{base_url}/health", timeout=3.0)
+            data = r.json() if r.status_code == 200 else {}
+            last_event = data.get("last_event_at") or data.get("last_updated")
+            if last_event:
+                from datetime import datetime as _dt, timezone as _tz
+                if isinstance(last_event, str):
+                    ts = _dt.fromisoformat(last_event.replace("Z", "+00:00"))
+                else:
+                    ts = _dt.fromtimestamp(last_event, tz=_tz.utc)
+                age = (datetime.now(UTC) - ts).total_seconds()
+                stage["last_event_age_seconds"] = round(age)
+                if age > EVENT_FRESHNESS_SECONDS:
+                    stage["status"] = "degraded"
+                    if overall != "broken":
+                        overall = "degraded"
+        except Exception:
+            pass  # freshness check is best-effort
+
+        stages.append(stage)
+
+    return {
+        "pipeline_status": overall,
+        "stages": stages,
+    }

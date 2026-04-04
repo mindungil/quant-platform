@@ -18,15 +18,28 @@ from datetime import UTC, datetime
 
 import websockets
 import websockets.exceptions
+from prometheus_client import Counter
+
 from app.models.candle import CandlePayload
+from shared.events import EventEnvelope, JetStreamBus
+from shared.persistence import RedisStore
 
 logger = logging.getLogger("binance_collector")
+
+candle_ingest_total = Counter(
+    "candle_ingest_total",
+    "Total candle ingestion attempts",
+    ["asset", "status"],
+)
 
 LOCAL_INGEST_BASE = os.getenv("LOCAL_INGEST_BASE", "http://127.0.0.1:8001")
 MONITORED_ASSETS = os.getenv("BINANCE_COLLECTOR_ASSETS", "BTCUSDT,ETHUSDT,SOLUSDT")
 INTERVAL = os.getenv("BINANCE_COLLECTOR_INTERVAL", "1h")
 RECONNECT_DELAY_SECONDS = 5
 MAX_RECONNECT_DELAY_SECONDS = 120
+NATS_URL = os.getenv("NATS_URL", "nats://localhost:4222")
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+_event_bus: JetStreamBus | None = None
 
 
 def _build_ws_url(assets: list[str], interval: str) -> str:
@@ -63,10 +76,31 @@ async def _post_candle(asset: str, candle: CandlePayload) -> None:
             response = await client.post(url, json=payload)
             if response.status_code < 300:
                 logger.info("Ingested candle %s at %s", asset, candle.timestamp.isoformat())
+                candle_ingest_total.labels(asset=asset, status="success").inc()
+                # Publish NATS event for downstream consumers
+                if _event_bus is not None:
+                    try:
+                        await _event_bus.publish(
+                            "market.candle.ingested",
+                            EventEnvelope(
+                                event_type="market.candle.ingested",
+                                source="binance-collector",
+                                data={
+                                    "asset": asset,
+                                    "timestamp": candle.timestamp.isoformat(),
+                                    "close": candle.close,
+                                    "volume": candle.volume,
+                                },
+                            ),
+                        )
+                    except Exception as pub_exc:
+                        logger.warning("Failed to publish candle event: %s", pub_exc)
             else:
                 logger.warning("Ingest rejected %s (status=%d)", asset, response.status_code)
+                candle_ingest_total.labels(asset=asset, status="failed").inc()
     except Exception:
         logger.exception("Failed to POST candle for %s", asset)
+        candle_ingest_total.labels(asset=asset, status="failed").inc()
 
 
 async def _run_ws_loop() -> None:
@@ -141,17 +175,30 @@ _task: asyncio.Task[None] | None = None
 
 async def start() -> None:
     """Launch the collector as a background asyncio task."""
-    global _task
+    global _task, _event_bus
     if _task is not None:
         logger.warning("Binance collector already running")
         return
+    # Initialize NATS event bus for publishing candle events
+    try:
+        _event_bus = JetStreamBus(
+            nats_url=NATS_URL,
+            redis_store=RedisStore(REDIS_URL),
+            enabled=True,
+        )
+        await _event_bus.connect()
+        await _event_bus.ensure_stream("MARKET", ["market.>"])
+        logger.info("Binance collector NATS event bus connected")
+    except Exception as exc:
+        logger.warning("Binance collector NATS init failed (events disabled): %s", exc)
+        _event_bus = None
     logger.info("Starting Binance WebSocket collector background task")
     _task = asyncio.create_task(_run_ws_loop())
 
 
 async def stop() -> None:
     """Cancel the background task gracefully."""
-    global _task
+    global _task, _event_bus
     if _task is None:
         return
     _task.cancel()
@@ -160,4 +207,7 @@ async def stop() -> None:
     except asyncio.CancelledError:
         pass
     _task = None
+    if _event_bus is not None:
+        await _event_bus.close()
+        _event_bus = None
     logger.info("Binance collector stopped")
