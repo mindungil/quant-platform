@@ -42,15 +42,9 @@ import shared.formulas.composite  # noqa: F401
 logger = get_logger("crypto-agent")
 
 
-# Store a reference to the engine module at import time.
-# This is needed because the test framework (_isolate_load) cleans app.* from
-# sys.modules after loading, so dynamic `import app.core.engine` at runtime
-# would fail.  Capturing the module object here lets monkeypatching still work.
-import app.core.engine as _engine_mod
-
-
 def _clients():
-    """Get client instances from engine module so monkeypatching in tests works."""
+    """Get client instances from engine module (lazy import to avoid circular imports)."""
+    import app.core.engine as _engine_mod
     return _engine_mod.signal_client, _engine_mod.memory_client, _engine_mod.strategy_client, _engine_mod.llm_gateway_client, _engine_mod.publisher
 
 SIGNAL_STALENESS_SECONDS = 300
@@ -63,7 +57,8 @@ SIGNAL_STALENESS_SECONDS = 300
 
 
 def _get_engine_helpers():
-    """Get engine helper functions via the captured module reference."""
+    """Get engine helper functions (lazy import to avoid circular imports)."""
+    import app.core.engine as _engine_mod
     return _engine_mod._build_order_request, _engine_mod._fallback_reasoning, _engine_mod._risk_pre_check
 
 
