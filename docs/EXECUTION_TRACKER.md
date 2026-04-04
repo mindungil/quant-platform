@@ -216,6 +216,24 @@ Tasks:
 - [x] add 12 unit tests covering mocked HTTP responses, cache behavior, and fallback on API failure
 - [x] all HTTP calls use httpx with timeout=5.0 and graceful fallback on failure
 
+## Milestone 12 — 노션 스펙 갭 해소: Portfolio PnL / Statistics Drift / Backtest→Kelly / LLM Reasoning
+
+**Goal:** Close gaps between Notion design spec and actual implementation across 5 services.
+
+- [x] portfolio-service: fetch live market prices from market-data `/candles/{asset}/latest` for real unrealized PnL
+- [x] portfolio-service: compute `realized_pnl` from recent fills, `total_pnl = unrealized + realized`
+- [x] portfolio-service: compute `daily_return_pct` from previous snapshot comparison
+- [x] statistics-service: rolling Sharpe drift detection vs `baseline_sharpe` from backtest
+- [x] statistics-service: add `drift_score`, `recent_sharpe` to StatisticsSnapshot model
+- [x] statistics-service: publish `strategy.drift_alert` NATS event when alert_level >= 1
+- [x] backtest-service: store Kelly params (win_rate, payoff_ratio, avg_win, avg_loss) in strategy after backtest
+- [x] strategy-registry: add `PATCH /strategies/{id}/kelly-params` endpoint for Kelly param storage
+- [x] crypto-agent: fetch backtest Kelly params from strategy-registry as fallback for live stats
+- [x] llm-gateway: add `generate_structured_reasoning()` for rich deterministic fallback
+- [x] llm-gateway: add API key-based LLM call support (ANTHROPIC_API_KEY / OPENAI_API_KEY)
+- [x] llm-gateway: add `regime` and `formula_name` fields to ReasoningRequest model
+- [x] market-data: confirmed `GET /candles/{asset}/latest` endpoint already exists
+
 ## Definition Of Done
 
 A milestone is complete only when:

@@ -153,6 +153,19 @@ def attach_backtest(strategy_id: str, payload: dict, x_user_id: str | None = Hea
     return strategy
 
 
+@router.patch("/strategies/{strategy_id}/kelly-params", response_model=Strategy)
+def update_kelly_params(strategy_id: str, payload: dict) -> Strategy:
+    """Store Kelly parameters from backtest results into strategy.backtest_results (merge)."""
+    strategy = strategy_repository.get(strategy_id)
+    if strategy is None:
+        raise HTTPException(status_code=404, detail="strategy_not_found")
+    existing = strategy.backtest_results or {}
+    existing.update(payload)
+    strategy.backtest_results = existing
+    strategy_repository._persist(strategy)
+    return strategy
+
+
 @router.post("/strategies/backtest-callback")
 def backtest_callback(payload: dict) -> dict:
     """Receive backtest results and apply auto-transition rules.

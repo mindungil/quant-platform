@@ -1,5 +1,6 @@
 import os
 
+import httpx
 from prometheus_client import Counter
 
 from app.core.config import settings
@@ -11,6 +12,23 @@ from shared.persistence import RedisStore, SqlStore
 from shared.realtime import RealtimeBus
 
 logger = get_logger("portfolio-service")
+
+
+def _fetch_current_prices(assets: list[str]) -> dict[str, float]:
+    """Fetch current prices from market-data service."""
+    market_data_url = os.getenv("MARKET_DATA_BASE_URL", "http://localhost:8001")
+    prices = {}
+    for asset in assets:
+        try:
+            resp = httpx.get(f"{market_data_url}/candles/{asset}/latest", timeout=3.0)
+            if resp.status_code == 200:
+                data = resp.json()
+                price = data.get("close") or data.get("price")
+                if price:
+                    prices[asset] = float(price)
+        except Exception:
+            pass
+    return prices
 
 portfolio_fills_total = Counter(
     "portfolio_fills_total",
@@ -176,7 +194,10 @@ class PortfolioRepository:
             recent_fills = self._fills.get(user_id, [])[-10:]
             updated_at = None
 
-        total_exposure = round(sum(abs(quantity) * prices.get(asset, 0.0) for asset, quantity in positions.items()), 4)
+        # Fetch live market prices for unrealized PnL
+        current_prices = _fetch_current_prices(list(positions.keys()))
+
+        total_exposure = round(sum(abs(quantity) * current_prices.get(asset, prices.get(asset, 0.0)) for asset, quantity in positions.items()), 4)
 
         # Unrealized P&L per position
         unrealized_pnl = 0.0
@@ -186,15 +207,45 @@ class PortfolioRepository:
 
         for asset, quantity in positions.items():
             entry_price = prices.get(asset, 0.0)
-            # For unrealized PnL we'd need current market price
-            # Use entry price as proxy (real implementation would fetch live prices)
-            position_value = abs(quantity) * entry_price
+            current_price = current_prices.get(asset, entry_price)
+            unrealized_pnl += (current_price - entry_price) * quantity
+            position_value = abs(quantity) * current_price
             if total_exposure > 0:
                 weight = round(position_value / total_exposure, 4)
                 concentration[asset] = weight
                 if weight > largest_weight:
                     largest_weight = weight
                     largest_position = asset
+
+        unrealized_pnl = round(unrealized_pnl, 4)
+
+        # Realized PnL from recent fills
+        realized_pnl = 0.0
+        for fill in recent_fills:
+            fill_pnl = getattr(fill, "pnl", None)
+            if fill_pnl is not None:
+                realized_pnl += fill_pnl
+        realized_pnl = round(realized_pnl, 4)
+
+        total_pnl = round(unrealized_pnl + realized_pnl, 4)
+
+        # Daily return %: compare current total to previous snapshot
+        daily_return_pct = 0.0
+        current_total = total_exposure + unrealized_pnl
+        if user_id and updated_at:
+            prev_row = self._store.fetch_one(
+                """
+                SELECT total_exposure, unrealized_pnl
+                FROM portfolio_snapshots
+                WHERE user_id = :user_id AND created_at < :before
+                ORDER BY created_at DESC LIMIT 1
+                """,
+                {"user_id": user_id, "before": updated_at},
+            )
+            if prev_row:
+                previous_total = (prev_row.get("total_exposure", 0) or 0) + (prev_row.get("unrealized_pnl", 0) or 0)
+                if previous_total > 0:
+                    daily_return_pct = round((current_total - previous_total) / previous_total, 6)
 
         # Concentration-based rebalance check
         max_weight = 0.30  # 30% max single asset
@@ -207,6 +258,9 @@ class PortfolioRepository:
             recent_fills=recent_fills,
             total_exposure=total_exposure,
             unrealized_pnl=unrealized_pnl,
+            realized_pnl=realized_pnl,
+            total_pnl=total_pnl,
+            daily_return_pct=daily_return_pct,
             concentration=concentration,
             largest_position=largest_position,
             rebalance_needed=rebalance_needed,

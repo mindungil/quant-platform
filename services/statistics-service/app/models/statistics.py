@@ -11,6 +11,7 @@ class StatisticsInput(BaseModel):
     correlation_id: str | None = None
     trade_pnls: list[float]
     expected_return: float = 0.0
+    baseline_sharpe: float | None = None
 
 
 class StatisticsSnapshot(BaseModel):
@@ -29,5 +30,7 @@ class StatisticsSnapshot(BaseModel):
     avg_loss: float = 0.0
     payoff_ratio: float = 0.0
     expectancy: float = 0.0
+    drift_score: float | None = None
+    recent_sharpe: float | None = None
     recent_trade_pnls: list[float] = Field(default_factory=list)
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

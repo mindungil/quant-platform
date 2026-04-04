@@ -275,6 +275,26 @@ def _build_order_request(decision: DecisionRecord, *, shadow_override: bool = Fa
     except Exception as exc:
         logger.debug("stats_fetch_failed_for_kelly", extra={"error": str(exc)[:100]})
 
+    # Check if strategy has backtest Kelly params (override defaults when live stats insufficient)
+    if decision.strategy_id:
+        try:
+            import httpx
+            strategy_resp = httpx.get(
+                f"{settings.strategy_registry_base_url}/strategies/{decision.strategy_id}",
+                timeout=3.0,
+            )
+            if strategy_resp.status_code == 200:
+                strat_data = strategy_resp.json()
+                br = strat_data.get("backtest_results") or {}
+                if br.get("backtest_win_rate", 0) > 0:
+                    # Use backtest params as baseline if live stats have insufficient data
+                    if win_rate == 0.55:  # still at default
+                        win_rate = br["backtest_win_rate"]
+                    if payoff_ratio == 1.5:  # still at default
+                        payoff_ratio = br.get("backtest_payoff_ratio", payoff_ratio)
+        except Exception:
+            pass
+
     requested_notional = _calculate_position_size(
         decision.signal_score, portfolio_balance, win_rate, payoff_ratio, realized_vol
     )

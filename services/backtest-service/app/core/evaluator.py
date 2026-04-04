@@ -615,6 +615,32 @@ async def _run_job(job_id: str, payload: BacktestRequest) -> None:
                                 "strategy_auto_transition_skipped",
                                 extra={"status_code": resp.status_code, "detail": resp.text[:200]},
                             )
+
+                    # Store Kelly params in strategy for live trading
+                    if result.win_rate and result.win_rate > 0:
+                        kelly_params = {
+                            "backtest_win_rate": result.win_rate,
+                            "backtest_payoff_ratio": result.payoff_ratio or 1.5,
+                            "backtest_sharpe": result.sharpe_ratio,
+                            "backtest_avg_win": result.avg_win,
+                            "backtest_avg_loss": result.avg_loss,
+                            "kelly_params_updated_at": datetime.now(UTC).isoformat(),
+                        }
+                        try:
+                            await client.patch(
+                                f"{registry_url}/strategies/{payload.strategy_id}/kelly-params",
+                                json=kelly_params,
+                            )
+                            logger.info(
+                                "kelly_params_stored",
+                                extra={
+                                    "strategy_id": payload.strategy_id,
+                                    "win_rate": result.win_rate,
+                                    "payoff_ratio": result.payoff_ratio,
+                                },
+                            )
+                        except Exception as exc:
+                            logger.warning("kelly_params_store_failed", extra={"error": str(exc)[:200]})
             except Exception as exc:
                 logger.warning("strategy_auto_promotion_failed", extra={"error": str(exc)[:200]})
     except ValueError as exc:

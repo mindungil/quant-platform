@@ -88,26 +88,46 @@ def compute_statistics(payload: StatisticsInput) -> StatisticsSnapshot:
     loss_rate = 1 - win_rate
     expectancy = round((win_rate * avg_win) - (loss_rate * abs(avg_loss)), 6)
 
-    # Drift detection
-    drift = total_return < payload.expected_return
-
+    # Drift detection — rolling Sharpe vs backtest baseline
     statistics_computations_total.inc()
-    # Update drift gauges
-    drift_score = abs(total_return - payload.expected_return)
     sid = payload.strategy_id or "default"
-    strategy_drift_score.labels(strategy_id=sid).set(round(drift_score, 4))
-    if drift_score > 0.1:
-        strategy_drift_alert.labels(strategy_id=sid).set(2)  # red
-        drift_alert_threshold.labels(strategy_id=sid).set(0.1)
-    elif drift_score > 0.05:
-        strategy_drift_alert.labels(strategy_id=sid).set(1)  # yellow
-        drift_alert_threshold.labels(strategy_id=sid).set(0.05)
-    else:
-        strategy_drift_alert.labels(strategy_id=sid).set(0)  # green
-        drift_alert_threshold.labels(strategy_id=sid).set(0.05)
+    recent_window = 20
+    recent_sharpe_val: float | None = None
 
-    # Publish drift alert event for critical drift
-    if drift_score > 0.1 and _drift_event_callback is not None:
+    if trade_count >= recent_window and payload.baseline_sharpe is not None:
+        recent_returns = returns[-recent_window:]
+        recent_sharpe_val = float(ep.sharpe_ratio(recent_returns)) if len(recent_returns) > 1 else 0.0
+        recent_sharpe_val = max(-10.0, min(10.0, recent_sharpe_val))
+
+        drift_score = abs(recent_sharpe_val - payload.baseline_sharpe)
+        drift_pct = drift_score / max(abs(payload.baseline_sharpe), 0.1)
+
+        if drift_pct > 0.5:  # >50% degradation
+            alert_level = 2  # red
+        elif drift_pct > 0.25:  # >25% degradation
+            alert_level = 1  # yellow
+        else:
+            alert_level = 0  # green
+
+        drift_detected = alert_level >= 1
+    else:
+        # Fallback to simple expected_return check
+        drift_score = abs(total_return - payload.expected_return)
+        if drift_score > 0.1:
+            alert_level = 2
+        elif drift_score > 0.05:
+            alert_level = 1
+        else:
+            alert_level = 0
+        drift_detected = total_return < payload.expected_return
+
+    # Update drift gauges
+    strategy_drift_score.labels(strategy_id=sid).set(round(drift_score, 4))
+    strategy_drift_alert.labels(strategy_id=sid).set(alert_level)
+    drift_alert_threshold.labels(strategy_id=sid).set(0.25 if payload.baseline_sharpe is not None else 0.05)
+
+    # Publish drift alert event when alert_level >= 1
+    if alert_level >= 1 and _drift_event_callback is not None:
         try:
             import asyncio
             loop = asyncio.get_event_loop()
@@ -118,7 +138,9 @@ def compute_statistics(payload: StatisticsInput) -> StatisticsSnapshot:
                         "strategy_id": sid,
                         "asset": getattr(payload, "asset", ""),
                         "drift_score": round(drift_score, 4),
-                        "threshold": 0.1,
+                        "alert_level": alert_level,
+                        "recent_sharpe": recent_sharpe_val,
+                        "baseline_sharpe": payload.baseline_sharpe,
                         "total_return": total_return,
                         "expected_return": payload.expected_return,
                     },
@@ -132,7 +154,7 @@ def compute_statistics(payload: StatisticsInput) -> StatisticsSnapshot:
         trade_count=trade_count,
         total_return=total_return,
         win_rate=win_rate,
-        drift_detected=drift,
+        drift_detected=drift_detected,
         sharpe=sharpe,
         sortino=sortino,
         max_drawdown=max_drawdown,
@@ -142,5 +164,7 @@ def compute_statistics(payload: StatisticsInput) -> StatisticsSnapshot:
         avg_loss=avg_loss,
         payoff_ratio=payoff_ratio,
         expectancy=expectancy,
+        drift_score=round(drift_score, 4),
+        recent_sharpe=round(recent_sharpe_val, 4) if recent_sharpe_val is not None else None,
         recent_trade_pnls=payload.trade_pnls[-10:],
     )
