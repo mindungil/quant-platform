@@ -1,6 +1,22 @@
 import math
 import numpy as np
 import pandas as pd
+# quantstats 0.0.64 uses IPython for HTML reports; mock it so the server starts without Jupyter
+import sys as _sys, types as _types
+if "IPython" not in _sys.modules:
+    _ipy = _types.ModuleType("IPython")
+    _ipy.core = _types.ModuleType("IPython.core")
+    _ipy.core.display = _types.ModuleType("IPython.core.display")
+    _ipy.core.display.display = lambda *a, **k: None
+    _ipy.core.display.HTML = type("HTML", (), {"__init__": lambda self, *a, **k: None})
+    _ipy.display = _types.ModuleType("IPython.display")
+    _ipy.display.display = lambda *a, **k: None
+    _ipy.display.HTML = _ipy.core.display.HTML
+    for _mod, _obj in [
+        ("IPython", _ipy), ("IPython.core", _ipy.core),
+        ("IPython.core.display", _ipy.core.display), ("IPython.display", _ipy.display),
+    ]:
+        _sys.modules[_mod] = _obj
 import quantstats as qs
 
 from prometheus_client import Counter, Gauge
