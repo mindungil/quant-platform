@@ -6,6 +6,7 @@ from app.core.reasoning import build_reasoning_text
 from app.core.oauth import (
     start_auth_flow, exchange_code, has_valid_token,
     get_token, call_with_oauth, PROVIDERS,
+    start_device_flow, get_device_flow_status,
 )
 from app.core.agent_loop import run_agent_loop
 from app.db.conversation import (
@@ -133,6 +134,21 @@ def oauth_status(provider: str, x_user_id: str | None = Header(default=None)) ->
     user_id = x_user_id or "anonymous"
     valid = has_valid_token(user_id, provider)
     return {"provider": provider, "user_id": user_id, "authenticated": valid}
+
+
+@router.post("/auth/github-copilot/device-start")
+async def copilot_device_start(x_user_id: str | None = Header(default=None)) -> dict:
+    """GitHub Copilot Device Flow 시작 — user_code와 verification_uri 반환."""
+    user_id = x_user_id or "anonymous"
+    result = await start_device_flow(user_id)
+    return result
+
+
+@router.post("/auth/github-copilot/device-poll")
+async def copilot_device_poll(x_user_id: str | None = Header(default=None)) -> dict:
+    """Device Flow polling 상태 확인."""
+    user_id = x_user_id or "anonymous"
+    return await get_device_flow_status(user_id)
 
 
 @router.get("/providers")

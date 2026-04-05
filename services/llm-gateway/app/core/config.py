@@ -4,6 +4,9 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Settings:
+    # Server public endpoint (for OAuth redirect_uri)
+    public_host: str = os.getenv("PUBLIC_HOST", "168.107.14.241")
+    llm_gateway_port: int = int(os.getenv("LLM_GATEWAY_PORT", "8021"))
     # LLM은 OAuth 기반 — API 키 불필요 (유저가 Claude/Codex 구독으로 인증)
     enable_llm: bool = os.getenv("ENABLE_LLM", "true").lower() == "true"
     max_tokens: int = int(os.getenv("LLM_MAX_TOKENS", "500"))
