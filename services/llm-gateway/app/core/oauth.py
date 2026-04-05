@@ -1,4 +1,4 @@
-"""OAuth 2.0 PKCE 인증 + GitHub Copilot Device Flow — Claude/Codex/Copilot 구독 연동.
+"""OAuth 2.0 PKCE 인증 — Claude/Codex 구독 연동.
 
 BYOKEY(AprilNEA/BYOKEY) 프로젝트의 Rust 구현을 Python으로 포팅.
 
@@ -9,21 +9,12 @@ BYOKEY(AprilNEA/BYOKEY) 프로젝트의 Rust 구현을 Python으로 포팅.
 4. code를 access_token으로 교환
 5. 토큰 저장 → 에이전트가 해당 토큰으로 LLM 호출
 
-유저 플로우 (Device Flow — GitHub Copilot):
-1. POST /auth/github-copilot/device-start → user_code, verification_uri 반환
-2. 유저가 브라우저에서 github.com/login/device 접속 → user_code 입력
-3. 서버가 백그라운드로 polling → access_token 수신
-4. GitHub access_token → Copilot 토큰 교환
-5. 30분마다 Copilot 토큰 자동 갱신
-
 지원 프로바이더:
 - Claude (Anthropic): claude.ai OAuth → console.anthropic.com 토큰 교환
 - Codex (OpenAI): auth.openai.com OAuth → 토큰 교환
-- GitHub Copilot: Device Flow → GitHub token → Copilot token 교환
 """
 from __future__ import annotations
 
-import asyncio
 import dataclasses
 import hashlib
 import json
@@ -32,10 +23,7 @@ import os
 import secrets
 import time
 from base64 import urlsafe_b64encode
-from dataclasses import dataclass, field
-from threading import Thread
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from urllib.parse import parse_qs, urlparse
+from dataclasses import dataclass
 
 import httpx
 import redis.asyncio as aioredis
@@ -67,15 +55,6 @@ PROVIDERS = {
         "callback_port": settings.llm_gateway_port,
         "scopes": ["openid", "email", "profile", "offline_access"],
     },
-    "github-copilot": {
-        "type": "device_flow",
-        "client_id": "Iv1.b507a08c87ecfe98",
-        "device_url": "https://github.com/login/device/code",
-        "token_url": "https://github.com/login/oauth/access_token",
-        "copilot_token_url": "https://api.github.com/copilot_internal/v2/token",
-        "chat_url": "https://api.githubcopilot.com/chat/completions",
-        "scope": "user copilot",
-    },
 }
 
 
@@ -99,15 +78,12 @@ class OAuthToken:
     expires_at: float = 0
     provider: str = ""
     user_id: str = ""
-    github_access_token: str | None = None
 
 
 # In-memory fallback: user_id -> {provider -> OAuthToken}
 _token_store: dict[str, dict[str, OAuthToken]] = {}
 # Pending auth flows: state -> {verifier, provider, user_id}
 _pending_flows: dict[str, dict] = {}
-# Device flow status: user_id -> status dict
-_device_flow_status: dict[str, dict] = {}
 
 
 def store_token(user_id: str, provider: str, token: OAuthToken) -> None:
@@ -174,9 +150,6 @@ def start_auth_flow(provider: str, user_id: str) -> dict:
     config = PROVIDERS.get(provider)
     if not config:
         return {"error": f"unknown provider: {provider}"}
-
-    if config.get("type") == "device_flow":
-        return {"error": f"use /auth/{provider}/device-start for device flow providers"}
 
     verifier, challenge = generate_pkce()
     state = secrets.token_hex(16)
@@ -273,172 +246,6 @@ async def exchange_code(state: str, code: str) -> OAuthToken | None:
     return token
 
 
-# ── GitHub Copilot Device Flow ───────────────────────────────────────────
-
-async def start_device_flow(user_id: str) -> dict:
-    """Start GitHub Device Flow — returns user_code and verification_uri."""
-    config = PROVIDERS["github-copilot"]
-
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            config["device_url"],
-            data={
-                "client_id": config["client_id"],
-                "scope": config["scope"],
-            },
-            headers={"Accept": "application/json"},
-            timeout=15.0,
-        )
-
-    if resp.status_code != 200:
-        logger.error("device_flow_start_failed", extra={"status": resp.status_code, "body": resp.text[:200]})
-        return {"error": "failed to start device flow", "status": resp.status_code}
-
-    data = resp.json()
-    device_code = data["device_code"]
-    interval = data.get("interval", 5)
-
-    _device_flow_status[user_id] = {
-        "status": "pending",
-        "user_code": data["user_code"],
-        "verification_uri": data["verification_uri"],
-        "expires_in": data.get("expires_in", 900),
-        "started_at": time.time(),
-    }
-
-    # Start background polling
-    asyncio.create_task(_poll_device_token(user_id, device_code, interval))
-
-    return {
-        "user_code": data["user_code"],
-        "verification_uri": data["verification_uri"],
-        "expires_in": data.get("expires_in", 900),
-        "interval": interval,
-    }
-
-
-async def _poll_device_token(user_id: str, device_code: str, interval: int) -> None:
-    """Background polling for device flow token."""
-    config = PROVIDERS["github-copilot"]
-    deadline = time.time() + 900  # 15 min max
-
-    async with httpx.AsyncClient() as client:
-        while time.time() < deadline:
-            await asyncio.sleep(interval)
-
-            try:
-                resp = await client.post(
-                    config["token_url"],
-                    data={
-                        "client_id": config["client_id"],
-                        "device_code": device_code,
-                        "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
-                    },
-                    headers={"Accept": "application/json"},
-                    timeout=15.0,
-                )
-            except Exception as exc:
-                logger.warning("device_poll_request_failed", extra={"error": str(exc)[:200]})
-                continue
-
-            data = resp.json()
-            error = data.get("error")
-
-            if error == "authorization_pending":
-                continue
-            elif error == "slow_down":
-                interval += 5
-                continue
-            elif error == "expired_token":
-                _device_flow_status[user_id] = {"status": "expired"}
-                return
-            elif error == "access_denied":
-                _device_flow_status[user_id] = {"status": "denied"}
-                return
-            elif error:
-                _device_flow_status[user_id] = {"status": "error", "error": error}
-                return
-
-            # Success — got GitHub access token
-            github_token = data.get("access_token", "")
-            logger.info("device_flow_github_token_acquired", extra={"user_id": user_id})
-
-            # Exchange for Copilot token
-            copilot_token_data = await _exchange_copilot_token(client, github_token)
-            if not copilot_token_data:
-                _device_flow_status[user_id] = {"status": "error", "error": "copilot_token_exchange_failed"}
-                return
-
-            token = OAuthToken(
-                access_token=copilot_token_data["token"],
-                expires_at=copilot_token_data.get("expires_at", time.time() + 1800),
-                provider="github-copilot",
-                user_id=user_id,
-                github_access_token=github_token,
-            )
-
-            await store_token_async(user_id, "github-copilot", token)
-            _device_flow_status[user_id] = {"status": "authenticated"}
-            logger.info("copilot_token_stored", extra={"user_id": user_id})
-
-            # Schedule periodic copilot token refresh
-            asyncio.create_task(_refresh_copilot_token_loop(user_id))
-            return
-
-    # Timed out
-    _device_flow_status[user_id] = {"status": "expired"}
-
-
-async def _exchange_copilot_token(client: httpx.AsyncClient, github_token: str) -> dict | None:
-    """Exchange GitHub access_token for Copilot internal token."""
-    config = PROVIDERS["github-copilot"]
-    try:
-        resp = await client.get(
-            config["copilot_token_url"],
-            headers={
-                "Authorization": f"token {github_token}",
-                "Accept": "application/json",
-            },
-            timeout=15.0,
-        )
-        if resp.status_code == 200:
-            return resp.json()
-        logger.error("copilot_token_exchange_failed", extra={"status": resp.status_code, "body": resp.text[:200]})
-    except Exception as exc:
-        logger.error("copilot_token_exchange_error", extra={"error": str(exc)[:200]})
-    return None
-
-
-async def _refresh_copilot_token_loop(user_id: str) -> None:
-    """Refresh Copilot token every 30 minutes using stored GitHub access_token."""
-    while True:
-        await asyncio.sleep(1800)  # 30분
-        token = await get_token_async(user_id, "github-copilot")
-        if not token or not token.github_access_token:
-            logger.info("copilot_refresh_stopped_no_token", extra={"user_id": user_id})
-            return
-
-        async with httpx.AsyncClient() as client:
-            copilot_data = await _exchange_copilot_token(client, token.github_access_token)
-
-        if not copilot_data:
-            logger.warning("copilot_refresh_failed", extra={"user_id": user_id})
-            continue
-
-        token.access_token = copilot_data["token"]
-        token.expires_at = copilot_data.get("expires_at", time.time() + 1800)
-        await store_token_async(user_id, "github-copilot", token)
-        logger.info("copilot_token_refreshed", extra={"user_id": user_id})
-
-
-async def get_device_flow_status(user_id: str) -> dict:
-    """Return current device flow status for user."""
-    status = _device_flow_status.get(user_id)
-    if not status:
-        return {"status": "not_started"}
-    return status
-
-
 # ── LLM Call with OAuth Token ────────────────────────────────────────────
 
 def call_with_oauth(user_id: str, provider: str, messages: list[dict], model: str = "", max_tokens: int = 500) -> str | None:
@@ -451,8 +258,6 @@ def call_with_oauth(user_id: str, provider: str, messages: list[dict], model: st
         return _call_claude_api(token.access_token, messages, model or "claude-sonnet-4-5-20250929", max_tokens)
     elif provider == "codex":
         return _call_openai_api(token.access_token, messages, model or "gpt-4o", max_tokens)
-    elif provider == "github-copilot":
-        return _call_github_copilot_api(token.access_token, messages, model or "gpt-4o", max_tokens)
     return None
 
 
@@ -512,31 +317,4 @@ def _call_openai_api(token: str, messages: list[dict], model: str, max_tokens: i
             return resp.json()["choices"][0]["message"]["content"]
     except Exception as exc:
         logger.warning("openai_api_failed", extra={"error": str(exc)[:200]})
-    return None
-
-
-def _call_github_copilot_api(copilot_token: str, messages: list[dict], model: str, max_tokens: int) -> str | None:
-    """Call GitHub Copilot Chat Completions API (OpenAI-compatible)."""
-    config = PROVIDERS["github-copilot"]
-    try:
-        resp = httpx.post(
-            config["chat_url"],
-            headers={
-                "Authorization": f"Bearer {copilot_token}",
-                "Content-Type": "application/json",
-                "Editor-Version": "vscode/1.85.0",
-                "Copilot-Integration-Id": "vscode-chat",
-            },
-            json={
-                "model": model,
-                "messages": messages,
-                "max_tokens": max_tokens,
-                "temperature": 0.3,
-            },
-            timeout=30.0,
-        )
-        if resp.status_code == 200:
-            return resp.json()["choices"][0]["message"]["content"]
-    except Exception as exc:
-        logger.warning("copilot_api_failed", extra={"error": str(exc)[:200]})
     return None
