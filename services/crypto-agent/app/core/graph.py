@@ -135,6 +135,7 @@ def detect_node(state: AgentState) -> dict:
 
     # Fetch external context (non-fatal)
     external_used = False
+    ext = {}
     try:
         ext_resp = httpx.get(
             f"{settings.external_data_service_base_url}/external/context/{state['asset']}",

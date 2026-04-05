@@ -51,6 +51,21 @@ class MemoryRepository:
             """
         )
 
+        # Add columns that may be missing from older table versions
+        for col_def in [
+            "formula_name TEXT",
+            "regime_label TEXT",
+            "trade_outcome DOUBLE PRECISION",
+            "outcome_sharpe DOUBLE PRECISION",
+        ]:
+            col_name = col_def.split()[0]
+            try:
+                self._store.execute(
+                    f"ALTER TABLE memory_records ADD COLUMN IF NOT EXISTS {col_def}"
+                )
+            except Exception:
+                pass  # column may already exist
+
         # Add pgvector column for semantic similarity search
         try:
             self._store.execute(

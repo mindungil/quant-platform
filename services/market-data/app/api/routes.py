@@ -34,7 +34,10 @@ def metrics() -> Response:
 def ingest_candle(asset: str, payload: CandlePayload) -> CandleIngestResponse:
     previous = _last_candles.get(asset)
     validation = validate_candle_transition(previous, payload)
-    if not validation.accepted:
+
+    # Non-monotonic timestamps are allowed (e.g. backfill, collector restart)
+    # but flagged as anomalies. Only reject truly invalid candles (e.g. negative volume).
+    if not validation.accepted and validation.reason != "non_monotonic_timestamp":
         raise HTTPException(status_code=422, detail=validation.reason)
 
     _last_candles[asset] = payload

@@ -100,41 +100,61 @@ def _check_protection(protection: ProtectiveOrder, current_price: float, shadow_
     fill_price = protection.trigger_price  # trigger_price is set relative to fill
 
     if protection.trigger_type == "STOP_LOSS":
-        # For BUY orders (long): stop if price drops below trigger
         # trigger_price is already the absolute stop price
-        if current_price <= protection.trigger_price:
-            _trigger_stop(protection, current_price, "stop_loss_hit", shadow_mode)
-            return True
+        # protection.side is the protective order side (opposite of position)
+        # SELL protective = long position, BUY protective = short position
+        if protection.side == "BUY":
+            # Short position: stop if price rises above trigger
+            if current_price >= protection.trigger_price:
+                _trigger_stop(protection, current_price, "stop_loss_hit_short", shadow_mode)
+                return True
+        else:
+            # Long position: stop if price drops below trigger
+            if current_price <= protection.trigger_price:
+                _trigger_stop(protection, current_price, "stop_loss_hit", shadow_mode)
+                return True
 
     elif protection.trigger_type == "TRAILING_STOP":
         trailing_pct = protection.trailing_stop_pct or 0.03
         state = _get_trailing_state(protection.order_id)
+        is_short = protection.side == "BUY"  # BUY protective = short position
 
         if state is None:
-            # Initialize trailing state from the fill price stored in highest_price
-            highest = protection.highest_price or current_price
+            ref_price = protection.highest_price or current_price
             state = {
-                "highest_price": max(highest, current_price),
-                "fill_price": protection.highest_price or current_price,
+                "highest_price": max(ref_price, current_price),
+                "lowest_price": min(ref_price, current_price),
+                "fill_price": ref_price,
                 "stop_pct": trailing_pct,
             }
             _set_trailing_state(protection.order_id, state)
 
-        highest = state["highest_price"]
-
-        # Update highest price
-        if current_price > highest:
-            state["highest_price"] = current_price
-            _set_trailing_state(protection.order_id, state)
-            highest = current_price
-
-        # Check trailing stop: if price dropped trailing_pct from highest
-        if highest > 0:
-            drop_pct = (highest - current_price) / highest
-            if drop_pct >= trailing_pct:
-                _trigger_stop(protection, current_price, f"trailing_stop_hit (drop={drop_pct:.4f} >= {trailing_pct})", shadow_mode)
-                _delete_trailing_state(protection.order_id)
-                return True
+        if is_short:
+            # Short position: track lowest price, trigger on rise
+            lowest = state.get("lowest_price", current_price)
+            if current_price < lowest:
+                state["lowest_price"] = current_price
+                _set_trailing_state(protection.order_id, state)
+                lowest = current_price
+            if lowest > 0:
+                rise_pct = (current_price - lowest) / lowest
+                if rise_pct >= trailing_pct:
+                    _trigger_stop(protection, current_price, f"trailing_stop_hit_short (rise={rise_pct:.4f} >= {trailing_pct})", shadow_mode)
+                    _delete_trailing_state(protection.order_id)
+                    return True
+        else:
+            # Long position: track highest price, trigger on drop
+            highest = state["highest_price"]
+            if current_price > highest:
+                state["highest_price"] = current_price
+                _set_trailing_state(protection.order_id, state)
+                highest = current_price
+            if highest > 0:
+                drop_pct = (highest - current_price) / highest
+                if drop_pct >= trailing_pct:
+                    _trigger_stop(protection, current_price, f"trailing_stop_hit (drop={drop_pct:.4f} >= {trailing_pct})", shadow_mode)
+                    _delete_trailing_state(protection.order_id)
+                    return True
 
     return False
 

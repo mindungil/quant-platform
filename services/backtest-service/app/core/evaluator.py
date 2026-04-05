@@ -597,10 +597,10 @@ def get_job(job_id: str) -> BacktestJob | None:
     return _jobs.get(job_id)
 
 
-def submit_job(payload: BacktestRequest) -> BacktestJob:
+def submit_job(payload: BacktestRequest, user_id: str = "system") -> BacktestJob:
     """Create a job entry and schedule async evaluation. Returns immediately."""
     job_id = str(uuid4())
-    job = BacktestJob(job_id=job_id, strategy_id=payload.strategy_id, status="PENDING")
+    job = BacktestJob(job_id=job_id, strategy_id=payload.strategy_id, user_id=user_id, status="PENDING")
     _jobs[job_id] = job
 
     # Fire-and-forget the actual evaluation on the running event loop

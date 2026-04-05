@@ -159,7 +159,18 @@ class JetStreamBus:
                 jetstream_redelivery_count.labels(subject=subject).set(info.num_redelivered)
             except Exception:
                 pass
-            event_id = payload["event_id"]
+            event_id = payload.get("event_id") or str(uuid4())
+            event_type = payload.get("event_type", "")
+
+            # Guard: skip messages already on DLQ to prevent infinite .dlq.dlq... loop
+            if ".dlq" in event_type or ".dlq" in message.subject:
+                logger.warning(
+                    "dlq_message_parked",
+                    extra={"event_type": event_type, "subject": message.subject},
+                )
+                await message.ack()
+                return
+
             idempotency_key = f"events:{durable}"
             if self._redis.sismember(idempotency_key, event_id):
                 jetstream_duplicate_messages_total.labels(consumer=durable).inc()
@@ -181,19 +192,22 @@ class JetStreamBus:
                         "service": "shared-events",
                         "correlation_id": payload.get("correlation_id"),
                         "user_id": payload.get("user_id"),
-                        "event_type": payload.get("event_type"),
+                        "event_type": event_type,
                     },
                 )
-                await self.publish(
-                    dlq_subject,
-                    EventEnvelope(
-                        event_type=f"{payload['event_type']}.dlq",
-                        source=durable,
-                        correlation_id=payload.get("correlation_id"),
-                        user_id=payload.get("user_id"),
-                        data=payload,
-                    ),
-                )
+                try:
+                    await self.publish(
+                        dlq_subject,
+                        EventEnvelope(
+                            event_type=f"{event_type}.dlq",
+                            source=durable,
+                            correlation_id=payload.get("correlation_id"),
+                            user_id=payload.get("user_id"),
+                            data=payload,
+                        ),
+                    )
+                except Exception:
+                    logger.error("dlq_publish_failed", extra={"event_type": event_type})
                 jetstream_messages_dlq_total.labels(consumer=durable).inc()
                 await message.ack()
             finally:

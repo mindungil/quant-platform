@@ -1,4 +1,8 @@
-from fastapi import APIRouter, Response
+import hmac
+import time
+from hashlib import sha256
+
+from fastapi import APIRouter, Header, HTTPException, Request, Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from app.core.config import settings
@@ -7,6 +11,27 @@ from app.models.portfolio import PositionUpdate, PortfolioSnapshot
 from shared.health import check_redis, check_sql, check_tcp, health_payload
 
 router = APIRouter()
+
+
+def _require_internal_admin(
+    request: Request,
+    x_internal_actor_user_id: str | None,
+    x_internal_admin_timestamp: str | None,
+    x_internal_admin_signature: str | None,
+) -> str:
+    if not x_internal_actor_user_id or not x_internal_admin_timestamp or not x_internal_admin_signature:
+        raise HTTPException(status_code=403, detail="missing_internal_admin_headers")
+    try:
+        timestamp = int(x_internal_admin_timestamp)
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail="invalid_internal_admin_timestamp") from exc
+    if abs(int(time.time()) - timestamp) > settings.admin_header_ttl_seconds:
+        raise HTTPException(status_code=403, detail="expired_internal_admin_signature")
+    message = f"{x_internal_actor_user_id}:{x_internal_admin_timestamp}:{request.url.path}"
+    expected = hmac.new(settings.internal_admin_secret.encode("utf-8"), message.encode("utf-8"), sha256).hexdigest()
+    if not hmac.compare_digest(expected, x_internal_admin_signature):
+        raise HTTPException(status_code=403, detail="invalid_internal_admin_signature")
+    return x_internal_actor_user_id
 
 
 @router.get("/health")
@@ -27,7 +52,14 @@ def metrics() -> Response:
 
 
 @router.post("/portfolio/fills", response_model=PortfolioSnapshot)
-def apply_fill(payload: PositionUpdate) -> PortfolioSnapshot:
+def apply_fill(
+    payload: PositionUpdate,
+    request: Request,
+    x_internal_actor_user_id: str | None = Header(default=None),
+    x_internal_admin_timestamp: str | None = Header(default=None),
+    x_internal_admin_signature: str | None = Header(default=None),
+) -> PortfolioSnapshot:
+    _require_internal_admin(request, x_internal_actor_user_id, x_internal_admin_timestamp, x_internal_admin_signature)
     return portfolio_repository.apply(payload)
 
 

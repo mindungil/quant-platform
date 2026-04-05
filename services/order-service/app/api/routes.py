@@ -69,23 +69,34 @@ def metrics() -> Response:
 
 
 @router.post("/orders", response_model=OrderResponse)
-def create_order(payload: OrderRequest) -> OrderResponse:
+def create_order(
+    payload: OrderRequest,
+    request: Request,
+    x_internal_actor_user_id: str | None = Header(default=None),
+    x_internal_admin_timestamp: str | None = Header(default=None),
+    x_internal_admin_signature: str | None = Header(default=None),
+) -> OrderResponse:
+    _require_internal_admin(request, x_internal_actor_user_id, x_internal_admin_timestamp, x_internal_admin_signature)
     return process_order(payload)
 
 
 @router.get("/orders/detail/{order_id}", response_model=OrderResponse)
-def get_order(order_id: str) -> OrderResponse:
+def get_order(order_id: str, x_user_id: str | None = Header(default=None)) -> OrderResponse:
     order = order_repository.get_by_id(order_id)
     if order is None:
         raise HTTPException(status_code=404, detail="order_not_found")
+    if x_user_id is not None and order.user_id != x_user_id:
+        raise HTTPException(status_code=403, detail="forbidden")
     return order
 
 
 @router.delete("/orders/{order_id}", response_model=OrderResponse)
-def cancel_order(order_id: str) -> OrderResponse:
+def cancel_order(order_id: str, x_user_id: str | None = Header(default=None)) -> OrderResponse:
     order = order_repository.get_by_id(order_id)
     if order is None:
         raise HTTPException(status_code=404, detail="order_not_found")
+    if x_user_id is not None and order.user_id != x_user_id:
+        raise HTTPException(status_code=403, detail="forbidden")
     if order.status in ("CANCELLED", "FILLED", "REJECTED", "FAILED"):
         raise HTTPException(status_code=409, detail=f"order_already_{order.status.lower()}")
 

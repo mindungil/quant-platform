@@ -64,7 +64,11 @@ def list_shadow_strategies() -> list[Strategy]:
 @router.get("/strategies/{strategy_id}", response_model=Strategy)
 def get_strategy(strategy_id: str, x_user_id: str | None = Header(default=None)) -> Strategy:
     strategy = strategy_repository.get(strategy_id)
-    if strategy is None or (x_user_id is not None and strategy.user_id not in {x_user_id, "bootstrap"}):
+    if strategy is None:
+        raise HTTPException(status_code=404, detail="strategy_not_found")
+    if x_user_id is None and strategy.user_id != "bootstrap":
+        raise HTTPException(status_code=403, detail="forbidden")
+    if x_user_id is not None and strategy.user_id not in {x_user_id, "bootstrap"}:
         raise HTTPException(status_code=404, detail="strategy_not_found")
     return strategy
 
@@ -211,7 +215,11 @@ def backtest_callback(payload: dict) -> dict:
 @router.delete("/strategies/{strategy_id}", response_model=Strategy)
 def delete_strategy(strategy_id: str, x_user_id: str | None = Header(default=None)) -> Strategy:
     strategy = strategy_repository.get(strategy_id)
-    if strategy is None or (x_user_id is not None and strategy.user_id != x_user_id):
+    if strategy is None:
+        raise HTTPException(status_code=404, detail="strategy_not_found")
+    if x_user_id is None and strategy.user_id != "bootstrap":
+        raise HTTPException(status_code=403, detail="forbidden")
+    if x_user_id is not None and strategy.user_id != x_user_id:
         raise HTTPException(status_code=404, detail="strategy_not_found")
     if strategy.status == "ARCHIVED":
         return strategy

@@ -204,6 +204,7 @@ def compute_statistics(payload: StatisticsInput) -> StatisticsSnapshot:
                         "strategy_id": sid,
                         "asset": getattr(payload, "asset", ""),
                         "drift_score": round(drift_score, 4),
+                        "threshold": round(drift_score - 0.01, 4),  # ensure consumer processes this (score already exceeded internal threshold)
                         "alert_level": alert_level,
                         "recent_sharpe": recent_sharpe_val,
                         "baseline_sharpe": payload.baseline_sharpe,

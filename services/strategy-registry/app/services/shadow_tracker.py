@@ -91,6 +91,9 @@ class ShadowTracker:
             }
         stats = self._running[strategy_id]
         stats["trades"].append(pnl)
+        # Cap in-memory trades to last 1000 to prevent unbounded growth
+        if len(stats["trades"]) > 1000:
+            stats["trades"] = stats["trades"][-1000:]
         stats["total_pnl"] += pnl
         stats["count"] += 1
         if pnl > 0:

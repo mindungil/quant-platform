@@ -109,10 +109,21 @@ def verify_token(payload: TokenVerificationRequest) -> TokenVerificationResponse
 
 
 @router.get("/auth/me", response_model=UserProfile)
-def me(x_user_id: str | None = Header(default=None)) -> UserProfile:
-    if x_user_id is None:
+def me(
+    x_user_id: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
+) -> UserProfile:
+    user_id = x_user_id
+    if user_id is None and authorization:
+        token = authorization.removeprefix("Bearer ").strip()
+        try:
+            result = verify_access_token(token)
+            user_id = result.claims.sub
+        except Exception:
+            raise HTTPException(status_code=401, detail="invalid_token")
+    if user_id is None:
         raise HTTPException(status_code=401, detail="missing_user_context")
-    profile = auth_repository.get_by_user_id(x_user_id)
+    profile = auth_repository.get_by_user_id(user_id)
     if profile is None:
         raise HTTPException(status_code=404, detail="user_not_found")
     return profile

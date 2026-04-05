@@ -100,8 +100,10 @@ def get_by_type(
 @router.post("/memory/knowledge")
 def store_knowledge(payload: dict, x_user_id: str | None = Header(default=None)) -> MemoryRecord:
     """전략 지식 저장 — 어떤 공식이 어떤 레짐에서 효과적인지."""
+    if x_user_id is None:
+        raise HTTPException(status_code=401, detail="x_user_id_required")
     record = MemoryRecord(
-        user_id=x_user_id or "system",
+        user_id=x_user_id,
         memory_type="knowledge",
         asset=payload.get("asset", "ALL"),
         asset_type=payload.get("asset_type", "crypto"),
@@ -119,8 +121,10 @@ def store_knowledge(payload: dict, x_user_id: str | None = Header(default=None))
 @router.post("/memory/rule")
 def store_rule(payload: dict, x_user_id: str | None = Header(default=None)) -> MemoryRecord:
     """고정 규칙 저장 — 매매 규칙, 리스크 제약, 운영 정책."""
+    if x_user_id is None:
+        raise HTTPException(status_code=401, detail="x_user_id_required")
     record = MemoryRecord(
-        user_id=x_user_id or "system",
+        user_id=x_user_id,
         memory_type="rule",
         asset=payload.get("asset", "ALL"),
         asset_type=payload.get("asset_type", "crypto"),
@@ -136,8 +140,10 @@ def store_rule(payload: dict, x_user_id: str | None = Header(default=None)) -> M
 @router.post("/memory/state")
 def store_state(payload: dict, x_user_id: str | None = Header(default=None)) -> MemoryRecord:
     """현재 상태 스냅샷 저장 — 에이전트 판단 컨텍스트."""
+    if x_user_id is None:
+        raise HTTPException(status_code=401, detail="x_user_id_required")
     record = MemoryRecord(
-        user_id=x_user_id or "system",
+        user_id=x_user_id,
         memory_type="state",
         asset=payload.get("asset", "ALL"),
         asset_type=payload.get("asset_type", "crypto"),

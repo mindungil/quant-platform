@@ -107,7 +107,14 @@ class PortfolioRepository:
         new_quantity = round(current + signed_quantity, 8)
         self._items[payload.user_id][payload.asset] = new_quantity
         if payload.side == "BUY" and payload.price > 0:
-            self._prices[payload.user_id][payload.asset] = payload.price
+            # Weighted average entry price for position adds
+            old_price = self._prices[payload.user_id].get(payload.asset, 0.0)
+            if current > 0 and old_price > 0:
+                self._prices[payload.user_id][payload.asset] = round(
+                    (old_price * current + payload.price * payload.quantity) / (current + payload.quantity), 8
+                )
+            else:
+                self._prices[payload.user_id][payload.asset] = payload.price
         self._fills[payload.user_id].append(payload)
         portfolio_fills_total.labels(side=payload.side).inc()
 

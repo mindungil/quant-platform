@@ -283,7 +283,11 @@ def gateway_risk_check(payload: dict, principal: GatewayPrincipal = Depends(requ
 @router.post("/gateway/orders")
 def gateway_create_order(payload: dict, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
     merged = {"user_id": principal.user_id, **payload}
-    response = order_client.request("POST", "/orders", json=merged)
+    response = order_client.request(
+        "POST", "/orders",
+        headers=build_internal_admin_headers(principal, "/orders"),
+        json=merged,
+    )
     return _proxy_json(response)
 
 

@@ -38,6 +38,7 @@ class BacktestResult(BaseModel):
 class BacktestJob(BaseModel):
     job_id: str
     strategy_id: str
+    user_id: str = "system"
     status: str = "PENDING"  # PENDING | RUNNING | COMPLETED | FAILED
     result: BacktestResult | None = None
     error: str | None = None

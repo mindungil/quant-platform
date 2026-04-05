@@ -5,14 +5,27 @@ OpenCode/Codex 패턴: tool_name + arguments → HTTP 요청 → 결과 반환.
 """
 from __future__ import annotations
 
+import hmac as _hmac
 import json
 import logging
 import time
+from hashlib import sha256
 from typing import Any
 
 import httpx
 
 from app.core.config import settings
+
+
+def _build_internal_admin_headers(actor_user_id: str, path: str) -> dict[str, str]:
+    ts = str(int(time.time()))
+    message = f"{actor_user_id}:{ts}:{path}"
+    sig = _hmac.new(settings.internal_admin_secret.encode(), message.encode(), sha256).hexdigest()
+    return {
+        "X-Internal-Actor-User-ID": actor_user_id,
+        "X-Internal-Admin-Timestamp": ts,
+        "X-Internal-Admin-Signature": sig,
+    }
 
 logger = logging.getLogger("llm-gateway")
 
@@ -209,7 +222,11 @@ async def _place_order(args: dict, user_id: str) -> dict:
         "stop_loss_pct": args.get("stop_loss_pct"),
         "take_profit_pct": args.get("take_profit_pct"),
     }
-    resp = await _client.post(_url("order_service", "/orders"), json=body)
+    resp = await _client.post(
+        _url("order_service", "/orders"),
+        headers=_build_internal_admin_headers(user_id, "/orders"),
+        json=body,
+    )
     resp.raise_for_status()
     result = resp.json()
     return {
