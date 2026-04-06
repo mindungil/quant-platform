@@ -52,8 +52,28 @@ export async function gatewayFetch(path: string, init?: RequestInit) {
   if (token) headers.set("Authorization", `Bearer ${token}`);
   if (!headers.has("Content-Type") && init?.body) headers.set("Content-Type", "application/json");
   const response = await fetch(`${gatewayBase}${path}`, { ...init, headers, cache: "no-store" });
-  if (!response.ok) {
-    throw new Error(await response.text());
+  if (response.status === 401) {
+    // Clear token and redirect to login
+    clearToken();
+    if (typeof window !== "undefined") {
+      window.location.href = "/";
+    }
+    throw new Error("인증이 만료되었습니다");
   }
-  return response.json();
+  if (!response.ok) {
+    const errorText = await response.text();
+    // Don't expose internal error details to client
+    const safeMessage = response.status === 401 ? "인증이 필요합니다"
+      : response.status === 403 ? "접근 권한이 없습니다"
+      : response.status === 404 ? "요청한 리소스를 찾을 수 없습니다"
+      : response.status === 429 ? "요청이 너무 많습니다. 잠시 후 다시 시도해주세요"
+      : response.status >= 500 ? "서버 오류가 발생했습니다"
+      : "요청 처리 중 오류가 발생했습니다";
+    throw new Error(safeMessage);
+  }
+  try {
+    return response.json();
+  } catch {
+    return {};
+  }
 }

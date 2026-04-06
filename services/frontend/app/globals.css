@@ -66,7 +66,8 @@ body {
   transition: border-color 0.15s ease;
 }
 .input-field:focus {
-  border-color: #737373;
+  border-color: rgba(6, 182, 212, 0.5);
+  box-shadow: 0 0 12px rgba(6, 182, 212, 0.1);
 }
 .input-field::placeholder {
   color: #525252;
@@ -104,14 +105,15 @@ body {
   50% { opacity: 0.5; transform: scale(1.5); }
 }
 .live-dot {
-  @apply inline-block h-1.5 w-1.5 rounded-full bg-emerald-400;
+  @apply inline-block h-1.5 w-1.5 rounded-full bg-cyan-400;
   animation: livePulse 2s ease-in-out infinite;
+  box-shadow: 0 0 6px rgba(6, 182, 212, 0.5);
 }
 
 /* Glow effects */
 @keyframes subtleGlow {
-  0%, 100% { box-shadow: 0 0 20px rgba(255, 255, 255, 0.03); }
-  50% { box-shadow: 0 0 40px rgba(255, 255, 255, 0.06); }
+  0%, 100% { box-shadow: 0 0 20px rgba(6, 182, 212, 0.05); }
+  50% { box-shadow: 0 0 40px rgba(6, 182, 212, 0.1); }
 }
 .glow-card {
   animation: subtleGlow 4s ease-in-out infinite;
@@ -119,7 +121,7 @@ body {
 
 /* Gradient text */
 .gradient-text {
-  background: linear-gradient(135deg, #fff 0%, #a3a3a3 100%);
+  background: linear-gradient(135deg, #e0f2fe 0%, #a5b4fc 50%, #c4b5fd 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -133,6 +135,65 @@ body {
 
 /* Selection */
 ::selection {
-  background: #fff;
-  color: #000;
+  background: rgba(6, 182, 212, 0.3);
+  color: #fff;
+}
+
+/* Accent keyframes */
+@keyframes gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+/* Accent gradient text */
+.text-gradient-accent {
+  background: linear-gradient(135deg, #06b6d4, #a855f7, #3b82f6);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradient-shift 6s ease infinite;
+}
+
+/* Accent card glow on hover */
+.card-accent-hover:hover {
+  border-color: rgba(6, 182, 212, 0.3);
+  box-shadow: 0 0 30px rgba(6, 182, 212, 0.1), 0 0 60px rgba(168, 85, 247, 0.05);
+}
+
+/* Gradient button */
+.btn-gradient {
+  background: linear-gradient(135deg, #06b6d4, #6366f1);
+  transition: all 0.3s ease;
+}
+.btn-gradient:hover {
+  box-shadow: 0 4px 20px rgba(6, 182, 212, 0.4);
+  transform: translateY(-1px);
+}
+
+/* Accent border glow */
+.border-glow {
+  border: 1px solid rgba(6, 182, 212, 0.2);
+  box-shadow: inset 0 0 20px rgba(6, 182, 212, 0.03);
+}
+
+/* Floating orb background decoration */
+.bg-orb-cyan {
+  position: absolute;
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(6, 182, 212, 0.08), transparent 70%);
+  filter: blur(60px);
+  pointer-events: none;
+}
+
+.bg-orb-purple {
+  position: absolute;
+  width: 250px;
+  height: 250px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(168, 85, 247, 0.06), transparent 70%);
+  filter: blur(60px);
+  pointer-events: none;
 }

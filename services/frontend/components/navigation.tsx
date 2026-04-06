@@ -32,7 +32,7 @@ export function Navigation() {
             href={href}
             className={`relative rounded-lg px-3 py-1.5 transition-colors ${
               isActive
-                ? "font-medium text-white"
+                ? "font-medium text-cyan-300"
                 : "text-neutral-500 hover:text-white"
             }`}
           >
@@ -40,7 +40,7 @@ export function Navigation() {
             {isActive && (
               <motion.div
                 layoutId="nav-active"
-                className="absolute inset-0 rounded-lg bg-white/[0.06]"
+                className="absolute inset-0 rounded-lg bg-gradient-to-r from-cyan-500/10 to-indigo-500/5 border border-cyan-500/20"
                 transition={{ type: "spring", stiffness: 400, damping: 30 }}
                 style={{ zIndex: -1 }}
               />

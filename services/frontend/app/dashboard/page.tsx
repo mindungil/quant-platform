@@ -331,14 +331,14 @@ function DashboardContent() {
             <div className="relative z-10">
               <div className="flex items-center gap-3 mb-4">
                 <motion.div
-                  className="h-2 w-2 rounded-full bg-emerald-500"
-                  animate={{ opacity: [1, 0.4, 1] }}
+                  className="h-2 w-2 rounded-full bg-cyan-400"
+                  animate={{ opacity: [1, 0.4, 1], boxShadow: ["0 0 6px rgba(6,182,212,0.6)", "0 0 2px rgba(6,182,212,0.2)", "0 0 6px rgba(6,182,212,0.6)"] }}
                   transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
                 />
-                <span className="text-sm text-neutral-400 font-medium">에이전트 활성</span>
+                <span className="text-sm text-cyan-500 font-medium">에이전트 활성</span>
               </div>
 
-              <h1 className="text-3xl sm:text-4xl font-bold text-neutral-900 tracking-tight">
+              <h1 className="text-3xl sm:text-4xl font-bold text-gradient-accent tracking-tight">
                 오늘의 시장
               </h1>
               <motion.p
@@ -373,7 +373,7 @@ function DashboardContent() {
         <StaggerContainer className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <StaggerItem>
             <motion.div
-              className="rounded-2xl border border-neutral-100 bg-white/70 backdrop-blur-sm p-6 hover:shadow-lg hover:border-neutral-200 transition-all duration-300"
+              className="rounded-2xl border border-neutral-100 bg-white/70 backdrop-blur-sm p-6 hover:shadow-lg hover:border-neutral-200 transition-all duration-300 card-accent-hover"
               whileHover={{ scale: 1.02, y: -4 }}
             >
               <p className="text-sm text-neutral-400 font-medium">총 투자금</p>
@@ -390,12 +390,12 @@ function DashboardContent() {
 
           <StaggerItem>
             <motion.div
-              className="rounded-2xl border border-neutral-100 bg-white/70 backdrop-blur-sm p-6 hover:shadow-lg hover:border-neutral-200 transition-all duration-300"
+              className="rounded-2xl border border-neutral-100 bg-white/70 backdrop-blur-sm p-6 hover:shadow-lg hover:border-neutral-200 transition-all duration-300 card-accent-hover"
               whileHover={{ scale: 1.02, y: -4 }}
             >
               <p className="text-sm text-neutral-400 font-medium">평가 손익</p>
               <div className={`mt-2 text-3xl font-bold tabular-nums ${
-                unrealizedPnl >= 0 ? "text-emerald-600" : "text-red-500"
+                unrealizedPnl >= 0 ? "text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.4)]" : "text-red-400 drop-shadow-[0_0_8px_rgba(239,68,68,0.4)]"
               }`}>
                 {unrealizedPnl >= 0 ? "+" : ""}$<AnimatedNumber value={unrealizedPnl} decimals={0} />
               </div>
@@ -407,12 +407,12 @@ function DashboardContent() {
 
           <StaggerItem>
             <motion.div
-              className="rounded-2xl border border-neutral-100 bg-white/70 backdrop-blur-sm p-6 hover:shadow-lg hover:border-neutral-200 transition-all duration-300"
+              className="rounded-2xl border border-neutral-100 bg-white/70 backdrop-blur-sm p-6 hover:shadow-lg hover:border-neutral-200 transition-all duration-300 card-accent-hover"
               whileHover={{ scale: 1.02, y: -4 }}
             >
               <p className="text-sm text-neutral-400 font-medium">실현 손익</p>
               <div className={`mt-2 text-3xl font-bold tabular-nums ${
-                realizedPnl >= 0 ? "text-emerald-600" : "text-red-500"
+                realizedPnl >= 0 ? "text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.4)]" : "text-red-400 drop-shadow-[0_0_8px_rgba(239,68,68,0.4)]"
               }`}>
                 {realizedPnl >= 0 ? "+" : ""}$<AnimatedNumber value={realizedPnl} decimals={0} />
               </div>
@@ -515,7 +515,7 @@ function DashboardContent() {
         {/* ── Recent Decisions ────────────────────────────── */}
         <FadeInView delay={0.15}>
           <section>
-            <h2 className="text-lg font-semibold text-neutral-900 mb-4">최근 매매 결정</h2>
+            <h2 className="text-lg font-semibold text-gradient-accent mb-4">최근 매매 결정</h2>
 
             {decisions.length === 0 ? (
               <div className="rounded-2xl border border-neutral-100 bg-white/70 backdrop-blur-sm p-8 text-center">

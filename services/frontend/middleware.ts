@@ -28,7 +28,7 @@ export async function middleware(request: NextRequest) {
 
     const responseHeaders = new Headers(resp.headers);
     // Ensure CORS headers for the proxied response
-    responseHeaders.set("Access-Control-Allow-Origin", "*");
+    responseHeaders.set("Access-Control-Allow-Origin", "https://quent.kro.kr");
 
     return new NextResponse(resp.body, {
       status: resp.status,

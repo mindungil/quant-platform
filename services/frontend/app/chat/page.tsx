@@ -133,7 +133,7 @@ function ToolPill({
           ${
             hasError
               ? "bg-red-500/10 text-red-400 hover:bg-red-500/20"
-              : "bg-neutral-800/80 text-neutral-300 hover:bg-neutral-700/80 hover:text-white"
+              : "bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20 hover:text-white"
           }
         `}
       >
@@ -330,7 +330,7 @@ export default function ChatPage() {
                 onClick={startNewConversation}
                 whileHover={{ scale: 1.04 }}
                 whileTap={{ scale: 0.96 }}
-                className="group relative rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-black transition-shadow hover:shadow-[0_0_20px_rgba(255,255,255,0.15)]"
+                className="group relative rounded-lg btn-gradient px-3 py-1.5 text-xs font-semibold text-white transition-shadow"
               >
                 <span className="relative z-10">+ 새 대화</span>
               </motion.button>
@@ -383,7 +383,7 @@ export default function ChatPage() {
               <path d="M3 12h18M3 6h18M3 18h18" />
             </svg>
           </motion.button>
-          <h1 className="text-sm font-semibold text-white tracking-tight">
+          <h1 className="text-sm font-semibold text-gradient-accent tracking-tight">
             AI 트레이딩 에이전트
           </h1>
         </div>
@@ -503,7 +503,7 @@ export default function ChatPage() {
                       )}
 
                       {/* Text content */}
-                      <div className="border-l-2 border-neutral-700/50 pl-4">
+                      <div className="border-l-2 border-cyan-500/30 pl-4">
                         <div className="whitespace-pre-wrap text-[15px] leading-[1.75] text-neutral-200">
                           {msg.content}
                         </div>
@@ -581,7 +581,7 @@ export default function ChatPage() {
                 disabled={loading || !input.trim()}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-white text-black transition-opacity disabled:opacity-20"
+                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl btn-gradient text-white transition-opacity disabled:opacity-20"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M5 12h14M12 5l7 7-7 7" />
