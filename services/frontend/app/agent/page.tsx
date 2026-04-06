@@ -78,7 +78,7 @@ function actionLabel(action: string): { text: string; color: string; bg: string;
     case "SELL":
       return { text: "매도 추천", color: "text-rose-700", bg: "bg-rose-50", ring: "ring-rose-200" };
     default:
-      return { text: "관망 추천", color: "text-neutral-600", bg: "bg-neutral-50", ring: "ring-neutral-200" };
+      return { text: "관망 추천", color: "text-neutral-400", bg: "bg-white/[0.02]", ring: "ring-white/[0.06]" };
   }
 }
 
@@ -109,7 +109,7 @@ function AnimatedBar({
 }) {
   const pct = Math.min(Math.max((value / max) * 100, 0), 100);
   return (
-    <div className={`w-full rounded-full bg-neutral-100 overflow-hidden ${height}`}>
+    <div className={`w-full rounded-full bg-white/[0.06] overflow-hidden ${height}`}>
       <motion.div
         className={`${height} rounded-full ${colorClass}`}
         initial={{ width: 0 }}
@@ -127,7 +127,7 @@ function CoinIcon({ asset, size = 32 }: { asset: string; size?: number }) {
   if (!meta) return null;
   return (
     <div
-      className={`inline-flex items-center justify-center rounded-full bg-gradient-to-br ${meta.gradient} text-white font-bold shrink-0 shadow-sm`}
+      className={`inline-flex items-center justify-center rounded-full bg-gradient-to-br ${meta.gradient} text-white font-bold shrink-0`}
       style={{ width: size, height: size, fontSize: size * 0.38 }}
     >
       {meta.short.charAt(0)}
@@ -186,10 +186,10 @@ function AgentContent() {
     <PageTransition>
       <main className="grid gap-6">
         {/* ── Header ──────────────────────────────────────────── */}
-        <section className="rounded-xl border border-neutral-200 bg-white p-6 shadow-sm">
+        <section className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-6">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-2xl font-bold text-neutral-900">AI 에이전트</h2>
+              <h2 className="text-2xl font-bold text-white">AI 에이전트</h2>
               <p className="mt-1 text-sm text-neutral-500">
                 실시간 시장 분석과 AI 추천을 확인하세요
               </p>
@@ -197,7 +197,7 @@ function AgentContent() {
 
             {/* Asset tabs */}
             <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1 rounded-xl bg-neutral-100 p-1">
+              <div className="flex items-center gap-1 rounded-xl bg-white/[0.06] p-1">
                 {ASSETS.map((a) => {
                   const am = ASSET_META[a];
                   const active = selectedAsset === a;
@@ -207,8 +207,8 @@ function AgentContent() {
                       onClick={() => setSelectedAsset(a)}
                       className={`relative flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-all duration-200 ${
                         active
-                          ? "bg-white text-neutral-900 shadow-sm"
-                          : "text-neutral-500 hover:text-neutral-700"
+                          ? "bg-white/[0.10] text-white"
+                          : "text-neutral-500 hover:text-neutral-300"
                       }`}
                     >
                       <CoinIcon asset={a} size={22} />
@@ -221,7 +221,7 @@ function AgentContent() {
               <button
                 onClick={runAgent}
                 disabled={running}
-                className="ml-2 flex items-center gap-2 rounded-xl bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-all hover:bg-neutral-800 active:scale-[0.97] disabled:opacity-50"
+                className="ml-2 flex items-center gap-2 rounded-xl bg-cyan-500 px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-cyan-400 active:scale-[0.97] disabled:opacity-50"
               >
                 {running ? (
                   <>
@@ -252,7 +252,7 @@ function AgentContent() {
             <section>
               <div className="mb-4 flex items-center gap-2">
                 <CoinIcon asset={selectedAsset} size={28} />
-                <h3 className="text-lg font-bold text-neutral-900">
+                <h3 className="text-lg font-bold text-white">
                   {meta.label} AI 추천
                 </h3>
               </div>
@@ -262,23 +262,23 @@ function AgentContent() {
                   {recs.map((r, i) => (
                     <StaggerItem key={i}>
                       <motion.div
-                        className={`group relative rounded-xl border bg-white p-5 shadow-sm transition-all duration-200 ${
+                        className={`group relative rounded-xl border bg-white/[0.03] p-5 transition-all duration-200 ${
                           i === 0
-                            ? "border-neutral-900/20 ring-1 ring-neutral-900/5"
-                            : "border-neutral-200 hover:border-neutral-300"
+                            ? "border-cyan-500/30 ring-1 ring-cyan-500/10"
+                            : "border-white/[0.06] hover:border-white/[0.10]"
                         }`}
                         whileHover={{ scale: 1.015, y: -2 }}
                         transition={{ type: "spring", stiffness: 400, damping: 25 }}
                       >
                         {i === 0 && (
-                          <span className="absolute -top-2.5 left-4 inline-flex items-center rounded-full bg-neutral-900 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white shadow-sm">
+                          <span className="absolute -top-2.5 left-4 inline-flex items-center rounded-full bg-cyan-500 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
                             최적 추천
                           </span>
                         )}
 
-                        <p className="mt-1 text-base font-bold text-neutral-900">{r.name}</p>
+                        <p className="mt-1 text-base font-bold text-white">{r.name}</p>
 
-                        <p className="mt-2.5 text-sm leading-relaxed text-neutral-600">
+                        <p className="mt-2.5 text-sm leading-relaxed text-neutral-400">
                           {r.reasoning}
                         </p>
 
@@ -286,7 +286,7 @@ function AgentContent() {
                         <div className="mt-4">
                           <div className="mb-1.5 flex items-center justify-between">
                             <span className="text-xs font-medium text-neutral-500">신뢰도</span>
-                            <span className="text-xs font-bold text-neutral-700">
+                            <span className="text-xs font-bold text-neutral-300">
                               {(r.confidence * 100).toFixed(0)}%
                             </span>
                           </div>
@@ -304,9 +304,9 @@ function AgentContent() {
                   ))}
                 </StaggerContainer>
               ) : (
-                <div className="flex items-center justify-center rounded-xl border border-dashed border-neutral-200 bg-neutral-50/50 py-12">
+                <div className="flex items-center justify-center rounded-xl border border-dashed border-white/[0.06] bg-white/[0.02] py-12">
                   <div className="text-center">
-                    <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-neutral-100">
+                    <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.06]">
                       <CoinIcon asset={selectedAsset} size={24} />
                     </div>
                     <p className="text-sm text-neutral-400">
@@ -329,8 +329,8 @@ function AgentContent() {
             transition={{ duration: 0.25, delay: 0.05 }}
           >
             <FadeInView delay={0.1}>
-              <section className="rounded-xl border border-neutral-200 bg-white p-6 shadow-sm">
-                <h3 className="text-lg font-bold text-neutral-900">최근 판단</h3>
+              <section className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-6">
+                <h3 className="text-lg font-bold text-white">최근 판단</h3>
                 <p className="mt-1 text-sm text-neutral-400">
                   AI 에이전트의 최근 분석 기록
                 </p>
@@ -350,7 +350,7 @@ function AgentContent() {
                   </div>
                 ) : decisions.length === 0 ? (
                   <div className="mt-8 flex flex-col items-center py-8 text-center">
-                    <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-neutral-100 text-xl">
+                    <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-white/[0.06] text-xl">
                       📊
                     </div>
                     <p className="text-sm text-neutral-400">
@@ -363,7 +363,7 @@ function AgentContent() {
                 ) : (
                   <div className="relative mt-6">
                     {/* Timeline line */}
-                    <div className="absolute left-5 top-0 bottom-0 w-px bg-neutral-100" />
+                    <div className="absolute left-5 top-0 bottom-0 w-px bg-white/[0.06]" />
 
                     <StaggerContainer className="space-y-1">
                       {decisions.map((d, i) => {
@@ -377,12 +377,12 @@ function AgentContent() {
                               initial={{ opacity: 0, x: -20 }}
                               animate={{ opacity: 1, x: 0 }}
                               transition={{ duration: 0.35, delay: i * 0.04 }}
-                              className="group relative flex gap-4 rounded-xl p-3 transition-colors hover:bg-neutral-50"
+                              className="group relative flex gap-4 rounded-xl p-3 transition-colors hover:bg-white/[0.03]"
                             >
                               {/* Timeline dot */}
                               <div className="relative z-10 mt-1 shrink-0">
                                 <div
-                                  className={`flex h-10 w-10 items-center justify-center rounded-full ${act.bg} ring-2 ring-white ${act.ring} transition-shadow group-hover:shadow-md`}
+                                  className={`flex h-10 w-10 items-center justify-center rounded-full ${act.bg} ring-2 ring-white/[0.06] ${act.ring} transition-shadow`}
                                 >
                                   <span className="text-sm">
                                     {d.action === "BUY" ? "▲" : d.action === "SELL" ? "▼" : "●"}
@@ -407,7 +407,7 @@ function AgentContent() {
 
                                 {/* Reasoning - prominent */}
                                 {d.reasoning && (
-                                  <p className="mt-2 text-sm leading-relaxed text-neutral-700">
+                                  <p className="mt-2 text-sm leading-relaxed text-neutral-300">
                                     {d.reasoning}
                                   </p>
                                 )}

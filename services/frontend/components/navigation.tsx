@@ -40,7 +40,7 @@ export function Navigation() {
             {isActive && (
               <motion.div
                 layoutId="nav-active"
-                className="absolute inset-0 rounded-lg bg-gradient-to-r from-cyan-500/10 to-indigo-500/5 border border-cyan-500/20"
+                className="absolute inset-0 rounded-lg bg-gradient-to-r from-cyan-500/10 to-cyan-500/5 border border-cyan-500/20"
                 transition={{ type: "spring", stiffness: 400, damping: 30 }}
                 style={{ zIndex: -1 }}
               />

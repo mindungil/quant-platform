@@ -11,7 +11,7 @@
 
 body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  background: #0a0a0a;
+  background: #0b0f19;
   color: #e5e5e5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -25,20 +25,20 @@ body {
 
 /* Cards — glass on dark gray */
 .card {
-  @apply rounded-2xl border border-neutral-800 bg-neutral-900/70 p-6 backdrop-blur-sm;
+  @apply rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6 backdrop-blur-sm;
   transition: border-color 0.2s ease, background-color 0.2s ease;
 }
 .card:hover {
-  border-color: #404040;
-  background-color: rgba(38, 38, 38, 0.8);
+  border-color: rgba(255, 255, 255, 0.10);
+  background-color: rgba(255, 255, 255, 0.06);
 }
 
 /* Buttons */
 .btn-primary {
-  @apply rounded-lg bg-neutral-100 px-4 py-2.5 text-sm font-semibold text-neutral-900;
+  @apply rounded-lg bg-cyan-500 px-4 py-2.5 text-sm font-semibold text-white;
   transition: all 0.15s ease;
 }
-.btn-primary:hover { background-color: #fff; }
+.btn-primary:hover { background-color: #22d3ee; }
 .btn-primary:active { transform: scale(0.98); }
 .btn-primary:disabled { opacity: 0.3; cursor: not-allowed; }
 
@@ -94,7 +94,7 @@ body {
 }
 .skeleton {
   @apply rounded-lg;
-  background: linear-gradient(90deg, #1a1a1a 25%, #262626 50%, #1a1a1a 75%);
+  background: linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.03) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
@@ -121,7 +121,7 @@ body {
 
 /* Gradient text */
 .gradient-text {
-  background: linear-gradient(135deg, #e0f2fe 0%, #a5b4fc 50%, #c4b5fd 100%);
+  background: linear-gradient(135deg, #06b6d4 0%, #22d3ee 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -147,7 +147,7 @@ body {
 
 /* Accent gradient text */
 .text-gradient-accent {
-  background: linear-gradient(135deg, #06b6d4, #a855f7, #3b82f6);
+  background: linear-gradient(135deg, #06b6d4, #22d3ee);
   background-size: 200% 200%;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -163,7 +163,7 @@ body {
 
 /* Gradient button */
 .btn-gradient {
-  background: linear-gradient(135deg, #06b6d4, #6366f1);
+  background: linear-gradient(135deg, #06b6d4, #0891b2);
   transition: all 0.3s ease;
 }
 .btn-gradient:hover {

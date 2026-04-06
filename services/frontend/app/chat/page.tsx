@@ -85,7 +85,7 @@ function LoadingDots() {
           key={i}
           className="inline-block h-[6px] w-[6px] rounded-full"
           style={{
-            background: "linear-gradient(135deg, #a78bfa, #60a5fa)",
+            background: "linear-gradient(135deg, #06b6d4, #22d3ee)",
           }}
           animate={{
             y: [0, -6, 0],
@@ -320,7 +320,7 @@ export default function ChatPage() {
             initial="closed"
             animate="open"
             exit="closed"
-            className="flex flex-col overflow-hidden border-r border-neutral-800/60 bg-[#0a0a0b]"
+            className="flex flex-col overflow-hidden border-r border-neutral-800/60 bg-[#0b0f19]"
           >
             <div className="flex items-center justify-between p-4">
               <span className="text-xs font-semibold uppercase tracking-wider text-neutral-500">
@@ -408,7 +408,7 @@ export default function ChatPage() {
                   <span
                     className="inline-block bg-clip-text text-6xl font-bold text-transparent"
                     style={{
-                      backgroundImage: "linear-gradient(135deg, #a78bfa, #60a5fa, #34d399)",
+                      backgroundImage: "linear-gradient(135deg, #06b6d4, #22d3ee, #67e8f9)",
                       backgroundSize: "200% 200%",
                       animation: "gradientShift 4s ease infinite",
                     }}
@@ -444,7 +444,7 @@ export default function ChatPage() {
                       }}
                       whileHover={{
                         scale: 1.02,
-                        boxShadow: "0 0 24px rgba(167, 139, 250, 0.12)",
+                        boxShadow: "0 0 24px rgba(6, 182, 212, 0.12)",
                       }}
                       whileTap={{ scale: 0.98 }}
                       onClick={() => {
@@ -474,7 +474,7 @@ export default function ChatPage() {
                 >
                   {msg.role === "user" ? (
                     /* ── User bubble ──────────────────── */
-                    <div className="max-w-[75%] rounded-2xl rounded-br-md bg-white px-5 py-3 text-[15px] leading-relaxed text-neutral-900 shadow-[0_2px_12px_rgba(255,255,255,0.06)]">
+                    <div className="max-w-[75%] rounded-2xl rounded-br-md bg-white/[0.10] px-5 py-3 text-[15px] leading-relaxed text-white shadow-[0_2px_12px_rgba(255,255,255,0.06)]">
                       {msg.content}
                     </div>
                   ) : (
@@ -550,7 +550,7 @@ export default function ChatPage() {
             <motion.div
               animate={{
                 boxShadow: inputFocused
-                  ? "0 0 0 2px rgba(167, 139, 250, 0.25), 0 4px 24px rgba(0,0,0,0.3)"
+                  ? "0 0 0 2px rgba(6, 182, 212, 0.25), 0 4px 24px rgba(0,0,0,0.3)"
                   : "0 0 0 1px rgba(64, 64, 64, 0.5), 0 2px 12px rgba(0,0,0,0.2)",
               }}
               transition={{ duration: 0.2 }}

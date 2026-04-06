@@ -161,9 +161,9 @@ export default function AdminTradingPage() {
   };
 
   const statusTextColors: Record<string, string> = {
-    live: "text-green-600",
+    live: "text-emerald-400",
     shadow: "text-neutral-600",
-    stopped: "text-red-600",
+    stopped: "text-red-400",
     unknown: "text-neutral-400",
   };
 
@@ -172,16 +172,16 @@ export default function AdminTradingPage() {
       <PageTransition>
         <main className="grid gap-6">
           {/* Header with status */}
-          <section className="rounded border border-neutral-200 bg-white p-6">
+          <section className="rounded border border-white/[0.06] bg-white/[0.03] p-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-medium uppercase tracking-wider text-neutral-400">TRADING CONTROL</p>
-                <h2 className="mt-1 text-2xl font-semibold text-neutral-900">실시간 트레이딩 제어</h2>
+                <h2 className="mt-1 text-2xl font-semibold text-white">실시간 트레이딩 제어</h2>
                 <p className="mt-1 text-sm text-neutral-500">
                   사전 점검, 실행 제어, 설정 관리
                 </p>
               </div>
-              <div className="rounded border border-neutral-200 px-6 py-3 text-center">
+              <div className="rounded border border-white/[0.06] px-6 py-3 text-center">
                 <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">현재 상태</p>
                 <p className={`mt-1 font-mono text-2xl font-semibold ${statusTextColors[currentMode]}`}>
                   {statusLabels[currentMode]}
@@ -198,7 +198,7 @@ export default function AdminTradingPage() {
                 animate={{ opacity: 1, height: "auto" }}
                 exit={{ opacity: 0, height: 0 }}
                 transition={{ duration: 0.25 }}
-                className="rounded border border-neutral-200 px-4 py-3 text-sm text-red-600"
+                className="rounded border border-white/[0.06] px-4 py-3 text-sm text-red-400"
               >
                 {error}
               </motion.div>
@@ -211,7 +211,7 @@ export default function AdminTradingPage() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.3 }}
-                className="rounded border border-neutral-200 px-4 py-3 text-sm text-green-600"
+                className="rounded border border-white/[0.06] px-4 py-3 text-sm text-emerald-400"
               >
                 {success}
               </motion.div>
@@ -219,11 +219,11 @@ export default function AdminTradingPage() {
           </AnimatePresence>
 
           {/* Pre-flight Checks */}
-          <section className="rounded border border-neutral-200 bg-white p-6">
+          <section className="rounded border border-white/[0.06] bg-white/[0.03] p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium uppercase tracking-wider text-neutral-400">PRE-FLIGHT</p>
-                <h3 className="mt-1 text-lg font-semibold text-neutral-900">사전 점검</h3>
+                <h3 className="mt-1 text-lg font-semibold text-white">사전 점검</h3>
               </div>
               <button
                 className="btn-primary disabled:opacity-50"
@@ -244,19 +244,19 @@ export default function AdminTradingPage() {
                   <StaggerContainer className="space-y-2">
                     {preflight.checks.map((check) => (
                       <StaggerItem key={check.name}>
-                        <div className="flex items-center gap-3 rounded border border-neutral-200 bg-white px-4 py-3">
+                        <div className="flex items-center gap-3 rounded border border-white/[0.06] bg-white/[0.03] px-4 py-3">
                           <span className={`inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-white text-xs ${
-                            check.passed ? "bg-neutral-900" : "bg-neutral-300"
+                            check.passed ? "bg-emerald-500" : "bg-red-500"
                           }`}>
                             {check.passed ? "\u2713" : "\u2717"}
                           </span>
                           <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium text-neutral-900">{check.name}</p>
+                            <p className="text-sm font-medium text-white">{check.name}</p>
                             {check.message && (
                               <p className="text-xs text-neutral-400">{check.message}</p>
                             )}
                           </div>
-                          <span className={`font-mono text-xs font-semibold ${check.passed ? "text-neutral-900" : "text-red-600"}`}>
+                          <span className={`font-mono text-xs font-semibold ${check.passed ? "text-white" : "text-red-400"}`}>
                             {check.passed ? "통과" : "실패"}
                           </span>
                         </div>
@@ -264,7 +264,7 @@ export default function AdminTradingPage() {
                     ))}
                   </StaggerContainer>
                   <div className={`mt-2 rounded border px-4 py-2 text-center text-sm font-semibold ${
-                    preflight.all_passed ? "border-neutral-200 text-green-600" : "border-neutral-200 text-red-600"
+                    preflight.all_passed ? "border-white/[0.06] text-emerald-400" : "border-white/[0.06] text-red-400"
                   }`}>
                     {preflight.all_passed ? "모든 점검 통과" : "일부 점검 실패"}
                   </div>
@@ -281,8 +281,8 @@ export default function AdminTradingPage() {
           {/* Enable Live / Emergency Stop */}
           <div className="grid gap-4 sm:grid-cols-2">
             {/* Enable Live */}
-            <section className="rounded border border-neutral-200 bg-white p-6">
-              <h3 className="mb-3 text-lg font-semibold text-neutral-900">실시간 트레이딩 활성화</h3>
+            <section className="rounded border border-white/[0.06] bg-white/[0.03] p-6">
+              <h3 className="mb-3 text-lg font-semibold text-white">실시간 트레이딩 활성화</h3>
               <p className="mb-4 text-sm text-neutral-500">
                 활성화 전 모든 사전 점검을 통과해야 합니다.
               </p>
@@ -290,7 +290,7 @@ export default function AdminTradingPage() {
                 {!enableConfirm ? (
                   <motion.div key="enable-btn" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
                     <button
-                      className="w-full rounded border border-neutral-900 bg-neutral-900 py-3 text-sm font-semibold text-white hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="w-full rounded border border-cyan-500 bg-cyan-500 py-3 text-sm font-semibold text-white hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-40"
                       disabled={!preflight?.all_passed || execConfig?.live_trading_enabled === true}
                       onClick={() => setEnableConfirm(true)}
                     >
@@ -306,12 +306,12 @@ export default function AdminTradingPage() {
                     transition={{ duration: 0.2 }}
                     className="space-y-3"
                   >
-                    <p className="text-sm font-medium text-neutral-900">
+                    <p className="text-sm font-medium text-white">
                       확인: 실제 자금으로 실시간 트레이딩을 활성화하시겠습니까?
                     </p>
                     <div className="flex gap-3">
                       <button
-                        className="flex-1 rounded bg-neutral-900 py-3 text-sm font-semibold text-white hover:bg-neutral-800 disabled:opacity-50"
+                        className="flex-1 rounded bg-cyan-500 py-3 text-sm font-semibold text-white hover:bg-cyan-400 disabled:opacity-50"
                         disabled={enableLoading}
                         onClick={enableLive}
                       >
@@ -330,8 +330,8 @@ export default function AdminTradingPage() {
             </section>
 
             {/* Emergency Stop */}
-            <section className="rounded border border-neutral-200 bg-white p-6">
-              <h3 className="mb-3 text-lg font-semibold text-neutral-900">긴급 정지</h3>
+            <section className="rounded border border-white/[0.06] bg-white/[0.03] p-6">
+              <h3 className="mb-3 text-lg font-semibold text-white">긴급 정지</h3>
               <p className="mb-4 text-sm text-neutral-500">
                 모든 트레이딩 작업을 즉시 중단하고 미체결 주문을 취소합니다.
               </p>
@@ -354,7 +354,7 @@ export default function AdminTradingPage() {
                     transition={{ duration: 0.2 }}
                     className="space-y-3"
                   >
-                    <p className="text-sm font-medium text-red-600">
+                    <p className="text-sm font-medium text-red-400">
                       정말 정지하시겠습니까? 모든 트레이딩이 즉시 중단됩니다.
                     </p>
                     <div className="flex gap-3">
@@ -379,14 +379,14 @@ export default function AdminTradingPage() {
           </div>
 
           {/* Execution Config Editor */}
-          <section className="rounded border border-neutral-200 bg-white p-6">
+          <section className="rounded border border-white/[0.06] bg-white/[0.03] p-6">
             <p className="text-sm font-medium uppercase tracking-wider text-neutral-400">EXECUTION CONFIG</p>
-            <h3 className="mt-2 text-lg font-semibold text-neutral-900">실행 설정</h3>
+            <h3 className="mt-2 text-lg font-semibold text-white">실행 설정</h3>
             {execConfig ? (
               <div className="mt-4 space-y-4">
-                <div className="rounded border border-neutral-200 bg-white p-4">
+                <div className="rounded border border-white/[0.06] bg-white/[0.03] p-4">
                   <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">live_trading_enabled</p>
-                  <p className={`mt-1 font-mono text-lg font-semibold ${execConfig.live_trading_enabled ? "text-green-600" : "text-red-600"}`}>
+                  <p className={`mt-1 font-mono text-lg font-semibold ${execConfig.live_trading_enabled ? "text-emerald-400" : "text-red-400"}`}>
                     {execConfig.live_trading_enabled ? "true" : "false"}
                   </p>
                   <p className="mt-1 text-xs text-neutral-400">
@@ -394,7 +394,7 @@ export default function AdminTradingPage() {
                   </p>
                 </div>
 
-                <div className="rounded border border-neutral-200 bg-white p-4">
+                <div className="rounded border border-white/[0.06] bg-white/[0.03] p-4">
                   <label className="block text-xs font-medium uppercase tracking-wider text-neutral-400">allowed_exchanges</label>
                   <input
                     type="text"
@@ -404,12 +404,12 @@ export default function AdminTradingPage() {
                       setConfigDirty(true);
                     }}
                     placeholder="binance, bybit, okx"
-                    className="mt-2 w-full rounded border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-900 outline-none focus:border-neutral-900"
+                    className="mt-2 w-full rounded border border-white/[0.06] bg-white/[0.03] px-3 py-2 text-sm text-white outline-none focus:border-cyan-500"
                   />
                   <p className="mt-1 text-xs text-neutral-400">쉼표로 구분된 거래소 식별자</p>
                 </div>
 
-                <div className="rounded border border-neutral-200 bg-white p-4">
+                <div className="rounded border border-white/[0.06] bg-white/[0.03] p-4">
                   <label className="flex items-center gap-3">
                     <input
                       type="checkbox"
@@ -418,9 +418,9 @@ export default function AdminTradingPage() {
                         setEditShadow(e.target.checked);
                         setConfigDirty(true);
                       }}
-                      className="h-4 w-4 rounded border-neutral-300 accent-neutral-900"
+                      className="h-4 w-4 rounded border-white/[0.10] accent-cyan-500"
                     />
-                    <span className="text-sm text-neutral-900">default_shadow_mode</span>
+                    <span className="text-sm text-white">default_shadow_mode</span>
                   </label>
                   <p className="mt-2 text-xs text-neutral-400">
                     활성화 시 새 전략이 기본적으로 섀도우 모드로 시작됩니다.

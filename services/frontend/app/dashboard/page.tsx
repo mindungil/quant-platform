@@ -63,11 +63,11 @@ interface DashboardData {
 function friendlyAction(action: string): { label: string; color: string; bg: string } {
   switch (action) {
     case "BUY":
-      return { label: "매수", color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200" };
+      return { label: "매수", color: "text-emerald-400", bg: "bg-emerald-500/15 border-emerald-500/30" };
     case "SELL":
-      return { label: "매도", color: "text-red-600", bg: "bg-red-50 border-red-200" };
+      return { label: "매도", color: "text-red-400", bg: "bg-red-500/15 border-red-500/30" };
     default:
-      return { label: "관망", color: "text-neutral-500", bg: "bg-neutral-50 border-neutral-200" };
+      return { label: "관망", color: "text-neutral-400", bg: "bg-white/[0.02] border-white/[0.06]" };
   }
 }
 
@@ -121,10 +121,10 @@ function SignalBar({ value, label }: { value: number; label?: string }) {
   return (
     <div className="space-y-1">
       {label && <p className="text-xs text-neutral-400">{label}</p>}
-      <div className="h-1.5 w-full rounded-full bg-neutral-100 overflow-hidden">
+      <div className="h-1.5 w-full rounded-full bg-white/[0.06] overflow-hidden">
         <motion.div
           className={`h-full rounded-full ${
-            isStrong ? "bg-neutral-900" : isMedium ? "bg-neutral-500" : "bg-neutral-300"
+            isStrong ? "bg-cyan-400" : isMedium ? "bg-cyan-600" : "bg-neutral-500"
           }`}
           initial={{ width: 0 }}
           animate={{ width: `${pct}%` }}
@@ -142,15 +142,15 @@ function ConfidenceBar({ value }: { value: number }) {
 
   return (
     <div className="flex items-center gap-3">
-      <div className="flex-1 h-2 rounded-full bg-neutral-100 overflow-hidden">
+      <div className="flex-1 h-2 rounded-full bg-white/[0.06] overflow-hidden">
         <motion.div
-          className="h-full rounded-full bg-neutral-900"
+          className="h-full rounded-full bg-cyan-400"
           initial={{ width: 0 }}
           animate={{ width: `${pct}%` }}
           transition={{ duration: 1, ease: "easeOut", delay: 0.3 }}
         />
       </div>
-      <span className="text-sm font-medium text-neutral-700 tabular-nums w-10 text-right">
+      <span className="text-sm font-medium text-neutral-300 tabular-nums w-10 text-right">
         {pct}%
       </span>
     </div>
@@ -180,11 +180,11 @@ function ComponentBars({ components }: { components: Record<string, number> }) {
           <div key={key} className="space-y-0.5">
             <div className="flex items-center justify-between">
               <span className="text-xs text-neutral-500">{friendlyKey}</span>
-              <span className={`text-xs font-medium tabular-nums ${val >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+              <span className={`text-xs font-medium tabular-nums ${val >= 0 ? "text-emerald-400" : "text-red-500"}`}>
                 {val >= 0 ? "+" : ""}{(val * 100).toFixed(0)}%
               </span>
             </div>
-            <div className="h-1 w-full rounded-full bg-neutral-100 overflow-hidden">
+            <div className="h-1 w-full rounded-full bg-white/[0.06] overflow-hidden">
               <motion.div
                 className={`h-full rounded-full ${val >= 0 ? "bg-emerald-400" : "bg-red-400"}`}
                 initial={{ width: 0 }}
@@ -212,14 +212,14 @@ function PositionCards({ positions }: { positions: Record<string, number> }) {
       {entries.map(([asset, amount]) => (
         <motion.div
           key={asset}
-          className="rounded-xl border border-neutral-200 bg-white/60 backdrop-blur-sm p-3 hover:shadow-md hover:border-neutral-300 transition-all duration-200"
+          className="rounded-xl border border-white/[0.06] bg-white/[0.03] backdrop-blur-sm p-3 hover:border-white/[0.10] transition-all duration-200"
           whileHover={{ scale: 1.02, y: -2 }}
         >
           <p className="text-xs text-neutral-400">보유</p>
-          <p className="text-base font-semibold text-neutral-900 mt-0.5">
+          <p className="text-base font-semibold text-white mt-0.5">
             {friendlyAsset(asset)}
           </p>
-          <p className="text-sm font-medium text-neutral-600 mt-1 tabular-nums">
+          <p className="text-sm font-medium text-neutral-400 mt-1 tabular-nums">
             ${formatMoney(amount)}
           </p>
         </motion.div>
@@ -241,7 +241,7 @@ function DashboardSkeleton() {
       {/* Cards skeleton */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[0, 1, 2].map((i) => (
-          <div key={i} className="rounded-2xl border border-neutral-100 bg-white p-6 space-y-3">
+          <div key={i} className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6 space-y-3">
             <div className="skeleton h-4 w-20" />
             <div className="skeleton h-10 w-32" />
           </div>
@@ -251,7 +251,7 @@ function DashboardSkeleton() {
       <div className="space-y-3">
         <div className="skeleton h-6 w-40" />
         {[0, 1, 2].map((i) => (
-          <div key={i} className="rounded-2xl border border-neutral-100 bg-white p-5 space-y-2">
+          <div key={i} className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-5 space-y-2">
             <div className="skeleton h-4 w-full" />
             <div className="skeleton h-3 w-2/3" />
           </div>
@@ -305,7 +305,7 @@ function DashboardContent() {
 
         {/* ── Hero Section ────────────────────────────────── */}
         <FadeInView>
-          <section className="relative overflow-hidden rounded-3xl border border-neutral-100 bg-gradient-to-br from-neutral-50 via-white to-neutral-50 p-8 sm:p-12">
+          <section className="relative overflow-hidden rounded-3xl border border-white/[0.06] bg-gradient-to-br from-white/[0.03] via-white/[0.02] to-white/[0.01] p-8 sm:p-12">
             {/* Animated gradient background decoration */}
             <motion.div
               className="absolute -top-24 -right-24 w-64 h-64 rounded-full opacity-[0.04]"
@@ -357,10 +357,10 @@ function DashboardContent() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.5, duration: 0.4 }}
                 >
-                  <span className="inline-flex items-center rounded-full bg-neutral-900 text-white px-4 py-1.5 text-sm font-medium">
+                  <span className="inline-flex items-center rounded-full bg-cyan-500/15 text-cyan-300 px-4 py-1.5 text-sm font-medium">
                     시장 상태 : {friendlyRegime(topRec.regime)}
                   </span>
-                  <span className="inline-flex items-center rounded-full border border-neutral-300 bg-white px-4 py-1.5 text-sm text-neutral-600">
+                  <span className="inline-flex items-center rounded-full border border-white/[0.06] bg-white/[0.03] px-4 py-1.5 text-sm text-neutral-300">
                     분석 방식 : {friendlyFormula(topRec.formula_name)}
                   </span>
                 </motion.div>
@@ -373,11 +373,11 @@ function DashboardContent() {
         <StaggerContainer className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <StaggerItem>
             <motion.div
-              className="rounded-2xl border border-neutral-100 bg-white/70 backdrop-blur-sm p-6 hover:shadow-lg hover:border-neutral-200 transition-all duration-300 card-accent-hover"
+              className="rounded-2xl border border-white/[0.06] bg-white/[0.03] backdrop-blur-sm p-6 hover:border-white/[0.06] transition-all duration-300 card-accent-hover"
               whileHover={{ scale: 1.02, y: -4 }}
             >
               <p className="text-sm text-neutral-400 font-medium">총 투자금</p>
-              <div className="mt-2 text-3xl font-bold text-neutral-900 tabular-nums">
+              <div className="mt-2 text-3xl font-bold text-white tabular-nums">
                 $<AnimatedNumber value={portfolio?.total_exposure ?? 0} decimals={0} />
               </div>
               {portfolio?.positions && (
@@ -390,7 +390,7 @@ function DashboardContent() {
 
           <StaggerItem>
             <motion.div
-              className="rounded-2xl border border-neutral-100 bg-white/70 backdrop-blur-sm p-6 hover:shadow-lg hover:border-neutral-200 transition-all duration-300 card-accent-hover"
+              className="rounded-2xl border border-white/[0.06] bg-white/[0.03] backdrop-blur-sm p-6 hover:border-white/[0.06] transition-all duration-300 card-accent-hover"
               whileHover={{ scale: 1.02, y: -4 }}
             >
               <p className="text-sm text-neutral-400 font-medium">평가 손익</p>
@@ -407,7 +407,7 @@ function DashboardContent() {
 
           <StaggerItem>
             <motion.div
-              className="rounded-2xl border border-neutral-100 bg-white/70 backdrop-blur-sm p-6 hover:shadow-lg hover:border-neutral-200 transition-all duration-300 card-accent-hover"
+              className="rounded-2xl border border-white/[0.06] bg-white/[0.03] backdrop-blur-sm p-6 hover:border-white/[0.06] transition-all duration-300 card-accent-hover"
               whileHover={{ scale: 1.02, y: -4 }}
             >
               <p className="text-sm text-neutral-400 font-medium">실현 손익</p>
@@ -434,8 +434,8 @@ function DashboardContent() {
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Confidence & Signal */}
           <FadeInView>
-            <section className="rounded-2xl border border-neutral-100 bg-white/70 backdrop-blur-sm p-6 h-full">
-              <h2 className="text-lg font-semibold text-neutral-900">에이전트 분석 현황</h2>
+            <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] backdrop-blur-sm p-6 h-full">
+              <h2 className="text-lg font-semibold text-white">에이전트 분석 현황</h2>
 
               {topRec ? (
                 <div className="mt-5 space-y-5">
@@ -448,7 +448,7 @@ function DashboardContent() {
                   {/* Strategy reasoning */}
                   <div>
                     <p className="text-sm text-neutral-500 mb-1">분석 의견</p>
-                    <p className="text-sm text-neutral-700 leading-relaxed">{topRec.reasoning}</p>
+                    <p className="text-sm text-neutral-300 leading-relaxed">{topRec.reasoning}</p>
                   </div>
 
                   {/* Other recommendations */}
@@ -459,11 +459,11 @@ function DashboardContent() {
                         {recs.slice(1, 3).map((r, i) => (
                           <motion.div
                             key={i}
-                            className="rounded-xl border border-neutral-100 bg-neutral-50/50 p-3 hover:bg-neutral-50 transition-colors"
+                            className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 hover:bg-white/[0.03] transition-colors"
                             whileHover={{ x: 4 }}
                           >
                             <div className="flex items-center justify-between">
-                              <span className="text-sm font-medium text-neutral-700">{r.name}</span>
+                              <span className="text-sm font-medium text-neutral-300">{r.name}</span>
                               <span className="text-xs text-neutral-400 tabular-nums">
                                 확신도 {(r.confidence * 100).toFixed(0)}%
                               </span>
@@ -478,7 +478,7 @@ function DashboardContent() {
               ) : (
                 <div className="mt-5 flex flex-col items-center justify-center py-8">
                   <motion.div
-                    className="w-8 h-8 rounded-full border-2 border-neutral-200 border-t-neutral-900"
+                    className="w-8 h-8 rounded-full border-2 border-white/[0.06] border-t-cyan-400"
                     animate={{ rotate: 360 }}
                     transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
                   />
@@ -490,14 +490,14 @@ function DashboardContent() {
 
           {/* Positions */}
           <FadeInView delay={0.1}>
-            <section className="rounded-2xl border border-neutral-100 bg-white/70 backdrop-blur-sm p-6 h-full">
-              <h2 className="text-lg font-semibold text-neutral-900">보유 자산</h2>
+            <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] backdrop-blur-sm p-6 h-full">
+              <h2 className="text-lg font-semibold text-white">보유 자산</h2>
 
               {portfolio?.positions && Object.keys(portfolio.positions).length > 0 ? (
                 <PositionCards positions={portfolio.positions} />
               ) : (
                 <div className="mt-5 flex flex-col items-center justify-center py-8">
-                  <div className="w-12 h-12 rounded-full bg-neutral-50 flex items-center justify-center">
+                  <div className="w-12 h-12 rounded-full bg-white/[0.02] flex items-center justify-center">
                     <span className="text-neutral-300 text-xl">$</span>
                   </div>
                   <p className="mt-3 text-sm text-neutral-400">
@@ -518,7 +518,7 @@ function DashboardContent() {
             <h2 className="text-lg font-semibold text-gradient-accent mb-4">최근 매매 결정</h2>
 
             {decisions.length === 0 ? (
-              <div className="rounded-2xl border border-neutral-100 bg-white/70 backdrop-blur-sm p-8 text-center">
+              <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] backdrop-blur-sm p-8 text-center">
                 <p className="text-sm text-neutral-400">
                   아직 매매 이력이 없습니다. 에이전트가 시장 데이터를 수집하면 자동으로 매매를 결정합니다.
                 </p>
@@ -530,20 +530,20 @@ function DashboardContent() {
                   return (
                     <StaggerItem key={d.decision_id ?? i}>
                       <motion.div
-                        className="rounded-2xl border border-neutral-100 bg-white/70 backdrop-blur-sm p-5 hover:shadow-md hover:border-neutral-200 transition-all duration-300"
+                        className="rounded-2xl border border-white/[0.06] bg-white/[0.03] backdrop-blur-sm p-5 hover:border-white/[0.06] transition-all duration-300"
                         whileHover={{ y: -2 }}
                       >
                         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                           {/* Asset + Action */}
                           <div className="flex items-center gap-3 flex-1">
-                            <span className="text-base font-semibold text-neutral-900">
+                            <span className="text-base font-semibold text-white">
                               {friendlyAsset(d.asset)}
                             </span>
                             <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${act.bg} ${act.color}`}>
                               {act.label}
                             </span>
                             {d.threshold_crossed && (
-                              <span className="inline-flex items-center rounded-full bg-amber-50 border border-amber-200 text-amber-700 px-2.5 py-0.5 text-xs font-medium">
+                              <span className="inline-flex items-center rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-400 px-2.5 py-0.5 text-xs font-medium">
                                 매매 신호 발생
                               </span>
                             )}

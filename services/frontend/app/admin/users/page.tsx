@@ -59,37 +59,37 @@ export default function AdminUsersPage() {
       <PageTransition>
         <main className="grid gap-6">
           {/* Header */}
-          <section className="rounded border border-neutral-200 bg-white p-6">
+          <section className="rounded border border-white/[0.06] bg-white/[0.03] p-6">
             <p className="text-sm font-medium uppercase tracking-wider text-neutral-400">USERS</p>
-            <h2 className="mt-1 text-2xl font-semibold text-neutral-900">사용자 관리</h2>
+            <h2 className="mt-1 text-2xl font-semibold text-white">사용자 관리</h2>
             <p className="mt-2 text-neutral-500">
               사용자 계정 관리, 플랜 확인, 역할 할당
             </p>
-            {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+            {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
           </section>
 
           {/* Stats */}
           <StaggerContainer className="grid gap-4 sm:grid-cols-3">
             <StaggerItem>
-              <div className="rounded border border-neutral-200 bg-white p-6 text-center">
+              <div className="rounded border border-white/[0.06] bg-white/[0.03] p-6 text-center">
                 <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">전체 사용자</p>
-                <p className="mt-1 font-mono text-2xl font-semibold text-neutral-900">
+                <p className="mt-1 font-mono text-2xl font-semibold text-white">
                   {users.length}
                 </p>
               </div>
             </StaggerItem>
             <StaggerItem>
-              <div className="rounded border border-neutral-200 bg-white p-6 text-center">
+              <div className="rounded border border-white/[0.06] bg-white/[0.03] p-6 text-center">
                 <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">관리자</p>
-                <p className="mt-1 font-mono text-2xl font-semibold text-neutral-900">
+                <p className="mt-1 font-mono text-2xl font-semibold text-white">
                   {adminCount}
                 </p>
               </div>
             </StaggerItem>
             <StaggerItem>
-              <div className="rounded border border-neutral-200 bg-white p-6 text-center">
+              <div className="rounded border border-white/[0.06] bg-white/[0.03] p-6 text-center">
                 <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">일반 사용자</p>
-                <p className="mt-1 font-mono text-2xl font-semibold text-neutral-900">
+                <p className="mt-1 font-mono text-2xl font-semibold text-white">
                   {users.length - adminCount}
                 </p>
               </div>
@@ -97,10 +97,10 @@ export default function AdminUsersPage() {
           </StaggerContainer>
 
           {/* User Table */}
-          <section className="rounded border border-neutral-200 bg-white p-6 overflow-x-auto">
+          <section className="rounded border border-white/[0.06] bg-white/[0.03] p-6 overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>
-                <tr className="border-b border-neutral-200 text-xs font-medium uppercase tracking-wider text-neutral-400">
+                <tr className="border-b border-white/[0.06] text-xs font-medium uppercase tracking-wider text-neutral-400">
                   <th className="pb-3 pr-4">사용자</th>
                   <th className="pb-3 pr-4">플랜</th>
                   <th className="pb-3 pr-4">역할</th>
@@ -113,17 +113,17 @@ export default function AdminUsersPage() {
                   users.map((user, index) => (
                     <motion.tr
                       key={user.user_id}
-                      className="border-b border-neutral-100"
+                      className="border-b border-white/[0.06]"
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.25, delay: index * 0.04, ease: "easeOut" }}
                     >
                       <td className="py-3 pr-4">
-                        <p className="font-semibold text-neutral-900">{user.display_name}</p>
+                        <p className="font-semibold text-white">{user.display_name}</p>
                         <p className="text-xs text-neutral-400">{user.email}</p>
                       </td>
                       <td className="py-3 pr-4">
-                        <span className="inline-flex items-center rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-600">
+                        <span className="inline-flex items-center rounded-full bg-white/[0.06] px-2 py-0.5 text-xs font-medium text-neutral-400">
                           {user.plan}
                         </span>
                       </td>
@@ -131,7 +131,7 @@ export default function AdminUsersPage() {
                         <select
                           value={user.roles.includes("admin") ? "admin" : "user"}
                           onChange={(e) => updateRole(user, e.target.value)}
-                          className="rounded border border-neutral-200 bg-white px-3 py-1.5 text-xs text-neutral-900 outline-none focus:border-neutral-900 transition-colors duration-200"
+                          className="rounded border border-white/[0.06] bg-white/[0.03] px-3 py-1.5 text-xs text-white outline-none focus:border-cyan-500 transition-colors duration-200"
                         >
                           <option value="user">user</option>
                           <option value="admin">admin</option>

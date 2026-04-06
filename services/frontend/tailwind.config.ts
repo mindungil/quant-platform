@@ -11,6 +11,12 @@ const config: Config = {
           blue: '#3b82f6',
           indigo: '#6366f1',
         },
+        surface: {
+          950: '#0b0f19',
+          900: '#111827',
+          800: '#1e293b',
+          700: '#334155',
+        },
       },
       keyframes: {
         'glow-pulse': {

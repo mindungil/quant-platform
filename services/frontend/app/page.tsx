@@ -54,7 +54,7 @@ export default function HomePage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#0a0a0a]">
+    <div className="flex min-h-screen items-center justify-center bg-[#0b0f19]">
       {/* Background glow */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="bg-orb-cyan" style={{ top: "-100px", left: "-80px", width: "500px", height: "500px" }} />
@@ -88,7 +88,7 @@ export default function HomePage() {
 
         {/* Form */}
         <motion.div
-          className="rounded-2xl border-glow bg-neutral-900/70 p-6 backdrop-blur-sm"
+          className="rounded-2xl border-glow bg-white/[0.04] p-6 backdrop-blur-md"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.25, duration: 0.5 }}

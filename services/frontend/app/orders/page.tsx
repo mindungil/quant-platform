@@ -50,8 +50,8 @@ function friendlyStatus(raw: string): string {
 /* ── status dot colours ──────────────────────────────────────── */
 function statusDotColor(status: string): string {
   const s = status.toUpperCase();
-  if (s === "FILLED") return "bg-green-500";
-  if (s === "REJECTED") return "bg-red-500";
+  if (s === "FILLED") return "bg-emerald-500/150";
+  if (s === "REJECTED") return "bg-red-500/150";
   if (s === "CANCELLED" || s === "EXPIRED") return "bg-neutral-300";
   if (s === "PENDING" || s === "NEW") return "bg-amber-400";
   if (s === "OPEN") return "bg-blue-500";
@@ -60,11 +60,11 @@ function statusDotColor(status: string): string {
 
 function statusTextColor(status: string): string {
   const s = status.toUpperCase();
-  if (s === "FILLED") return "text-green-700";
-  if (s === "REJECTED") return "text-red-600";
+  if (s === "FILLED") return "text-emerald-400";
+  if (s === "REJECTED") return "text-red-400";
   if (s === "CANCELLED" || s === "EXPIRED") return "text-neutral-400";
-  if (s === "PENDING" || s === "NEW") return "text-amber-600";
-  if (s === "OPEN") return "text-blue-600";
+  if (s === "PENDING" || s === "NEW") return "text-amber-400";
+  if (s === "OPEN") return "text-blue-400";
   return "text-neutral-400";
 }
 
@@ -162,7 +162,7 @@ function OrderItem({
   const isBuy = order.side === "BUY";
 
   return (
-    <article className="relative rounded-xl border border-neutral-200 bg-white transition-all hover:border-neutral-300 hover:shadow-sm">
+    <article className="relative rounded-xl border border-white/[0.06] bg-white/[0.03] transition-all hover:border-white/[0.10]">
       {/* main row — clickable */}
       <button
         onClick={onToggle}
@@ -172,8 +172,8 @@ function OrderItem({
         <div
           className={`mt-0.5 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold ${
             isBuy
-              ? "bg-green-50 text-green-600"
-              : "bg-red-50 text-red-600"
+              ? "bg-emerald-500/15 text-emerald-400"
+              : "bg-red-500/15 text-red-400"
           }`}
         >
           {friendlySide(order.side)}
@@ -182,7 +182,7 @@ function OrderItem({
         {/* content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-base font-semibold text-neutral-900">
+            <span className="text-base font-semibold text-white">
               {friendlyAsset(order.asset)}
             </span>
 
@@ -234,7 +234,7 @@ function OrderItem({
                 onCancel();
               }}
               disabled={isCancelling}
-              className="rounded-full border border-neutral-200 px-3 py-1 text-[11px] font-medium text-neutral-500 transition hover:border-neutral-400 hover:text-neutral-700 disabled:opacity-40"
+              className="rounded-full border border-white/[0.06] px-3 py-1 text-[11px] font-medium text-neutral-500 transition hover:border-white/[0.10] hover:text-neutral-300 disabled:opacity-40"
             >
               {isCancelling ? "취소 중..." : "주문 취소"}
             </button>
@@ -244,11 +244,11 @@ function OrderItem({
 
       {/* expandable detail */}
       <Expandable open={isExpanded}>
-        <div className="border-t border-neutral-100 px-5 pb-5 pt-4">
+        <div className="border-t border-white/[0.06] px-5 pb-5 pt-4">
           <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
             <div>
               <p className="text-[11px] text-neutral-400">주문 유형</p>
-              <p className="mt-0.5 text-neutral-700">
+              <p className="mt-0.5 text-neutral-300">
                 {order.order_type === "LIMIT"
                   ? "지정가"
                   : order.order_type === "MARKET"
@@ -258,19 +258,19 @@ function OrderItem({
             </div>
             <div>
               <p className="text-[11px] text-neutral-400">거래소</p>
-              <p className="mt-0.5 text-neutral-700">
+              <p className="mt-0.5 text-neutral-300">
                 {order.exchange ?? "--"}
               </p>
             </div>
             <div>
               <p className="text-[11px] text-neutral-400">주문 수량</p>
-              <p className="mt-0.5 font-mono text-neutral-700">
+              <p className="mt-0.5 font-mono text-neutral-300">
                 {formatQty(order.quantity)}
               </p>
             </div>
             <div>
               <p className="text-[11px] text-neutral-400">주문 가격</p>
-              <p className="mt-0.5 font-mono text-neutral-700">
+              <p className="mt-0.5 font-mono text-neutral-300">
                 {formatPrice(order.price)}
               </p>
             </div>
@@ -278,11 +278,11 @@ function OrderItem({
 
           {/* fill info */}
           {order.filled_quantity != null && (
-            <div className="mt-4 rounded-lg bg-green-50 p-3">
-              <p className="text-[11px] font-medium text-green-700">
+            <div className="mt-4 rounded-lg bg-emerald-500/15 p-3">
+              <p className="text-[11px] font-medium text-emerald-400">
                 체결 정보
               </p>
-              <p className="mt-1 font-mono text-sm text-green-800">
+              <p className="mt-1 font-mono text-sm text-emerald-300">
                 {formatQty(order.filled_quantity)} @ {formatPrice(order.filled_price)}
               </p>
             </div>
@@ -290,11 +290,11 @@ function OrderItem({
 
           {/* reject reason */}
           {order.reject_reason && (
-            <div className="mt-4 rounded-lg bg-red-50 p-3">
-              <p className="text-[11px] font-medium text-red-700">
+            <div className="mt-4 rounded-lg bg-red-500/15 p-3">
+              <p className="text-[11px] font-medium text-red-400">
                 거부 사유
               </p>
-              <p className="mt-1 text-sm text-red-800">
+              <p className="mt-1 text-sm text-red-300">
                 {order.reject_reason}
               </p>
             </div>
@@ -373,20 +373,20 @@ function OrdersContent() {
     <PageTransition>
       <main className="grid gap-6">
         {/* Header */}
-        <section className="rounded-xl border border-neutral-200 bg-white p-6">
+        <section className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">
                 Orders
               </p>
-              <h2 className="mt-1 text-2xl font-semibold text-neutral-900">
+              <h2 className="mt-1 text-2xl font-semibold text-white">
                 주문 내역
               </h2>
             </div>
             <div className="flex items-center gap-3">
               <button
                 onClick={fetchOrders}
-                className="rounded-full border border-neutral-200 px-4 py-1.5 text-xs font-medium text-neutral-600 transition hover:border-neutral-400"
+                className="rounded-full border border-white/[0.06] px-4 py-1.5 text-xs font-medium text-neutral-400 transition hover:border-white/[0.10]"
               >
                 새로고침
               </button>
@@ -401,15 +401,15 @@ function OrdersContent() {
                 onClick={() => setFilter(f)}
                 className={`relative rounded-full px-4 py-1.5 text-xs font-medium transition ${
                   filter === f
-                    ? "bg-neutral-900 text-white"
-                    : "text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600"
+                    ? "bg-cyan-500/15 text-cyan-300"
+                    : "text-neutral-400 hover:bg-white/[0.06] hover:text-neutral-200"
                 }`}
               >
                 {FILTER_LABELS[f] ?? f}
                 {filter === f && (
                   <motion.div
                     layoutId="order-filter-pill"
-                    className="absolute inset-0 rounded-full bg-neutral-900 -z-10"
+                    className="absolute inset-0 rounded-full bg-cyan-500/15 -z-10"
                     transition={{ type: "spring", stiffness: 400, damping: 30 }}
                   />
                 )}
@@ -425,21 +425,21 @@ function OrdersContent() {
               {
                 label: "전체",
                 count: orders.length,
-                color: "text-neutral-900",
+                color: "text-white",
               },
               {
                 label: "체결",
                 count: orders.filter(
                   (o) => o.status.toUpperCase() === "FILLED"
                 ).length,
-                color: "text-green-600",
+                color: "text-emerald-400",
               },
               {
                 label: "대기/진행",
                 count: orders.filter((o) =>
                   ["PENDING", "NEW", "OPEN"].includes(o.status.toUpperCase())
                 ).length,
-                color: "text-amber-600",
+                color: "text-amber-400",
               },
               {
                 label: "취소/거부",
@@ -453,7 +453,7 @@ function OrdersContent() {
             ].map((s) => (
               <div
                 key={s.label}
-                className="rounded-xl border border-neutral-200 bg-white p-4 text-center"
+                className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-4 text-center"
               >
                 <p className="text-xs text-neutral-400">{s.label}</p>
                 <p className={`mt-1 font-mono text-2xl font-bold ${s.color}`}>
@@ -469,28 +469,28 @@ function OrdersContent() {
           <StaggerContainer className="space-y-3">
             {[0, 1, 2, 3].map((i) => (
               <StaggerItem key={i}>
-                <div className="rounded-xl border border-neutral-200 bg-white p-5 animate-pulse">
+                <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-5 animate-pulse">
                   <div className="flex items-center gap-4">
-                    <div className="h-10 w-10 rounded-full bg-neutral-100" />
+                    <div className="h-10 w-10 rounded-full bg-white/[0.06]" />
                     <div className="flex-1 space-y-2">
-                      <div className="h-4 w-32 rounded bg-neutral-100" />
-                      <div className="h-3 w-48 rounded bg-neutral-50" />
+                      <div className="h-4 w-32 rounded bg-white/[0.06]" />
+                      <div className="h-3 w-48 rounded bg-white/[0.02]" />
                     </div>
-                    <div className="h-3 w-16 rounded bg-neutral-50" />
+                    <div className="h-3 w-16 rounded bg-white/[0.02]" />
                   </div>
                 </div>
               </StaggerItem>
             ))}
           </StaggerContainer>
         ) : error ? (
-          <div className="rounded-xl border border-neutral-200 bg-white p-8 text-center">
-            <p className="text-red-600 text-sm">{error}</p>
+          <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-8 text-center">
+            <p className="text-red-400 text-sm">{error}</p>
             <p className="mt-2 text-sm text-neutral-400">
               로그인 상태와 주문 서비스 연결을 확인해주세요.
             </p>
           </div>
         ) : filtered.length === 0 ? (
-          <div className="rounded-xl border border-neutral-200 bg-white p-12 text-center">
+          <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-12 text-center">
             <p className="text-lg text-neutral-300">
               {filter === "ALL"
                 ? "아직 주문이 없습니다"
