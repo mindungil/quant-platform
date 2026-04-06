@@ -1,6 +1,8 @@
+import os
 import uuid
 
 from fastapi import APIRouter, Header
+from fastapi.responses import RedirectResponse
 
 from app.core.reasoning import build_reasoning_text
 from app.core.oauth import (
@@ -119,12 +121,19 @@ def oauth_login(provider: str, x_user_id: str | None = Header(default=None)) -> 
 
 
 @router.get("/auth/{provider}/callback")
-async def oauth_callback(provider: str, code: str, state: str) -> dict:
-    """OAuth 콜백 — authorization code를 token으로 교환."""
+async def oauth_callback(provider: str, code: str, state: str):
+    """OAuth 콜백 — authorization code를 token으로 교환 후 프론트엔드로 리다이렉트."""
     token = await exchange_code(state, code)
+    frontend_base = os.environ.get("PUBLIC_SCHEME", "https") + "://" + os.environ.get("PUBLIC_HOST", "quent.kro.kr")
     if token:
-        return {"status": "authenticated", "provider": provider, "user_id": token.user_id}
-    return {"status": "failed", "provider": provider}
+        return RedirectResponse(
+            url=f"{frontend_base}/settings?oauth={provider}&status=success",
+            status_code=302,
+        )
+    return RedirectResponse(
+        url=f"{frontend_base}/settings?oauth={provider}&status=failed",
+        status_code=302,
+    )
 
 
 @router.get("/auth/{provider}/status")

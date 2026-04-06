@@ -34,7 +34,7 @@ logger = logging.getLogger("llm-gateway")
 
 # ── Provider Credentials (from assets.byokey.io) ────────────────────────
 
-_redirect_base = f"http://{settings.public_host}:{settings.llm_gateway_port}"
+_redirect_base = f"{settings.public_scheme}://{settings.public_host}/gw"
 
 PROVIDERS = {
     "claude": {

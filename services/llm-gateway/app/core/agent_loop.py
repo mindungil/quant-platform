@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import time
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator
@@ -217,6 +218,39 @@ def _build_openai_assistant_msg(data: dict) -> dict:
     return choice.get("message", {"role": "assistant", "content": ""})
 
 
+# ── OpenAI-Compatible API (OpenRouter, Groq, etc.) ──────────────────
+
+async def _call_openai_compatible(
+    token: str,
+    messages: list[dict],
+    model: str,
+    max_tokens: int,
+    tools: list[dict],
+    base_url: str,
+) -> dict:
+    """Call any OpenAI-compatible API endpoint."""
+    body: dict[str, Any] = {
+        "model": model,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": 0.3,
+    }
+    if tools:
+        body["tools"] = tools
+
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        resp = await client.post(
+            base_url,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            },
+            json=body,
+        )
+    resp.raise_for_status()
+    return resp.json()
+
+
 # ── Main Agent Loop ──────────────────────────────────────────────────
 
 async def run_agent_loop(
@@ -242,9 +276,16 @@ async def run_agent_loop(
                 break
 
     if not provider:
-        # No OAuth token — return helpful message
+        # No OAuth token — guide user to connect their LLM account
+        base_url = os.environ.get("PUBLIC_SCHEME", "https") + "://" + os.environ.get("PUBLIC_HOST", "quent.kro.kr")
         return AgentResponse(
-            text="LLM 프로바이더에 연결되지 않았습니다. /auth/{provider}/login에서 Claude 또는 Codex 계정을 연동해주세요.",
+            text=(
+                "## AI 에이전트 연동이 필요합니다\n\n"
+                "채팅 기능을 사용하려면 Claude 또는 Codex 계정을 연동해주세요.\n\n"
+                f"**Claude 연동**: 설정 → AI 연동 메뉴에서 Claude 연결 버튼을 클릭하세요.\n"
+                f"**Codex 연동**: 설정 → AI 연동 메뉴에서 Codex 연결 버튼을 클릭하세요.\n\n"
+                "연동 후 이 대화창에서 시장 분석, 매매 판단, 포트폴리오 관리 등을 요청할 수 있습니다."
+            ),
             provider="none",
             total_ms=(time.monotonic() - start_time) * 1000,
         )
@@ -263,6 +304,33 @@ async def run_agent_loop(
         parse_fn = _parse_claude_response
         build_result_fn = _build_claude_tool_result
         build_assistant_fn = _build_claude_assistant_msg
+    elif provider == "github":
+        model = "gpt-4o"
+        tools = get_openai_tools()
+        call_fn = lambda tok, msgs, mdl, mt, tls: _call_openai_compatible(
+            tok, msgs, mdl, mt, tls, "https://models.inference.ai.azure.com/chat/completions"
+        )
+        parse_fn = _parse_openai_response
+        build_result_fn = _build_openai_tool_result
+        build_assistant_fn = _build_openai_assistant_msg
+    elif provider == "openrouter":
+        model = "anthropic/claude-sonnet-4"
+        tools = get_openai_tools()  # OpenRouter uses OpenAI-compatible format
+        call_fn = lambda tok, msgs, mdl, mt, tls: _call_openai_compatible(
+            tok, msgs, mdl, mt, tls, "https://openrouter.ai/api/v1/chat/completions"
+        )
+        parse_fn = _parse_openai_response
+        build_result_fn = _build_openai_tool_result
+        build_assistant_fn = _build_openai_assistant_msg
+    elif provider == "groq":
+        model = "llama-3.3-70b-versatile"
+        tools = get_openai_tools()
+        call_fn = lambda tok, msgs, mdl, mt, tls: _call_openai_compatible(
+            tok, msgs, mdl, mt, tls, "https://api.groq.com/openai/v1/chat/completions"
+        )
+        parse_fn = _parse_openai_response
+        build_result_fn = _build_openai_tool_result
+        build_assistant_fn = _build_openai_assistant_msg
     else:
         model = "gpt-4o"
         tools = get_openai_tools()

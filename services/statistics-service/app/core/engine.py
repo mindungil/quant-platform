@@ -83,21 +83,27 @@ def compute_statistics(payload: StatisticsInput) -> StatisticsSnapshot:
     losses = returns[returns < 0]
     win_rate = round(float(len(wins) / trade_count), 4)
 
-    # Build a dated Series for quantstats (requires DatetimeIndex)
+    # Calculate Sharpe/Sortino manually with correct annualization
+    # (per-trade returns are NOT daily — using fake daily dates inflates ratios)
+    if trade_count >= 2 and np.std(returns) > 0:
+        std_ret = float(np.std(returns, ddof=1))
+        mean_ret = float(np.mean(returns))
+        trades_per_year = max(trade_count, 252)  # at least daily frequency
+        ann_factor = np.sqrt(min(trades_per_year, 8760))
+        sharpe = round((mean_ret / std_ret) * ann_factor, 4)
+        downside = returns[returns < 0]
+        downside_std = float(np.std(downside, ddof=1)) if len(downside) > 1 else std_ret
+        sortino = round((mean_ret / downside_std) * ann_factor, 4)
+    else:
+        sharpe = 0.0
+        sortino = 0.0
+
+    # Build a dated Series for quantstats (requires DatetimeIndex) — used for non-Sharpe metrics
     ret_series = pd.Series(
         returns,
         index=pd.date_range("2020-01-01", periods=len(returns), freq="D"),
     )
 
-    # --- quantstats: production-grade performance metrics ---
-    try:
-        sharpe = round(_safe_float(qs.stats.sharpe(ret_series)), 4) if trade_count > 1 else 0.0
-    except Exception:
-        sharpe = 0.0
-    try:
-        sortino = round(_safe_float(qs.stats.sortino(ret_series)), 4) if trade_count > 1 else 0.0
-    except Exception:
-        sortino = 0.0
     try:
         max_drawdown = round(abs(_safe_float(qs.stats.max_drawdown(ret_series))), 4)
     except Exception:
@@ -156,11 +162,14 @@ def compute_statistics(payload: StatisticsInput) -> StatisticsSnapshot:
     if trade_count >= recent_window and payload.baseline_sharpe is not None:
         recent_returns = returns[-recent_window:]
         try:
-            recent_ret_series = pd.Series(
-                recent_returns,
-                index=pd.date_range("2020-01-01", periods=len(recent_returns), freq="D"),
-            )
-            recent_sharpe_val = _safe_float(qs.stats.sharpe(recent_ret_series)) if len(recent_returns) > 1 else 0.0
+            if len(recent_returns) > 1 and np.std(recent_returns) > 0:
+                r_std = float(np.std(recent_returns, ddof=1))
+                r_mean = float(np.mean(recent_returns))
+                r_n = len(recent_returns)
+                r_ann = np.sqrt(min(max(r_n, 252), 8760))
+                recent_sharpe_val = (r_mean / r_std) * r_ann
+            else:
+                recent_sharpe_val = 0.0
         except Exception:
             recent_sharpe_val = 0.0
         recent_sharpe_val = max(-10.0, min(10.0, recent_sharpe_val))

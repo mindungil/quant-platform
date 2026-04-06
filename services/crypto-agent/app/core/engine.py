@@ -422,7 +422,7 @@ def _phase_detect(
         if val is not None:
             features[field_name] = val
 
-    regime = detect_regime(features)
+    regime = detect_regime(features, asset=signal.asset)
     suggested_type = suggest_formula_type(regime)
 
     _complete_phase(phase, detail=f"regime={regime.label} suggest={suggested_type}")

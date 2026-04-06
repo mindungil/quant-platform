@@ -98,12 +98,12 @@ def _estimate_expected_returns(
     while down-weighting stale observations. More robust than simple mean
     return for crypto assets.
     """
-    log_returns = np.log(prices / prices.shift(1)).dropna()
+    returns = (prices / prices.shift(1) - 1).dropna()
 
     halflife_periods = halflife_days * 24  # convert days to hourly periods
-    ewm_mean = log_returns.ewm(halflife=halflife_periods).mean().iloc[-1]
+    ewm_mean = returns.ewm(halflife=halflife_periods).mean().iloc[-1]
 
-    # Annualize: hourly log return -> annual
+    # Annualize: hourly arithmetic return -> annual
     annual_returns = ewm_mean * ANNUALIZATION_FACTOR
 
     return annual_returns
@@ -136,8 +136,8 @@ def _inverse_volatility_weights(
     If no price data is available, falls back to equal weight.
     """
     if prices is not None and len(prices) >= MIN_OBSERVATIONS:
-        log_returns = np.log(prices / prices.shift(1)).dropna()
-        vols = log_returns.std()
+        returns = (prices / prices.shift(1) - 1).dropna()
+        vols = returns.std()
         # Guard against zero-vol assets
         vols = vols.replace(0, vols[vols > 0].min() if (vols > 0).any() else 1.0)
         inv_vol = 1.0 / vols

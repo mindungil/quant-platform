@@ -41,6 +41,72 @@ interface UserProfile {
   roles?: string[];
 }
 
+/* ── AI Provider OAuth Card ── */
+function AiProviderCard({ provider, name, description, color, iconColor }: {
+  provider: string; name: string; description: string; color: string; iconColor: string;
+}) {
+  const [status, setStatus] = useState<"loading" | "connected" | "disconnected">("loading");
+
+  useEffect(() => {
+    gatewayFetch(`/auth/${provider}/status`)
+      .then((d) => setStatus(d.authenticated ? "connected" : "disconnected"))
+      .catch(() => setStatus("disconnected"));
+  }, [provider]);
+
+  const handleConnect = async () => {
+    try {
+      const data = await gatewayFetch(`/auth/${provider}/login`);
+      if (data.auth_url) {
+        window.open(data.auth_url, "_blank", "width=600,height=700");
+      }
+    } catch {
+      alert("연동 URL을 가져올 수 없습니다");
+    }
+  };
+
+  // Check URL params for OAuth callback result
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("oauth") === provider && params.get("status") === "success") {
+      setStatus("connected");
+      window.history.replaceState({}, "", "/settings");
+    }
+  }, [provider]);
+
+  return (
+    <div className={`rounded-xl border p-4 ${color}`}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className={`flex h-10 w-10 items-center justify-center rounded-lg bg-white/10 text-lg ${iconColor}`}>
+            {provider === "claude" ? "🤖" : "⚡"}
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-white">{name}</p>
+            <p className="text-[11px] text-neutral-400">{description}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {status === "loading" ? (
+            <span className="text-xs text-neutral-500">확인 중...</span>
+          ) : status === "connected" ? (
+            <span className="flex items-center gap-1.5 rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-medium text-emerald-400">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              연동됨
+            </span>
+          ) : (
+            <button
+              onClick={handleConnect}
+              className="rounded-lg bg-white px-4 py-1.5 text-xs font-semibold text-black transition-all hover:shadow-[0_0_20px_rgba(255,255,255,0.15)] active:scale-95"
+            >
+              연동하기
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const EXCHANGES: { id: string; name: string; guide: string }[] = [
   {
     id: "binance",
@@ -502,6 +568,33 @@ function SettingsContent() {
                 ) : (
                   <p className="text-sm text-neutral-600">실행 설정을 불러올 수 없습니다</p>
                 )}
+              </section>
+            </FadeInView>
+
+            {/* AI 연동 (OAuth) */}
+            <FadeInView delay={0.12}>
+              <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6 space-y-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-white">AI 에이전트 연동</h3>
+                  <p className="mt-0.5 text-xs text-neutral-500">Claude 또는 Codex 계정을 연동하면 AI 채팅이 활성화됩니다</p>
+                </div>
+                <AiProviderCard
+                  provider="claude"
+                  name="Claude (Anthropic)"
+                  description="Claude Sonnet/Opus로 시장 분석, 매매 판단, 도구 호출"
+                  color="bg-gradient-to-r from-orange-500/20 to-amber-500/20 border-orange-500/20"
+                  iconColor="text-orange-400"
+                />
+                <AiProviderCard
+                  provider="codex"
+                  name="Codex (OpenAI)"
+                  description="GPT-4o로 시장 분석, 매매 판단, 도구 호출"
+                  color="bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border-emerald-500/20"
+                  iconColor="text-emerald-400"
+                />
+                <p className="text-[10px] text-neutral-600">
+                  OAuth PKCE로 안전하게 연동됩니다. API 키가 서버에 저장되지 않습니다.
+                </p>
               </section>
             </FadeInView>
 

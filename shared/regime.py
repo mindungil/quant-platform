@@ -431,24 +431,31 @@ class RegimeDetector:
 # Module-level convenience (stateless, for backward compat)
 # ---------------------------------------------------------------------------
 
-# A default detector instance for callers that don't need explicit state mgmt.
-_default_detector = RegimeDetector()
+# Per-asset detector instances to prevent cross-asset state contamination.
+_detectors: dict[str, RegimeDetector] = {}
 
 
-def detect_regime(features: dict) -> MarketRegime:
+def detect_regime(features: dict, asset: str | None = None) -> MarketRegime:
     """Detect market regime from a features dictionary.
 
-    Stateful: maintains rolling statistics across calls to adapt thresholds.
-    If you need a fresh detector, instantiate ``RegimeDetector`` directly.
+    Stateful per asset: each asset maintains independent rolling statistics
+    to prevent cross-contamination between different assets/timeframes.
+
+    The asset key is resolved in order: explicit argument > features["asset"] > "default".
 
     Args:
         features: Dict with keys like 'adx_14', 'atr_14', 'close', 'rsi_14',
                   'macd', 'macd_signal', 'bb_upper', 'bb_lower', etc.
+                  May also contain 'asset' key for automatic isolation.
+        asset: Asset identifier for per-asset state isolation (e.g. 'BTCUSDT').
 
     Returns:
         MarketRegime with trend, volatility, momentum, and micro-regime info.
     """
-    return _default_detector.update(features)
+    key = asset or features.get("asset") or "default"
+    if key not in _detectors:
+        _detectors[key] = RegimeDetector()
+    return _detectors[key].update(features)
 
 
 def suggest_formula_type(regime: MarketRegime) -> str:

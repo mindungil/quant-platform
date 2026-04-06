@@ -123,7 +123,7 @@ def detect_node(state: AgentState) -> dict:
 
     signal = SignalSnapshot.model_validate(state["signal"])
 
-    features = {}
+    features = {"asset": state.get("asset", "default")}
     for field_name in (
         "close", "volume", "rsi_14", "macd", "macd_signal",
         "bb_upper", "bb_lower", "ema_9", "ema_21", "ema_50",
@@ -190,7 +190,7 @@ def detect_node(state: AgentState) -> dict:
         })
 
     try:
-        regime = detect_regime(features)
+        regime = detect_regime(features, asset=state.get("asset"))
         regime_label = regime.label
         suggested_type = suggest_formula_type(regime)
     except Exception as exc:

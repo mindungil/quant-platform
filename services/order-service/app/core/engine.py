@@ -1,6 +1,8 @@
+import os
 import time
 from uuid import uuid4
 
+import httpx as _httpx
 from prometheus_client import Counter, Histogram
 
 from app.core.config import settings
@@ -252,6 +254,45 @@ def process_order(payload: OrderRequest) -> OrderResponse:
     elif credential:
         payload.credential_label = credential.get("label")
         payload.credential_sandbox = credential.get("sandbox", True)
+    # --- Kelly Criterion position sizing (optional) ---
+    original_quantity = payload.quantity
+    if payload.strategy_id:
+        try:
+            registry_url = os.environ.get("STRATEGY_REGISTRY_BASE_URL", "http://localhost:8005")
+            resp = _httpx.get(f"{registry_url}/strategies/{payload.strategy_id}", timeout=5.0)
+            if resp.status_code == 200:
+                strategy = resp.json()
+                kelly_params = strategy.get("kelly_params")
+                if kelly_params and kelly_params.get("backtest_win_rate"):
+                    win_rate = kelly_params["backtest_win_rate"]
+                    payoff = kelly_params.get("backtest_payoff_ratio", 1.5)
+                    # Kelly fraction: f* = (p*b - q) / b where p=win_rate, b=payoff, q=1-p
+                    kelly_f = (win_rate * payoff - (1 - win_rate)) / payoff if payoff > 0 else 0
+                    # Fractional Kelly (25%) with max 15% of portfolio
+                    safe_f = min(max(kelly_f * 0.25, 0.01), 0.15)
+                    # Adjust notional using portfolio exposure limit as proxy for portfolio value
+                    portfolio_value = payload.max_notional if payload.max_notional > 0 else payload.requested_notional
+                    kelly_notional = portfolio_value * safe_f
+                    original_notional = payload.requested_notional
+                    if kelly_notional < original_notional and payload.price > 0:
+                        payload.quantity = kelly_notional / payload.price
+                        payload.requested_notional = kelly_notional
+                        logger.info(
+                            "kelly_sizing_applied",
+                            extra={
+                                "service": "order-service",
+                                "strategy_id": payload.strategy_id,
+                                "kelly_f": round(kelly_f, 4),
+                                "safe_f": round(safe_f, 4),
+                                "original_quantity": original_quantity,
+                                "adjusted_quantity": round(payload.quantity, 8),
+                                "adjusted_notional": round(kelly_notional, 2),
+                                "user_id": payload.user_id,
+                            },
+                        )
+        except Exception:
+            pass  # proceed with original sizing
+
     publisher.publish_order_created(payload, local_order_id)
     logger.info(
         "exchange_submission_started",

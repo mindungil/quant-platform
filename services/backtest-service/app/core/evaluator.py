@@ -8,6 +8,10 @@ from uuid import uuid4
 import httpx
 import numpy as np
 import pandas as pd
+import ta.momentum
+import ta.trend
+import ta.volatility
+import ta.volume
 # quantstats 0.0.64 uses IPython for HTML reports; mock it so the server starts without Jupyter
 import sys as _sys, types as _types
 if "IPython" not in _sys.modules:
@@ -347,23 +351,27 @@ def _calc_metrics(trades: list[dict], risk_free_daily: float) -> dict:
     win_rate = float(len(wins) / n)
     mean_ret = float(np.mean(returns))
 
-    # Build a dated Series for quantstats (requires DatetimeIndex)
+    # Calculate Sharpe/Sortino manually with correct annualization
+    # (per-trade returns are NOT daily — using fake daily dates inflates ratios)
+    if n >= 2 and np.std(returns) > 0:
+        std_ret = float(np.std(returns, ddof=1))
+        # Estimate trades per year from the actual test period
+        # Use hourly base (crypto trades ~24/7) and annualize accordingly
+        trades_per_year = max(n, 252)  # at least daily frequency
+        ann_factor = np.sqrt(min(trades_per_year, 8760))
+        sharpe = (mean_ret / std_ret) * ann_factor
+        downside = returns[returns < 0]
+        downside_std = float(np.std(downside, ddof=1)) if len(downside) > 1 else std_ret
+        sortino = (mean_ret / downside_std) * ann_factor
+    else:
+        sharpe = 0.0
+        sortino = 0.0
+
+    # Build a dated Series for quantstats (requires DatetimeIndex) — used for non-Sharpe metrics
     ret_series = pd.Series(
         returns,
         index=pd.date_range("2020-01-01", periods=len(returns), freq="D"),
     )
-
-    # Sharpe (quantstats - annualized)
-    try:
-        sharpe = _safe_float(qs.stats.sharpe(ret_series))
-    except Exception:
-        sharpe = 0.0
-
-    # Sortino (quantstats)
-    try:
-        sortino = _safe_float(qs.stats.sortino(ret_series))
-    except Exception:
-        sortino = 0.0
 
     # Max drawdown (quantstats)
     try:
@@ -454,10 +462,64 @@ def evaluate_strategy(payload: BacktestRequest) -> BacktestResult:
     lows = df["low"]
     volumes = df["volume"]
 
+    # Compute ATR early (needed for indicator normalisation and adaptive stops)
+    atr = _calc_atr(highs, lows, closes)
+    atr_series = atr  # alias for clarity in indicator code
+
     # Compute indicators and weighted signal score
     indicators: dict[str, pd.Series] = {}
     indicators["rsi"] = (_calc_rsi(closes) - 50) / 50
     indicators["macd"] = _calc_macd(closes)
+
+    # MACD signal line (normalised by ATR)
+    macd_ind = ta.trend.MACD(close=closes, window_slow=26, window_fast=12, window_sign=9)
+    indicators["macd_signal"] = macd_ind.macd_signal() / atr_series.where(atr_series > 0, 1.0)
+
+    # SMA-20 deviation from close (normalised by ATR, clipped)
+    indicators["sma_20"] = ta.trend.SMAIndicator(close=closes, window=20).sma_indicator()
+    indicators["sma_20"] = ((closes - indicators["sma_20"]) / atr_series.where(atr_series > 0, 1.0)).clip(-3, 3) / 3
+
+    # EMAs (9 and 21) deviation from close (normalised by ATR, clipped)
+    for period in [9, 21]:
+        ema = ta.trend.EMAIndicator(close=closes, window=period).ema_indicator()
+        indicators[f"ema_{period}"] = ((closes - ema) / atr_series.where(atr_series > 0, 1.0)).clip(-3, 3) / 3
+
+    # Bollinger Bands
+    bb = ta.volatility.BollingerBands(close=closes, window=20, window_dev=2)
+    indicators["bb_upper"] = bb.bollinger_hband()
+    indicators["bb_lower"] = bb.bollinger_lband()
+    pct_b = bb.bollinger_pband()
+    indicators["bollinger"] = (pct_b - 0.5) * 2
+
+    # Stochastic Oscillator
+    stoch = ta.momentum.StochasticOscillator(high=highs, low=lows, close=closes, window=14, smooth_window=3)
+    indicators["stochastic_k"] = (stoch.stoch() - 50) / 50
+    indicators["stochastic_d"] = (stoch.stoch_signal() - 50) / 50
+
+    # ADX (normalised to [0, 1])
+    adx = ta.trend.ADXIndicator(high=highs, low=lows, close=closes, window=14)
+    indicators["adx_14"] = adx.adx() / 100
+
+    # ATR as an indicator
+    indicators["atr_14"] = atr_series
+
+    # VWAP approximation
+    if volumes is not None and len(volumes) > 0:
+        typical = (highs + lows + closes) / 3
+        cum_vol = volumes.cumsum()
+        vwap = (typical * volumes).cumsum() / cum_vol.where(cum_vol > 0, 1.0)
+        indicators["vwap"] = ((closes - vwap) / atr_series.where(atr_series > 0, 1.0)).clip(-3, 3) / 3
+
+    # On-Balance Volume
+    obv = ta.volume.OnBalanceVolumeIndicator(
+        close=closes,
+        volume=volumes if volumes is not None else pd.Series(0, index=closes.index),
+    )
+    indicators["obv"] = obv.on_balance_volume()
+
+    # Fill NaNs in all indicators to avoid propagation
+    for k in indicators:
+        indicators[k] = indicators[k].fillna(0.0)
 
     score = pd.Series(0.0, index=df.index)
     for name, weight in payload.weights.items():
@@ -465,10 +527,7 @@ def evaluate_strategy(payload: BacktestRequest) -> BacktestResult:
         if key in indicators:
             score += indicators[key] * weight
         else:
-            score += indicators["rsi"] * weight
-
-    # Compute ATR for adaptive stops
-    atr = _calc_atr(highs, lows, closes)
+            score += 0.0  # neutral fallback for unknown indicators
 
     commission_bps = settings.commission_bps
     slippage_bps = settings.slippage_bps
