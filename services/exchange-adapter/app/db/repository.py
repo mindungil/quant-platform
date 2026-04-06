@@ -4,6 +4,8 @@ import logging
 import os
 from datetime import UTC, datetime
 
+import httpx
+
 from app.adapters.base import ExchangeAdapter
 from app.adapters.binance import BinanceAdapter
 from app.adapters.upbit import UpbitAdapter
@@ -34,7 +36,23 @@ class ExchangeRepository:
         self._failure_counts: dict[tuple[str, str], int] = {}
         self._store = SqlStore(os.getenv("POSTGRES_URL", settings.postgres_url))
         self._adapters = _build_adapter_registry()
+        self._credential_store_url = os.getenv("CREDENTIAL_STORE_BASE_URL", "http://localhost:8010")
         self._ensure_schema()
+
+    def _fetch_credential(self, user_id: str, exchange: str) -> dict | None:
+        """credential-store에서 API 키를 자동 조회."""
+        try:
+            resp = httpx.get(
+                f"{self._credential_store_url}/credentials/{user_id}/{exchange}/reveal",
+                timeout=5.0,
+            )
+            if resp.status_code == 404:
+                return None
+            resp.raise_for_status()
+            return resp.json()
+        except Exception:
+            logger.warning("credential_fetch_failed user=%s exchange=%s", user_id, exchange)
+            return None
 
     def _ensure_schema(self) -> None:
         self._store.execute(
@@ -257,6 +275,13 @@ class ExchangeRepository:
                 shadow_mode=False,
             )
 
+        # api_key 미전달 시 credential-store에서 자동 조회
+        if not api_key:
+            cred = self._fetch_credential(user_id, exchange)
+            if cred:
+                api_key = cred.get("api_key")
+                api_secret = cred.get("api_secret")
+
         try:
             result = adapter.get_balance(
                 user_id=user_id,
@@ -297,6 +322,13 @@ class ExchangeRepository:
                 positions=[],
                 shadow_mode=False,
             )
+
+        # api_key 미전달 시 credential-store에서 자동 조회
+        if not api_key:
+            cred = self._fetch_credential(user_id, exchange)
+            if cred:
+                api_key = cred.get("api_key")
+                api_secret = cred.get("api_secret")
 
         try:
             result = adapter.get_positions(
