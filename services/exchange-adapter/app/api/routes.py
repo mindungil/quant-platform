@@ -46,12 +46,11 @@ def cancel_order(order_id: str, payload: CancelOrderRequest) -> CancelOrderRespo
 def get_balance(
     user_id: str,
     exchange: str,
-    api_key: str | None = None,
-    api_secret: str | None = None,
     shadow_mode: bool = False,
 ) -> BalanceResponse:
+    # Credentials are fetched internally from credential-store; never via URL params
     return exchange_repository.get_balance(
-        user_id, exchange, api_key=api_key, api_secret=api_secret, shadow_mode=shadow_mode,
+        user_id, exchange, shadow_mode=shadow_mode,
     )
 
 
@@ -59,12 +58,11 @@ def get_balance(
 def get_positions(
     user_id: str,
     exchange: str,
-    api_key: str | None = None,
-    api_secret: str | None = None,
     shadow_mode: bool = False,
 ) -> PositionsResponse:
+    # Credentials are fetched internally from credential-store; never via URL params
     return exchange_repository.get_positions(
-        user_id, exchange, api_key=api_key, api_secret=api_secret, shadow_mode=shadow_mode,
+        user_id, exchange, shadow_mode=shadow_mode,
     )
 
 

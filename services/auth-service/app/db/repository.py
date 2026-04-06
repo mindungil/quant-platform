@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 from datetime import UTC, datetime
 from uuid import uuid4
 
 import bcrypt
+
+logger = logging.getLogger(__name__)
 
 from app.core.config import settings
 from app.models.auth import UserProfile, UserRegistrationRequest
@@ -23,9 +26,10 @@ class AuthRepository:
     def _hash_password(self, password: str) -> str:
         return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
-    def _verify_password(self, password: str, password_hash: str) -> bool:
+    def _verify_password(self, password: str, password_hash: str, email: str = "") -> bool:
         # Support legacy SHA256 hashes (64 hex chars) with auto-upgrade
         if len(password_hash) == 64 and not password_hash.startswith("$2"):
+            logger.warning("legacy_sha256_login: user still using SHA-256 hash", extra={"email": email})
             return hashlib.sha256(password.encode("utf-8")).hexdigest() == password_hash
         return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
 
@@ -49,7 +53,8 @@ class AuthRepository:
             CREATE TABLE IF NOT EXISTS auth_refresh_tokens (
                 refresh_token TEXT PRIMARY KEY,
                 user_id TEXT NOT NULL,
-                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '30 days')
             )
             """
         )
@@ -158,7 +163,7 @@ class AuthRepository:
         record = self._get_record_by_email(email)
         if record is None:
             return None
-        if not self._verify_password(password, record["password_hash"]):
+        if not self._verify_password(password, record["password_hash"], email=email):
             return None
         # Auto-upgrade legacy SHA256 hashes to bcrypt
         if len(record["password_hash"]) == 64 and not record["password_hash"].startswith("$2"):
@@ -218,15 +223,20 @@ class AuthRepository:
         self._persist_refresh_token(user_id, refresh_token)
 
     def consume_refresh_token(self, refresh_token: str) -> UserProfile | None:
-        user_id = self._refresh_tokens.get(refresh_token)
+        user_id = self._refresh_tokens.pop(refresh_token, None)
         if user_id is None:
             row = self._store.fetch_one(
-                "SELECT user_id FROM auth_refresh_tokens WHERE refresh_token = :refresh_token",
+                "SELECT user_id FROM auth_refresh_tokens WHERE refresh_token = :refresh_token AND expires_at > NOW()",
                 {"refresh_token": refresh_token},
             )
             user_id = None if row is None else row["user_id"]
         if user_id is None:
             return None
+        # Delete the token so it cannot be reused (single-use)
+        self._store.execute(
+            "DELETE FROM auth_refresh_tokens WHERE refresh_token = :refresh_token",
+            {"refresh_token": refresh_token},
+        )
         return self.get_by_user_id(user_id)
 
     def _profile(self, record: dict) -> UserProfile:

@@ -1,6 +1,18 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+
+def _validate_password_complexity(v: str) -> str:
+    if len(v) < 8:
+        raise ValueError("비밀번호는 8자 이상이어야 합니다")
+    if not any(c.isupper() for c in v):
+        raise ValueError("대문자를 하나 이상 포함해야 합니다")
+    if not any(c.islower() for c in v):
+        raise ValueError("소문자를 하나 이상 포함해야 합니다")
+    if not any(c.isdigit() for c in v):
+        raise ValueError("숫자를 하나 이상 포함해야 합니다")
+    return v
 
 
 class UserRegistrationRequest(BaseModel):
@@ -8,6 +20,11 @@ class UserRegistrationRequest(BaseModel):
     password: str = Field(min_length=8)
     display_name: str = Field(min_length=1)
     plan: str = "free"
+
+    @field_validator("password")
+    @classmethod
+    def check_password(cls, v: str) -> str:
+        return _validate_password_complexity(v)
 
 
 class UserLoginRequest(BaseModel):

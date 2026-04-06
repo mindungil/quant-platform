@@ -1,6 +1,7 @@
 import hmac
 import os
 import time
+from collections import defaultdict
 from hashlib import sha256
 
 import redis
@@ -25,6 +26,30 @@ from app.models.auth import (
 from shared.health import check_sql, health_payload
 
 router = APIRouter()
+
+# ---------------------------------------------------------------------------
+# In-memory rate limiter for login / register brute-force protection
+# ---------------------------------------------------------------------------
+_login_attempts: dict[str, list[float]] = defaultdict(list)
+_MAX_LOGIN_ATTEMPTS = 5
+_LOGIN_WINDOW = 300  # 5 minutes
+
+_register_attempts: dict[str, list[float]] = defaultdict(list)
+_MAX_REGISTER_ATTEMPTS = 3
+_REGISTER_WINDOW = 3600  # 1 hour
+
+
+def _check_rate(store: dict[str, list[float]], key: str, max_attempts: int, window: int) -> bool:
+    """Returns True if the request is allowed, False if rate-limited."""
+    now = time.time()
+    attempts = store[key]
+    store[key] = [t for t in attempts if now - t < window]
+    return len(store[key]) < max_attempts
+
+
+def _record_attempt(store: dict[str, list[float]], key: str) -> None:
+    store[key].append(time.time())
+
 
 _redis_client = None
 
@@ -96,6 +121,9 @@ def create_token(payload: TokenIssueRequest, x_internal_actor_user_id: str | Non
 
 @router.post("/auth/register", response_model=UserProfile)
 def register(payload: UserRegistrationRequest) -> UserProfile:
+    if not _check_rate(_register_attempts, payload.email.lower(), _MAX_REGISTER_ATTEMPTS, _REGISTER_WINDOW):
+        raise HTTPException(status_code=429, detail="too_many_register_attempts")
+    _record_attempt(_register_attempts, payload.email.lower())
     try:
         return auth_repository.register(payload)
     except ValueError as exc:
@@ -104,6 +132,9 @@ def register(payload: UserRegistrationRequest) -> UserProfile:
 
 @router.post("/auth/login", response_model=TokenIssueResponse)
 def login(payload: UserLoginRequest) -> TokenIssueResponse:
+    if not _check_rate(_login_attempts, payload.email.lower(), _MAX_LOGIN_ATTEMPTS, _LOGIN_WINDOW):
+        raise HTTPException(status_code=429, detail="too_many_login_attempts")
+    _record_attempt(_login_attempts, payload.email.lower())
     profile = auth_repository.login(payload.email, payload.password)
     if profile is None:
         raise HTTPException(status_code=401, detail="invalid_credentials")
