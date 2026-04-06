@@ -95,18 +95,37 @@ def gather_node(state: AgentState) -> dict:
     })
 
     if age > SIGNAL_STALENESS_SECONDS:
-        logger.warning("graph_signal_stale", extra={
+        logger.warning("graph_signal_stale_retry", extra={
             "asset": state["asset"], "age": round(age),
         })
-        return {
-            "signal": signal_dict,
-            "signal_age_seconds": age,
-            "abort": True,
-            "action": "HOLD",
-            "threshold_crossed": False,
-            "phase_timings": timings,
-            "errors": errors,
-        }
+        # Retry once after brief wait before aborting
+        time.sleep(5)
+        try:
+            signal = signal_client.get_latest_signal(
+                state["asset"], user_id=state.get("user_id")
+            )
+            signal_dict = signal.model_dump(mode="json")
+            feature_ts = signal.feature_timestamp
+            if feature_ts.tzinfo is None:
+                feature_ts = feature_ts.replace(tzinfo=UTC)
+            age = (datetime.now(UTC) - feature_ts).total_seconds()
+        except Exception as exc:
+            errors.append(f"gather_retry: {exc}")
+
+        if age > SIGNAL_STALENESS_SECONDS:
+            logger.warning("graph_signal_stale", extra={
+                "asset": state["asset"], "age": round(age),
+            })
+            timings["gather"] = round((time.monotonic() - t0) * 1000, 2)
+            return {
+                "signal": signal_dict,
+                "signal_age_seconds": age,
+                "abort": True,
+                "action": "HOLD",
+                "threshold_crossed": False,
+                "phase_timings": timings,
+                "errors": errors,
+            }
 
     return {
         "signal": signal_dict,

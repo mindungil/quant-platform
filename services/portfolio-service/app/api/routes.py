@@ -74,6 +74,12 @@ def get_portfolio(user_id: str) -> PortfolioSnapshot:
     return portfolio_repository.get(user_id)
 
 
+@router.get("/portfolio/{user_id}/live")
+def get_portfolio_live(user_id: str) -> dict:
+    """Portfolio with real-time unrealized PnL from live market prices."""
+    return portfolio_repository.get_portfolio_with_live_pnl(user_id)
+
+
 @router.get("/portfolio/{user_id}/history")
 def get_portfolio_history(user_id: str, limit: int = 30) -> list[dict]:
     return portfolio_repository.get_snapshot_history(user_id, limit=limit)

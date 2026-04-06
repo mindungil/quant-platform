@@ -51,6 +51,12 @@ def get_credential(user_id: str, exchange: str, x_user_id: str | None = Header(d
     return credential
 
 
+@router.get("/credentials/audit/{user_id}")
+def get_audit_log(user_id: str, limit: int = 50, x_user_id: str | None = Header(default=None)) -> list[dict]:
+    effective_user = x_user_id or user_id
+    return credential_repository.get_audit_log(effective_user, limit=limit)
+
+
 @router.get("/credentials/{user_id}/{exchange}/reveal", response_model=CredentialResponse)
 def reveal_credential(user_id: str, exchange: str, x_user_id: str | None = Header(default=None)) -> CredentialResponse:
     if x_user_id is not None and x_user_id != user_id:

@@ -26,6 +26,44 @@ class CredentialRepository:
             )
             """
         )
+        self._store.execute(
+            """
+            CREATE TABLE IF NOT EXISTS credential_audit_log (
+                id SERIAL PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                exchange TEXT NOT NULL,
+                action TEXT NOT NULL,
+                ip_address TEXT,
+                timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+            """
+        )
+        self._store.execute(
+            "CREATE INDEX IF NOT EXISTS idx_cred_audit_user ON credential_audit_log(user_id, timestamp DESC)"
+        )
+
+    def _log_audit(self, user_id: str, exchange: str, action: str) -> None:
+        try:
+            self._store.execute(
+                "INSERT INTO credential_audit_log (user_id, exchange, action) VALUES (:uid, :ex, :act)",
+                {"uid": user_id, "ex": exchange, "act": action},
+            )
+        except Exception:
+            pass  # audit failure should not block operations
+
+    def get_audit_log(self, user_id: str, limit: int = 50) -> list[dict]:
+        """Return recent audit log entries for a user."""
+        rows = self._store.fetch_all(
+            """
+            SELECT id, user_id, exchange, action, ip_address, timestamp
+            FROM credential_audit_log
+            WHERE user_id = :user_id
+            ORDER BY timestamp DESC
+            LIMIT :limit
+            """,
+            {"user_id": user_id, "limit": limit},
+        )
+        return [dict(row) for row in rows]
 
     def _mask(self, value: str) -> str:
         if len(value) <= 4:
@@ -63,6 +101,7 @@ class CredentialRepository:
                 "sandbox": payload.sandbox,
             },
         )
+        self._log_audit(payload.user_id, payload.exchange, "store")
         return self.get_masked(payload.user_id, payload.exchange)
 
     def get(self, user_id: str, exchange: str) -> CredentialResponse | None:
@@ -86,6 +125,7 @@ class CredentialRepository:
                 self._items[(user_id, exchange)] = value
         if value is None:
             return None
+        self._log_audit(user_id, exchange, "retrieve")
         return CredentialResponse(
             user_id=user_id,
             exchange=exchange,
@@ -113,6 +153,7 @@ class CredentialRepository:
             "DELETE FROM credential_records WHERE user_id = :user_id AND exchange = :exchange",
             {"user_id": user_id, "exchange": exchange},
         )
+        self._log_audit(user_id, exchange, "delete")
         return True
 
     def get_masked(self, user_id: str, exchange: str) -> CredentialMaskedResponse | None:

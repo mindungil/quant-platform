@@ -390,6 +390,40 @@ class PortfolioRepository:
 
         return round(realized, 4)
 
+    def get_portfolio_with_live_pnl(self, user_id: str) -> dict:
+        """Get portfolio with real-time unrealized PnL from live market prices."""
+        positions = self.get_positions(user_id)
+
+        for pos in positions:
+            asset = pos.get("asset", "")
+            entry_price = pos.get("avg_entry", 0)
+            quantity = pos.get("quantity", 0)
+
+            # Fetch live price from market-data
+            try:
+                market_url = os.environ.get("MARKET_DATA_BASE_URL", "http://localhost:8001")
+                resp = httpx.get(f"{market_url}/candles/{asset}/latest", timeout=3.0)
+                if resp.status_code == 200:
+                    live_price = resp.json().get("close", entry_price)
+                    pos["current_price"] = live_price
+                    pos["unrealized_pnl"] = (live_price - entry_price) * quantity
+                    pos["unrealized_pnl_pct"] = ((live_price / entry_price) - 1) * 100 if entry_price > 0 else 0
+            except Exception:
+                pos.setdefault("current_price", entry_price)
+                pos.setdefault("unrealized_pnl", 0)
+                pos["unrealized_pnl_pct"] = 0
+
+        total_value = sum(p.get("current_price", 0) * p.get("quantity", 0) for p in positions)
+        total_pnl = sum(p.get("unrealized_pnl", 0) for p in positions)
+
+        return {
+            "user_id": user_id,
+            "positions": positions,
+            "total_value": round(total_value, 4),
+            "total_unrealized_pnl": round(total_pnl, 4),
+            "total_unrealized_pnl_pct": round((total_pnl / total_value * 100), 4) if total_value > 0 else 0,
+        }
+
     def get_aggregate(self) -> dict:
         """Aggregate positions across all users for internal risk monitoring."""
         rows = self._store.fetch_all(
