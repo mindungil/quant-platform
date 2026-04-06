@@ -518,13 +518,13 @@ function SettingsContent() {
                     <div className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
                       <div>
                         <p className="text-[11px] font-medium uppercase tracking-widest text-neutral-500">섀도우 모드</p>
-                        <p className={`mt-1 text-sm font-semibold ${execConfig.default_shadow_mode ? "text-blue-400" : "text-neutral-400"}`}>
+                        <p className={`mt-1 text-sm font-semibold ${execConfig.default_shadow_mode ? "text-white" : "text-neutral-400"}`}>
                           {execConfig.default_shadow_mode ? "기본 활성" : "비활성"}
                         </p>
                       </div>
                       {isAdmin && (
                         <button
-                          className={`relative h-6 w-11 rounded-full transition-colors ${execConfig.default_shadow_mode ? "bg-blue-500" : "bg-neutral-700"}`}
+                          className={`relative h-6 w-11 rounded-full transition-colors ${execConfig.default_shadow_mode ? "bg-white" : "bg-neutral-700"}`}
                           onClick={() => updateExecConfig({ default_shadow_mode: !execConfig.default_shadow_mode })}
                         >
                           <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${execConfig.default_shadow_mode ? "left-[22px]" : "left-0.5"}`} />
@@ -582,15 +582,15 @@ function SettingsContent() {
                   provider="claude"
                   name="Claude (Anthropic)"
                   description="Claude Sonnet/Opus로 시장 분석, 매매 판단, 도구 호출"
-                  color="bg-gradient-to-r from-orange-500/20 to-amber-500/20 border-orange-500/20"
-                  iconColor="text-orange-400"
+                  color="border-white/[0.08] bg-white/[0.03]"
+                  iconColor="text-white"
                 />
                 <AiProviderCard
                   provider="codex"
                   name="Codex (OpenAI)"
                   description="GPT-4o로 시장 분석, 매매 판단, 도구 호출"
-                  color="bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border-emerald-500/20"
-                  iconColor="text-emerald-400"
+                  color="border-white/[0.08] bg-white/[0.03]"
+                  iconColor="text-white"
                 />
                 <p className="text-[10px] text-neutral-600">
                   OAuth PKCE로 안전하게 연동됩니다. API 키가 서버에 저장되지 않습니다.

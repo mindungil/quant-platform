@@ -190,7 +190,7 @@ export function MarketChart({ asset = "BTCUSDT" }: { asset?: string }) {
   /* ── Render ──────────────────────────────────────────────────── */
 
   return (
-    <div className="relative rounded-xl border border-white/[0.06] bg-[#0b0f19] overflow-hidden">
+    <div className="relative rounded-xl border border-white/[0.06] bg-zinc-950 overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
         <div className="flex items-center gap-2">
@@ -209,7 +209,7 @@ export function MarketChart({ asset = "BTCUSDT" }: { asset?: string }) {
 
       {/* Loading skeleton overlay */}
       {loading && !error && (
-        <div className="absolute inset-0 top-[45px] flex items-center justify-center bg-[#0b0f19]/80">
+        <div className="absolute inset-0 top-[45px] flex items-center justify-center bg-zinc-950/80">
           <div className="space-y-3 w-3/4">
             <div className="h-2 rounded bg-neutral-800 animate-pulse" />
             <div className="h-2 rounded bg-neutral-800 animate-pulse w-5/6" />
@@ -222,7 +222,7 @@ export function MarketChart({ asset = "BTCUSDT" }: { asset?: string }) {
 
       {/* Error state */}
       {error && (
-        <div className="absolute inset-0 top-[45px] flex items-center justify-center bg-[#0b0f19]/80">
+        <div className="absolute inset-0 top-[45px] flex items-center justify-center bg-zinc-950/80">
           <div className="text-center">
             <p className="text-sm text-neutral-500">{error}</p>
             <p className="text-xs text-neutral-600 mt-1">

@@ -139,13 +139,13 @@ function BaselineComparison({
           <span className="w-10 text-[10px] text-neutral-500">기준</span>
           <div className="flex-1 rounded-full bg-white/[0.04] h-2 overflow-hidden">
             <motion.div
-              className="h-2 rounded-full bg-blue-500/60"
+              className="h-2 rounded-full bg-zinc-500"
               initial={{ width: 0 }}
               animate={{ width: `${Math.min(basePct, 100)}%` }}
               transition={{ duration: 0.6, delay: 0.1, ease: "easeOut" }}
             />
           </div>
-          <span className="w-16 text-right font-mono text-[11px] text-blue-400">
+          <span className="w-16 text-right font-mono text-[11px] text-zinc-400">
             {baseline >= 0 ? "+" : ""}{(baseline * 100).toFixed(2)}%
           </span>
         </div>
@@ -342,7 +342,7 @@ function StrategiesContent() {
                               strat.status === "ACTIVE"
                                 ? "bg-emerald-500/15 text-emerald-400"
                                 : strat.status === "SHADOW"
-                                  ? "bg-blue-500/15 text-blue-400"
+                                  ? "bg-white/[0.08] text-zinc-300"
                                   : "bg-neutral-700/50 text-neutral-400"
                             }`}
                           >

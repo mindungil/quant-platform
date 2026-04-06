@@ -5,32 +5,21 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        accent: {
-          cyan: '#06b6d4',
-          purple: '#a855f7',
-          blue: '#3b82f6',
-          indigo: '#6366f1',
-        },
         surface: {
-          950: '#0b0f19',
-          900: '#111827',
-          800: '#1e293b',
-          700: '#334155',
+          950: '#09090b',
+          900: '#18181b',
+          800: '#27272a',
+          700: '#3f3f46',
         },
       },
       keyframes: {
-        'glow-pulse': {
-          '0%, 100%': { boxShadow: '0 0 20px rgba(6, 182, 212, 0.15)' },
-          '50%': { boxShadow: '0 0 40px rgba(6, 182, 212, 0.3)' },
-        },
-        'gradient-shift': {
-          '0%, 100%': { backgroundPosition: '0% 50%' },
-          '50%': { backgroundPosition: '100% 50%' },
+        'white-glow': {
+          '0%, 100%': { boxShadow: '0 0 20px rgba(255, 255, 255, 0.05)' },
+          '50%': { boxShadow: '0 0 40px rgba(255, 255, 255, 0.10)' },
         },
       },
       animation: {
-        'glow-pulse': 'glow-pulse 3s ease-in-out infinite',
-        'gradient-shift': 'gradient-shift 6s ease infinite',
+        'white-glow': 'white-glow 3s ease-in-out infinite',
       },
     }
   },

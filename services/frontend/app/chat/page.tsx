@@ -85,7 +85,7 @@ function LoadingDots() {
           key={i}
           className="inline-block h-[6px] w-[6px] rounded-full"
           style={{
-            background: "linear-gradient(135deg, #06b6d4, #22d3ee)",
+            background: "linear-gradient(135deg, #ffffff, #a1a1aa)",
           }}
           animate={{
             y: [0, -6, 0],
@@ -133,7 +133,7 @@ function ToolPill({
           ${
             hasError
               ? "bg-red-500/10 text-red-400 hover:bg-red-500/20"
-              : "bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20 hover:text-white"
+              : "bg-white/[0.08] text-zinc-300 hover:bg-white/[0.12] hover:text-white"
           }
         `}
       >
@@ -320,7 +320,7 @@ export default function ChatPage() {
             initial="closed"
             animate="open"
             exit="closed"
-            className="flex flex-col overflow-hidden border-r border-neutral-800/60 bg-[#0b0f19]"
+            className="flex flex-col overflow-hidden border-r border-neutral-800/60 bg-zinc-950"
           >
             <div className="flex items-center justify-between p-4">
               <span className="text-xs font-semibold uppercase tracking-wider text-neutral-500">
@@ -383,7 +383,7 @@ export default function ChatPage() {
               <path d="M3 12h18M3 6h18M3 18h18" />
             </svg>
           </motion.button>
-          <h1 className="text-sm font-semibold text-gradient-accent tracking-tight">
+          <h1 className="text-sm font-bold text-white tracking-tight">
             AI 트레이딩 에이전트
           </h1>
         </div>
@@ -408,7 +408,7 @@ export default function ChatPage() {
                   <span
                     className="inline-block bg-clip-text text-6xl font-bold text-transparent"
                     style={{
-                      backgroundImage: "linear-gradient(135deg, #06b6d4, #22d3ee, #67e8f9)",
+                      backgroundImage: "linear-gradient(135deg, #fafafa, #a1a1aa, #fafafa)",
                       backgroundSize: "200% 200%",
                       animation: "gradientShift 4s ease infinite",
                     }}
@@ -444,7 +444,7 @@ export default function ChatPage() {
                       }}
                       whileHover={{
                         scale: 1.02,
-                        boxShadow: "0 0 24px rgba(6, 182, 212, 0.12)",
+                        boxShadow: "0 0 24px rgba(255, 255, 255, 0.08)",
                       }}
                       whileTap={{ scale: 0.98 }}
                       onClick={() => {
@@ -503,7 +503,7 @@ export default function ChatPage() {
                       )}
 
                       {/* Text content */}
-                      <div className="border-l-2 border-cyan-500/30 pl-4">
+                      <div className="border-l-2 border-white/[0.15] pl-4">
                         <div className="whitespace-pre-wrap text-[15px] leading-[1.75] text-neutral-200">
                           {msg.content}
                         </div>
@@ -550,7 +550,7 @@ export default function ChatPage() {
             <motion.div
               animate={{
                 boxShadow: inputFocused
-                  ? "0 0 0 2px rgba(6, 182, 212, 0.25), 0 4px 24px rgba(0,0,0,0.3)"
+                  ? "0 0 0 2px rgba(255, 255, 255, 0.15), 0 4px 24px rgba(0,0,0,0.3)"
                   : "0 0 0 1px rgba(64, 64, 64, 0.5), 0 2px 12px rgba(0,0,0,0.2)",
               }}
               transition={{ duration: 0.2 }}
@@ -581,7 +581,7 @@ export default function ChatPage() {
                 disabled={loading || !input.trim()}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl btn-gradient text-white transition-opacity disabled:opacity-20"
+                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-white text-black transition-opacity disabled:opacity-20"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M5 12h14M12 5l7 7-7 7" />

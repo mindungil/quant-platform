@@ -54,12 +54,12 @@ export default function HomePage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#0b0f19]">
+    <div className="flex min-h-screen items-center justify-center bg-zinc-950">
       {/* Background glow */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="bg-orb-cyan" style={{ top: "-100px", left: "-80px", width: "500px", height: "500px" }} />
-        <div className="bg-orb-purple" style={{ bottom: "-80px", right: "-60px", width: "400px", height: "400px" }} />
-        <div className="bg-orb-cyan" style={{ top: "40%", right: "10%", width: "250px", height: "250px", opacity: 0.5 }} />
+        <div className="bg-orb-light" style={{ top: "-100px", left: "-80px", width: "500px", height: "500px" }} />
+        <div className="bg-orb-dim" style={{ bottom: "-80px", right: "-60px", width: "400px", height: "400px" }} />
+        <div className="bg-orb-light" style={{ top: "40%", right: "10%", width: "250px", height: "250px", opacity: 0.5 }} />
       </div>
 
       <motion.div
@@ -75,10 +75,10 @@ export default function HomePage() {
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.15, type: "spring", stiffness: 200, damping: 20 }}
         >
-          <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-xl btn-gradient shadow-[0_0_20px_rgba(6,182,212,0.3)]">
-            <span className="text-lg font-bold text-white">Q</span>
+          <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-white shadow-[0_0_20px_rgba(255,255,255,0.15)]">
+            <span className="text-lg font-bold text-black">Q</span>
           </div>
-          <h1 className="text-xl font-semibold tracking-tight text-gradient-accent">
+          <h1 className="text-xl font-bold tracking-tight text-white">
             {isLogin ? "로그인" : "계정 만들기"}
           </h1>
           <p className="mt-2 text-sm text-neutral-500">
@@ -108,7 +108,7 @@ export default function HomePage() {
                       이름
                     </label>
                     <input
-                      className="w-full rounded-lg border border-neutral-700 bg-neutral-800/50 px-3.5 py-2.5 text-sm text-white placeholder-neutral-600 outline-none transition-colors focus:border-cyan-500/50"
+                      className="w-full rounded-lg border border-neutral-700 bg-neutral-800/50 px-3.5 py-2.5 text-sm text-white placeholder-neutral-600 outline-none transition-colors focus:border-white/[0.30]"
                       value={displayName}
                       onChange={(e) => setDisplayName(e.target.value)}
                       placeholder="표시 이름"
@@ -123,7 +123,7 @@ export default function HomePage() {
                 이메일
               </label>
               <input
-                className="w-full rounded-lg border border-neutral-700 bg-neutral-800/50 px-3.5 py-2.5 text-sm text-white placeholder-neutral-600 outline-none transition-colors focus:border-cyan-500/50"
+                className="w-full rounded-lg border border-neutral-700 bg-neutral-800/50 px-3.5 py-2.5 text-sm text-white placeholder-neutral-600 outline-none transition-colors focus:border-white/[0.30]"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -136,7 +136,7 @@ export default function HomePage() {
                 비밀번호
               </label>
               <input
-                className="w-full rounded-lg border border-neutral-700 bg-neutral-800/50 px-3.5 py-2.5 text-sm text-white placeholder-neutral-600 outline-none transition-colors focus:border-cyan-500/50"
+                className="w-full rounded-lg border border-neutral-700 bg-neutral-800/50 px-3.5 py-2.5 text-sm text-white placeholder-neutral-600 outline-none transition-colors focus:border-white/[0.30]"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -145,7 +145,7 @@ export default function HomePage() {
             </div>
 
             <motion.button
-              className="w-full rounded-lg btn-gradient py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+              className="w-full rounded-lg bg-white py-2.5 text-sm font-semibold text-black disabled:opacity-40 hover:shadow-[0_0_20px_rgba(255,255,255,0.15)]"
               onClick={isLogin ? login : register}
               disabled={loading || !email || !password}
               whileTap={{ scale: 0.98 }}

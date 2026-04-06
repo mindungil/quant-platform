@@ -54,7 +54,7 @@ function statusDotColor(status: string): string {
   if (s === "REJECTED") return "bg-red-500/150";
   if (s === "CANCELLED" || s === "EXPIRED") return "bg-neutral-300";
   if (s === "PENDING" || s === "NEW") return "bg-amber-400";
-  if (s === "OPEN") return "bg-blue-500";
+  if (s === "OPEN") return "bg-white";
   return "bg-neutral-300";
 }
 
@@ -64,7 +64,7 @@ function statusTextColor(status: string): string {
   if (s === "REJECTED") return "text-red-400";
   if (s === "CANCELLED" || s === "EXPIRED") return "text-neutral-400";
   if (s === "PENDING" || s === "NEW") return "text-amber-400";
-  if (s === "OPEN") return "text-blue-400";
+  if (s === "OPEN") return "text-white";
   return "text-neutral-400";
 }
 
@@ -401,7 +401,7 @@ function OrdersContent() {
                 onClick={() => setFilter(f)}
                 className={`relative rounded-full px-4 py-1.5 text-xs font-medium transition ${
                   filter === f
-                    ? "bg-cyan-500/15 text-cyan-300"
+                    ? "bg-white text-black"
                     : "text-neutral-400 hover:bg-white/[0.06] hover:text-neutral-200"
                 }`}
               >
@@ -409,7 +409,7 @@ function OrdersContent() {
                 {filter === f && (
                   <motion.div
                     layoutId="order-filter-pill"
-                    className="absolute inset-0 rounded-full bg-cyan-500/15 -z-10"
+                    className="absolute inset-0 rounded-full bg-white -z-10"
                     transition={{ type: "spring", stiffness: 400, damping: 30 }}
                   />
                 )}

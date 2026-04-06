@@ -124,7 +124,7 @@ function SignalBar({ value, label }: { value: number; label?: string }) {
       <div className="h-1.5 w-full rounded-full bg-white/[0.06] overflow-hidden">
         <motion.div
           className={`h-full rounded-full ${
-            isStrong ? "bg-cyan-400" : isMedium ? "bg-cyan-600" : "bg-neutral-500"
+            isStrong ? "bg-white" : isMedium ? "bg-zinc-400" : "bg-neutral-500"
           }`}
           initial={{ width: 0 }}
           animate={{ width: `${pct}%` }}
@@ -144,7 +144,7 @@ function ConfidenceBar({ value }: { value: number }) {
     <div className="flex items-center gap-3">
       <div className="flex-1 h-2 rounded-full bg-white/[0.06] overflow-hidden">
         <motion.div
-          className="h-full rounded-full bg-cyan-400"
+          className="h-full rounded-full bg-white"
           initial={{ width: 0 }}
           animate={{ width: `${pct}%` }}
           transition={{ duration: 1, ease: "easeOut", delay: 0.3 }}
@@ -331,11 +331,11 @@ function DashboardContent() {
             <div className="relative z-10">
               <div className="flex items-center gap-3 mb-4">
                 <motion.div
-                  className="h-2 w-2 rounded-full bg-cyan-400"
-                  animate={{ opacity: [1, 0.4, 1], boxShadow: ["0 0 6px rgba(6,182,212,0.6)", "0 0 2px rgba(6,182,212,0.2)", "0 0 6px rgba(6,182,212,0.6)"] }}
+                  className="h-2 w-2 rounded-full bg-white"
+                  animate={{ opacity: [1, 0.4, 1], boxShadow: ["0 0 6px rgba(255,255,255,0.6)", "0 0 2px rgba(255,255,255,0.2)", "0 0 6px rgba(255,255,255,0.6)"] }}
                   transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
                 />
-                <span className="text-sm text-cyan-500 font-medium">에이전트 활성</span>
+                <span className="text-sm text-white font-medium">에이전트 활성</span>
               </div>
 
               <h1 className="text-3xl sm:text-4xl font-bold text-gradient-accent tracking-tight">
@@ -357,7 +357,7 @@ function DashboardContent() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.5, duration: 0.4 }}
                 >
-                  <span className="inline-flex items-center rounded-full bg-cyan-500/15 text-cyan-300 px-4 py-1.5 text-sm font-medium">
+                  <span className="inline-flex items-center rounded-full bg-white/[0.08] text-white px-4 py-1.5 text-sm font-medium">
                     시장 상태 : {friendlyRegime(topRec.regime)}
                   </span>
                   <span className="inline-flex items-center rounded-full border border-white/[0.06] bg-white/[0.03] px-4 py-1.5 text-sm text-neutral-300">
@@ -478,7 +478,7 @@ function DashboardContent() {
               ) : (
                 <div className="mt-5 flex flex-col items-center justify-center py-8">
                   <motion.div
-                    className="w-8 h-8 rounded-full border-2 border-white/[0.06] border-t-cyan-400"
+                    className="w-8 h-8 rounded-full border-2 border-white/[0.06] border-t-white"
                     animate={{ rotate: 360 }}
                     transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
                   />
@@ -515,7 +515,7 @@ function DashboardContent() {
         {/* ── Recent Decisions ────────────────────────────── */}
         <FadeInView delay={0.15}>
           <section>
-            <h2 className="text-lg font-semibold text-gradient-accent mb-4">최근 매매 결정</h2>
+            <h2 className="text-xl font-bold text-white mb-4 drop-shadow-[0_0_8px_rgba(255,255,255,0.3)]">최근 매매 결정</h2>
 
             {decisions.length === 0 ? (
               <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] backdrop-blur-sm p-8 text-center">

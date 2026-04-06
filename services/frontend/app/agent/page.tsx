@@ -50,20 +50,20 @@ const ASSET_META: Record<string, { label: string; short: string; color: string; 
   BTCUSDT: {
     label: "비트코인 (BTC)",
     short: "BTC",
-    color: "#F7931A",
-    gradient: "from-amber-500 to-orange-600",
+    color: "#fafafa",
+    gradient: "from-white to-zinc-400",
   },
   ETHUSDT: {
     label: "이더리움 (ETH)",
     short: "ETH",
-    color: "#627EEA",
-    gradient: "from-indigo-500 to-blue-600",
+    color: "#a1a1aa",
+    gradient: "from-zinc-300 to-zinc-500",
   },
   SOLUSDT: {
     label: "솔라나 (SOL)",
     short: "SOL",
-    color: "#9945FF",
-    gradient: "from-purple-500 to-violet-600",
+    color: "#71717a",
+    gradient: "from-zinc-400 to-zinc-600",
   },
 };
 
@@ -221,12 +221,12 @@ function AgentContent() {
               <button
                 onClick={runAgent}
                 disabled={running}
-                className="ml-2 flex items-center gap-2 rounded-xl bg-cyan-500 px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-cyan-400 active:scale-[0.97] disabled:opacity-50"
+                className="ml-2 flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-black transition-all hover:shadow-[0_0_20px_rgba(255,255,255,0.15)] active:scale-[0.97] disabled:opacity-50"
               >
                 {running ? (
                   <>
                     <motion.span
-                      className="inline-block h-4 w-4 rounded-full border-2 border-white border-t-transparent"
+                      className="inline-block h-4 w-4 rounded-full border-2 border-black border-t-transparent"
                       animate={{ rotate: 360 }}
                       transition={{ repeat: Infinity, duration: 0.7, ease: "linear" }}
                     />
@@ -264,14 +264,14 @@ function AgentContent() {
                       <motion.div
                         className={`group relative rounded-xl border bg-white/[0.03] p-5 transition-all duration-200 ${
                           i === 0
-                            ? "border-cyan-500/30 ring-1 ring-cyan-500/10"
+                            ? "border-white/[0.20] ring-1 ring-white/[0.06]"
                             : "border-white/[0.06] hover:border-white/[0.10]"
                         }`}
                         whileHover={{ scale: 1.015, y: -2 }}
                         transition={{ type: "spring", stiffness: 400, damping: 25 }}
                       >
                         {i === 0 && (
-                          <span className="absolute -top-2.5 left-4 inline-flex items-center rounded-full bg-cyan-500 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
+                          <span className="absolute -top-2.5 left-4 inline-flex items-center rounded-full bg-white px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-black">
                             최적 추천
                           </span>
                         )}

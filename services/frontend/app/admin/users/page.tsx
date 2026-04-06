@@ -131,7 +131,7 @@ export default function AdminUsersPage() {
                         <select
                           value={user.roles.includes("admin") ? "admin" : "user"}
                           onChange={(e) => updateRole(user, e.target.value)}
-                          className="rounded border border-white/[0.06] bg-white/[0.03] px-3 py-1.5 text-xs text-white outline-none focus:border-cyan-500 transition-colors duration-200"
+                          className="rounded border border-white/[0.06] bg-white/[0.03] px-3 py-1.5 text-xs text-white outline-none focus:border-white/[0.30] transition-colors duration-200"
                         >
                           <option value="user">user</option>
                           <option value="admin">admin</option>

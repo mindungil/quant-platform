@@ -51,13 +51,13 @@ function PnlBar({ value, maxAbs, index }: { value: number; maxAbs: number; index
 
 /* ── concentration bar with colour ───────────────────────────── */
 const BAR_COLORS = [
-  "bg-blue-500",
-  "bg-indigo-500",
-  "bg-violet-500",
-  "bg-fuchsia-500",
-  "bg-pink-500",
-  "bg-cyan-500",
-  "bg-teal-500",
+  "bg-white",
+  "bg-zinc-300",
+  "bg-zinc-400",
+  "bg-zinc-500",
+  "bg-zinc-600",
+  "bg-zinc-200",
+  "bg-neutral-400",
 ];
 
 function ConcentrationBar({

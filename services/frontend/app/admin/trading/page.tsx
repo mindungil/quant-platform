@@ -162,7 +162,7 @@ export default function AdminTradingPage() {
 
   const statusTextColors: Record<string, string> = {
     live: "text-emerald-400",
-    shadow: "text-neutral-600",
+    shadow: "text-neutral-400",
     stopped: "text-red-400",
     unknown: "text-neutral-400",
   };
@@ -290,7 +290,7 @@ export default function AdminTradingPage() {
                 {!enableConfirm ? (
                   <motion.div key="enable-btn" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
                     <button
-                      className="w-full rounded border border-cyan-500 bg-cyan-500 py-3 text-sm font-semibold text-white hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="w-full rounded border border-white/[0.20] bg-white py-3 text-sm font-semibold text-black hover:shadow-[0_0_20px_rgba(255,255,255,0.15)] disabled:cursor-not-allowed disabled:opacity-40"
                       disabled={!preflight?.all_passed || execConfig?.live_trading_enabled === true}
                       onClick={() => setEnableConfirm(true)}
                     >
@@ -311,7 +311,7 @@ export default function AdminTradingPage() {
                     </p>
                     <div className="flex gap-3">
                       <button
-                        className="flex-1 rounded bg-cyan-500 py-3 text-sm font-semibold text-white hover:bg-cyan-400 disabled:opacity-50"
+                        className="flex-1 rounded bg-white py-3 text-sm font-semibold text-black hover:shadow-[0_0_20px_rgba(255,255,255,0.15)] disabled:opacity-50"
                         disabled={enableLoading}
                         onClick={enableLive}
                       >
@@ -404,7 +404,7 @@ export default function AdminTradingPage() {
                       setConfigDirty(true);
                     }}
                     placeholder="binance, bybit, okx"
-                    className="mt-2 w-full rounded border border-white/[0.06] bg-white/[0.03] px-3 py-2 text-sm text-white outline-none focus:border-cyan-500"
+                    className="mt-2 w-full rounded border border-white/[0.06] bg-white/[0.03] px-3 py-2 text-sm text-white outline-none focus:border-white/[0.20]"
                   />
                   <p className="mt-1 text-xs text-neutral-400">쉼표로 구분된 거래소 식별자</p>
                 </div>
@@ -418,7 +418,7 @@ export default function AdminTradingPage() {
                         setEditShadow(e.target.checked);
                         setConfigDirty(true);
                       }}
-                      className="h-4 w-4 rounded border-white/[0.10] accent-cyan-500"
+                      className="h-4 w-4 rounded border-white/[0.10] accent-white"
                     />
                     <span className="text-sm text-white">default_shadow_mode</span>
                   </label>
