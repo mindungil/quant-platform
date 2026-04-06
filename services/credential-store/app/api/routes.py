@@ -59,8 +59,9 @@ def get_audit_log(user_id: str, limit: int = 50, x_user_id: str | None = Header(
 
 @router.get("/credentials/{user_id}/{exchange}/reveal", response_model=CredentialResponse)
 def reveal_credential(user_id: str, exchange: str, x_user_id: str | None = Header(default=None)) -> CredentialResponse:
-    if x_user_id is not None and x_user_id != user_id:
-        raise HTTPException(status_code=404, detail="credential_not_found")
+    # Only allow the credential owner or internal services to reveal
+    if x_user_id and x_user_id != user_id:
+        raise HTTPException(status_code=403, detail="credential_access_denied")
     credential = credential_repository.get(user_id, exchange)
     if credential is None:
         raise HTTPException(status_code=404, detail="credential_not_found")

@@ -1,9 +1,12 @@
+import logging
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import jwt
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 from app.db.repository import auth_repository
 from app.models.auth import (
     RefreshTokenRequest,
@@ -55,8 +58,9 @@ def verify_access_token(token: str) -> TokenVerificationResponse:
             raise jwt.InvalidTokenError("token_revoked")
     except jwt.InvalidTokenError:
         raise
-    except Exception:
-        pass  # fail open if Redis unavailable
+    except Exception as exc:
+        logger.warning("token_blacklist_check_failed", extra={"error": str(exc)[:100]})
+        # Fail open — token expiry is the primary protection
 
     claims = TokenClaims(**payload)
     return TokenVerificationResponse(valid=True, claims=claims)

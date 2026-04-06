@@ -87,7 +87,10 @@ def metrics() -> Response:
 
 
 @router.post("/auth/token", response_model=TokenIssueResponse)
-def create_token(payload: TokenIssueRequest) -> TokenIssueResponse:
+def create_token(payload: TokenIssueRequest, x_internal_actor_user_id: str | None = Header(default=None)) -> TokenIssueResponse:
+    # Only allow from internal services with admin context
+    if not x_internal_actor_user_id:
+        raise HTTPException(status_code=403, detail="internal_only")
     return issue_access_token(payload)
 
 

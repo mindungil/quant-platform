@@ -108,7 +108,7 @@ class ExchangeRepository:
                 "shadow_mode": payload.shadow_mode,
                 "circuit_state": response.circuit_state,
                 "correlation_id": payload.correlation_id,
-                "request_payload": serialize_json(payload.model_dump(mode="json")),
+                "request_payload": serialize_json({k: v for k, v in payload.model_dump(mode="json").items() if k not in ("api_key", "api_secret", "secret", "password")}),
                 "response_payload": serialize_json(response.model_dump(mode="json")),
                 "created_at": datetime.now(UTC),
             },

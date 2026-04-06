@@ -13,6 +13,8 @@ app.include_router(router)
 
 @app.on_event("startup")
 def bootstrap_defaults() -> None:
+    if not settings.jwt_secret:
+        raise RuntimeError("JWT_SECRET environment variable must be set to a strong random value")
     startup_dependency_guard(
         service_name="auth-service",
         check_fns={

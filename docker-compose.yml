@@ -22,7 +22,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - db-data:/var/lib/postgresql/data
     healthcheck:
@@ -34,7 +34,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -45,7 +45,7 @@ services:
     image: nats:2.11-alpine
     command: ["-js", "-m", "8222"]
     ports:
-      - "4222:4222"
+      - "127.0.0.1:4222:4222"
     healthcheck:
       test: ["CMD-SHELL", "nc -z 127.0.0.1 4222"]
       interval: 5s
@@ -61,26 +61,26 @@ services:
     env_file:
       - .env.example
     ports:
-      - "8001:8001"   # market-data
-      - "8002:8002"   # feature-store
-      - "8003:8003"   # signal-service
-      - "8004:8004"   # memory-service
-      - "8005:8005"   # strategy-registry
-      - "8006:8006"   # crypto-agent
-      - "8007:8007"   # backtest-service
-      - "8008:8008"   # exchange-adapter
-      - "8009:8009"   # risk-service
-      - "8010:8010"   # credential-store
-      - "8011:8011"   # order-service
-      - "8012:8012"   # portfolio-service
-      - "8013:8013"   # statistics-service
-      - "8014:8014"   # orchestrator-agent
-      - "8015:8015"   # etf-agent
-      - "8016:8016"   # stock-agent
-      - "8017:8017"   # api-gateway
-      - "8019:8019"   # auth-service
-      - "8020:8020"   # external-data-service
-      - "8021:8021"   # llm-gateway
+      - "127.0.0.1:8001:8001"   # market-data (internal only)
+      - "127.0.0.1:8002:8002"   # feature-store (internal only)
+      - "127.0.0.1:8003:8003"   # signal-service (internal only)
+      - "127.0.0.1:8004:8004"   # memory-service (internal only)
+      - "127.0.0.1:8005:8005"   # strategy-registry (internal only)
+      - "127.0.0.1:8006:8006"   # crypto-agent (internal only)
+      - "127.0.0.1:8007:8007"   # backtest-service (internal only)
+      - "127.0.0.1:8008:8008"   # exchange-adapter (internal only)
+      - "127.0.0.1:8009:8009"   # risk-service (internal only)
+      - "127.0.0.1:8010:8010"   # credential-store (internal only)
+      - "127.0.0.1:8011:8011"   # order-service (internal only)
+      - "127.0.0.1:8012:8012"   # portfolio-service (internal only)
+      - "127.0.0.1:8013:8013"   # statistics-service (internal only)
+      - "127.0.0.1:8014:8014"   # orchestrator-agent (internal only)
+      - "127.0.0.1:8015:8015"   # etf-agent (internal only)
+      - "127.0.0.1:8016:8016"   # stock-agent (internal only)
+      - "8017:8017"              # api-gateway (public)
+      - "127.0.0.1:8019:8019"   # auth-service (internal only)
+      - "127.0.0.1:8020:8020"   # external-data-service (internal only)
+      - "127.0.0.1:8021:8021"   # llm-gateway (internal only)
     depends_on:
       db:
         condition: service_healthy
