@@ -4,6 +4,7 @@
 API key 환경변수(OPENAI_API_KEY, ANTHROPIC_API_KEY) 사용 가능.
 토큰/키 미등록 시 데이터 기반 자동 추론 (deterministic but detailed).
 """
+import json
 import logging
 import math
 import os
@@ -160,6 +161,80 @@ def _smart_fallback(payload: ReasoningRequest) -> str:
     return " ".join(parts)
 
 
+def _generate_reasoning_structured(payload: ReasoningRequest) -> dict:
+    """Generate structured reasoning data for rich frontend display."""
+    score = payload.signal_score
+    components = payload.components or {}
+    asset = payload.asset.replace("USDT", "").replace("KRW-", "")
+
+    abs_score = abs(score)
+
+    # Signal strength
+    if abs_score >= 0.6:
+        strength = "강함"
+        strength_level = 3
+    elif abs_score >= 0.3:
+        strength = "보통"
+        strength_level = 2
+    else:
+        strength = "약함"
+        strength_level = 1
+
+    direction = "매수" if score >= 0 else "매도"
+    action = "BUY" if score >= 0.6 else "SELL" if score <= -0.6 else "HOLD"
+
+    # Regime
+    adx = components.get("adx_filter", 1.0)
+    if adx >= 1.1:
+        regime = "추세"
+        regime_desc = "강한 추세가 형성된 시장"
+    elif adx <= 0.6:
+        regime = "횡보"
+        regime_desc = "뚜렷한 방향성이 없는 횡보 시장"
+    else:
+        regime = "중립"
+        regime_desc = "보통 수준의 추세 시장"
+
+    # Top indicators
+    sorted_comp = sorted(components.items(), key=lambda x: abs(x[1]), reverse=True)
+    bullish = [{"name": k, "value": round(v, 3)} for k, v in sorted_comp if v > 0.05][:4]
+    bearish = [{"name": k, "value": round(v, 3)} for k, v in sorted_comp if v < -0.05][:4]
+
+    # Conflicting signals
+    conflicts: list[str] = []
+    if score >= 0 and bearish:
+        conflicts = [i["name"] for i in bearish[:2]]
+    elif score < 0 and bullish:
+        conflicts = [i["name"] for i in bullish[:2]]
+
+    # Summary text (concise)
+    if abs_score < 0.15:
+        summary = f"{asset} 시그널이 뚜렷하지 않아 관망 권장"
+    elif score >= 0:
+        summary = f"{asset} {strength} 매수 시그널 ({score:+.2f})"
+    else:
+        summary = f"{asset} {strength} 매도 시그널 ({score:+.2f})"
+
+    return {
+        "summary": summary,
+        "asset": asset,
+        "score": round(score, 4),
+        "abs_score": round(abs_score, 4),
+        "direction": direction,
+        "action": action,
+        "strength": strength,
+        "strength_level": strength_level,
+        "regime": regime,
+        "regime_description": regime_desc,
+        "bullish_indicators": bullish,
+        "bearish_indicators": bearish,
+        "conflicts": conflicts,
+        "memory_refs": getattr(payload, "memory_count", 0) or 0,
+        "formula": getattr(payload, "formula_name", None),
+        "strategy": getattr(payload, "strategy_name", None),
+    }
+
+
 def _call_llm_with_api_key(messages: list[dict], max_tokens: int = 512) -> str | None:
     """Try calling LLM using API keys from environment variables."""
     anthropic_key = os.getenv("ANTHROPIC_API_KEY")
@@ -219,21 +294,32 @@ def _call_llm_with_api_key(messages: list[dict], max_tokens: int = 512) -> str |
     return None
 
 
+def _build_combined_reasoning(text: str, payload: ReasoningRequest) -> str:
+    """Combine structured JSON + readable text into a single reasoning string."""
+    structured = _generate_reasoning_structured(payload)
+    return json.dumps({"structured": structured, "text": text}, ensure_ascii=False)
+
+
 def build_reasoning_text(payload: ReasoningRequest, user_id: str | None = None) -> ReasoningResponse:
     """Generate reasoning using user's OAuth-authenticated LLM, API keys, or structured fallback."""
+    structured = _generate_reasoning_structured(payload)
+
     if not settings.enable_llm:
         # Use structured reasoning when LLM is disabled
+        plain_text = generate_structured_reasoning(
+            asset=payload.asset,
+            signal_score=payload.signal_score,
+            strategy_name=payload.strategy_name,
+            memory_count=payload.memory_count,
+            components=payload.components or {},
+            regime=payload.regime,
+            formula_name=payload.formula_name,
+        )
+        combined = json.dumps({"structured": structured, "text": plain_text}, ensure_ascii=False)
         return ReasoningResponse(
-            reasoning=generate_structured_reasoning(
-                asset=payload.asset,
-                signal_score=payload.signal_score,
-                strategy_name=payload.strategy_name,
-                memory_count=payload.memory_count,
-                components=payload.components or {},
-                regime=payload.regime,
-                formula_name=payload.formula_name,
-            ),
+            reasoning=combined,
             provider="structured-reasoning",
+            structured=structured,
         )
 
     messages = [
@@ -248,16 +334,21 @@ def build_reasoning_text(payload: ReasoningRequest, user_id: str | None = None) 
         if has_valid_token(uid, provider):
             result = call_with_oauth(uid, provider, messages, max_tokens=settings.max_tokens)
             if result:
-                return ReasoningResponse(reasoning=result, provider=f"{provider}/oauth")
+                combined = json.dumps({"structured": structured, "text": result}, ensure_ascii=False)
+                return ReasoningResponse(reasoning=combined, provider=f"{provider}/oauth", structured=structured)
 
     # Try API key-based LLM call
     api_result = _call_llm_with_api_key(messages, max_tokens=settings.max_tokens)
     if api_result:
         provider_name = "anthropic/api-key" if os.getenv("ANTHROPIC_API_KEY") else "openai/api-key"
-        return ReasoningResponse(reasoning=api_result, provider=provider_name)
+        combined = json.dumps({"structured": structured, "text": api_result}, ensure_ascii=False)
+        return ReasoningResponse(reasoning=combined, provider=provider_name, structured=structured)
 
     # Smart fallback — detailed data-driven reasoning
+    fallback_text = _smart_fallback(payload)
+    combined = json.dumps({"structured": structured, "text": fallback_text}, ensure_ascii=False)
     return ReasoningResponse(
-        reasoning=_smart_fallback(payload),
+        reasoning=combined,
         provider="auto-reasoning",
+        structured=structured,
     )

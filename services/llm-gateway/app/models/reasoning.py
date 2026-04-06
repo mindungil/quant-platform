@@ -15,3 +15,4 @@ class ReasoningRequest(BaseModel):
 class ReasoningResponse(BaseModel):
     reasoning: str
     provider: str
+    structured: dict | None = None
