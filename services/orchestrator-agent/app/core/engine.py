@@ -64,7 +64,7 @@ def _get_agent_status(name: str, url: str) -> dict:
 def _get_portfolio_risk() -> dict:
     """Check portfolio-level risk across all agents."""
     try:
-        r = httpx.get(f"{settings.portfolio_service_base_url}/portfolio/anonymous", timeout=5.0)
+        r = httpx.get(f"{settings.portfolio_service_base_url}/portfolio/aggregate", timeout=5.0)
         if r.status_code == 200:
             data = r.json()
             return {

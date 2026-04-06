@@ -206,18 +206,26 @@ class StrategyRepository:
             return self._hydrate(row)
         return self._get_bootstrap_active(asset_type)
 
+    _ALLOWED_ASSET_TYPES = {"crypto", "stock", "etf", "forex"}
+    _ALLOWED_STATUSES = {"DRAFT", "PENDING", "TESTED", "SHADOW", "ACTIVE", "DEPRECATED", "ARCHIVED"}
+
     def list_strategies(
         self,
         asset_type: str | None = None,
         status: str | None = None,
         user_id: str | None = None,
     ) -> list[Strategy]:
+        # SQL-safe: only hardcoded condition strings, no user input interpolated
         conditions: list[str] = ["status != 'ARCHIVED'"]
         params: dict[str, str] = {}
         if asset_type is not None:
+            if asset_type not in self._ALLOWED_ASSET_TYPES:
+                return []
             conditions.append("asset_type = :asset_type")
             params["asset_type"] = asset_type
         if status is not None:
+            if status not in self._ALLOWED_STATUSES:
+                return []
             conditions.append("status = :status")
             params["status"] = status
         if user_id is not None:

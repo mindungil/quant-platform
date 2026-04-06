@@ -390,6 +390,58 @@ class PortfolioRepository:
 
         return round(realized, 4)
 
+    def get_aggregate(self) -> dict:
+        """Aggregate positions across all users for internal risk monitoring."""
+        rows = self._store.fetch_all(
+            """
+            SELECT asset, SUM(ABS(quantity)) AS total_qty, SUM(quantity) AS net_qty
+            FROM portfolio_positions
+            GROUP BY asset
+            ORDER BY total_qty DESC
+            """
+        )
+        if not rows:
+            return {
+                "total_exposure": 0.0,
+                "concentration": {},
+                "largest_position": "",
+                "rebalance_needed": False,
+            }
+
+        assets = [row["asset"] for row in rows]
+        current_prices = _fetch_current_prices(assets)
+
+        total_exposure = 0.0
+        concentration: dict[str, float] = {}
+        largest_position = ""
+        largest_value = 0.0
+
+        for row in rows:
+            asset = row["asset"]
+            total_qty = float(row["total_qty"])
+            price = current_prices.get(asset, 0.0)
+            value = total_qty * price
+            total_exposure += value
+            concentration[asset] = value
+            if value > largest_value:
+                largest_value = value
+                largest_position = asset
+
+        # Normalize concentration to weights
+        if total_exposure > 0:
+            concentration = {k: round(v / total_exposure, 4) for k, v in concentration.items()}
+
+        total_exposure = round(total_exposure, 4)
+        max_weight = max(concentration.values()) if concentration else 0.0
+        rebalance_needed = total_exposure > 100000 or max_weight > 0.30
+
+        return {
+            "total_exposure": total_exposure,
+            "concentration": concentration,
+            "largest_position": largest_position,
+            "rebalance_needed": rebalance_needed,
+        }
+
     def get_positions(self, user_id: str) -> list[dict]:
         """Return per-asset net positions with side, qty, avg_entry, unrealized PnL."""
         fills = self._store.fetch_all(

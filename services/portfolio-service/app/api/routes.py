@@ -63,6 +63,12 @@ def apply_fill(
     return portfolio_repository.apply(payload)
 
 
+@router.get("/portfolio/aggregate")
+def get_aggregate_portfolio() -> dict:
+    """Aggregate portfolio across all users — internal orchestrator endpoint, no auth."""
+    return portfolio_repository.get_aggregate()
+
+
 @router.get("/portfolio/{user_id}", response_model=PortfolioSnapshot)
 def get_portfolio(user_id: str) -> PortfolioSnapshot:
     return portfolio_repository.get(user_id)

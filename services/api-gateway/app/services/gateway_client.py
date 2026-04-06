@@ -6,8 +6,9 @@ from shared.request_context import current_request_headers
 
 
 class GatewayClient:
-    def __init__(self, base_url: str) -> None:
+    def __init__(self, base_url: str, timeout: float = 5.0) -> None:
         self._base_url = base_url.rstrip("/")
+        self._timeout = timeout
 
     def request(
         self,
@@ -24,7 +25,7 @@ class GatewayClient:
             headers={**current_request_headers(), **(headers or {})},
             params=params,
             json=json,
-            timeout=5.0,
+            timeout=self._timeout,
         )
 
     def get(self, path: str, *, headers: dict[str, str] | None = None, params: dict[str, Any] | None = None) -> Any:
