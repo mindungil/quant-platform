@@ -98,6 +98,13 @@ def gateway_refresh(payload: dict) -> JSONResponse:
     return _proxy_json(auth_client.request("POST", "/auth/refresh", json=payload))
 
 
+@router.post("/auth/logout")
+def gateway_logout(request: Request) -> JSONResponse:
+    headers = {k: v for k, v in request.headers.items() if k.lower() in ("authorization",)}
+    response = auth_client.request("POST", "/auth/logout", headers=headers)
+    return _proxy_json(response)
+
+
 @router.get("/gateway/dashboard")
 def dashboard(principal: GatewayPrincipal = Depends(require_principal)) -> dict:
     return build_dashboard_summary(principal)

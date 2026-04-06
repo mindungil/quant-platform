@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
-from app.core.engine import build_summary, build_system_summary, get_all_agent_statuses, check_pipeline_health, run_agent_graph
+from app.core.engine import build_summary, build_system_summary, get_all_agent_statuses, check_pipeline_health, run_agent_graph, get_all_asset_locks
 from app.db.repository import orchestrator_repository
 
 router = APIRouter()
@@ -44,6 +44,15 @@ def agents():
 def pipeline_health():
     """Check the full signal pipeline health: market-data → feature-store → signal-service → crypto-agent."""
     return check_pipeline_health()
+
+
+@router.get("/orchestrator/locks")
+def locks():
+    """View all currently held asset locks."""
+    try:
+        return {"locks": get_all_asset_locks()}
+    except Exception as exc:
+        return {"locks": [], "error": str(exc)[:200]}
 
 
 @router.post("/orchestrator/agent-graph/{asset}")

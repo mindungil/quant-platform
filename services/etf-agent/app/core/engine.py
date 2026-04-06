@@ -1,16 +1,31 @@
-import random
+import logging
+import os
 from datetime import UTC, datetime
+
+import httpx
 
 from app.core.market_hours import is_korean_market_open
 from app.models.agent import DecisionRecord
 
+logger = logging.getLogger("etf-agent")
+
+SIGNAL_SERVICE_URL = os.getenv("SIGNAL_SERVICE_BASE_URL", "http://localhost:8003")
+THRESHOLD = 0.4
+
+
+def _fetch_signal(asset: str) -> dict:
+    """Fetch the latest signal for *asset* from signal-service."""
+    url = f"{SIGNAL_SERVICE_URL}/signals/{asset}/latest"
+    resp = httpx.get(url, timeout=5.0)
+    resp.raise_for_status()
+    return resp.json()
+
 
 def run_decision_loop(asset: str, *, correlation_id: str | None = None) -> DecisionRecord:
-    """Execute a single decision cycle for the given Korean-market ETF asset.
+    """Execute a single decision cycle for the given ETF asset.
 
     If the market is closed the agent immediately returns a HOLD decision.
-    When the market is open a simulated signal is produced (to be replaced
-    with real signal-service integration later).
+    When the market is open the signal-service is queried for the real signal.
     """
     now = datetime.now()
     market_open = is_korean_market_open(now)
@@ -28,26 +43,38 @@ def run_decision_loop(asset: str, *, correlation_id: str | None = None) -> Decis
             correlation_id=correlation_id,
         )
 
-    # --- simulated signal (placeholder) ---
-    signal_score = round(random.uniform(-1.0, 1.0), 4)
-    components = {
-        "momentum": round(random.uniform(-1, 1), 4),
-        "mean_reversion": round(random.uniform(-1, 1), 4),
-        "volume": round(random.uniform(-1, 1), 4),
-    }
-    threshold = 0.4
-    threshold_crossed = abs(signal_score) >= threshold
+    # --- real signal-service integration ---
+    try:
+        data = _fetch_signal(asset)
+    except Exception as exc:
+        logger.warning("signal_fetch_failed", extra={"asset": asset, "error": str(exc)[:200]})
+        return DecisionRecord(
+            timestamp=datetime.now(UTC),
+            asset=asset,
+            asset_type="etf",
+            action="HOLD",
+            signal_score=0.0,
+            threshold_crossed=False,
+            reasoning=f"signal_fetch_failed: {exc}",
+            market_open=True,
+            correlation_id=correlation_id,
+        )
+
+    signal_score = float(data.get("signal_score", 0.0))
+    direction = data.get("direction", "HOLD")
+    components = data.get("components", {})
+    reference_price = data.get("reference_price")
+
+    threshold_crossed = abs(signal_score) >= THRESHOLD
 
     if not threshold_crossed:
         action = "HOLD"
-    elif signal_score > 0:
-        action = "BUY"
     else:
-        action = "SELL"
+        action = direction if direction in ("BUY", "SELL") else ("BUY" if signal_score > 0 else "SELL")
 
     reasoning = (
-        f"{asset} simulated signal_score={signal_score:.4f} "
-        f"({'above' if threshold_crossed else 'below'} threshold {threshold}). "
+        f"{asset} signal_score={signal_score:.4f} direction={direction} "
+        f"({'above' if threshold_crossed else 'below'} threshold {THRESHOLD}). "
         f"Action: {action}."
     )
 
@@ -60,6 +87,7 @@ def run_decision_loop(asset: str, *, correlation_id: str | None = None) -> Decis
         threshold_crossed=threshold_crossed,
         reasoning=reasoning,
         components=components,
+        reference_price=reference_price,
         market_open=True,
         correlation_id=correlation_id,
     )

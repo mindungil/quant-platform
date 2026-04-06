@@ -45,6 +45,19 @@ def verify_access_token(token: str) -> TokenVerificationResponse:
         algorithms=[settings.jwt_algorithm],
         issuer=settings.jwt_issuer,
     )
+    # Check if token has been revoked (blacklisted)
+    try:
+        import os
+        import redis as _redis
+        url = getattr(settings, "redis_url", None) or os.getenv("REDIS_URL", "redis://redis:6379/0")
+        r = _redis.Redis.from_url(url, decode_responses=True)
+        if r.exists(f"token_blacklist:{token[:32]}"):
+            raise jwt.InvalidTokenError("token_revoked")
+    except jwt.InvalidTokenError:
+        raise
+    except Exception:
+        pass  # fail open if Redis unavailable
+
     claims = TokenClaims(**payload)
     return TokenVerificationResponse(valid=True, claims=claims)
 

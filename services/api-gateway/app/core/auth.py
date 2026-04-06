@@ -6,6 +6,7 @@ from fastapi import Header, HTTPException
 import jwt
 
 from app.core.config import settings
+from app.core.rate_limiter import check_rate_limit
 from app.models.auth import GatewayPrincipal
 from shared.request_context import current_request_headers
 
@@ -25,11 +26,20 @@ def require_principal(authorization: str | None = Header(default=None)) -> Gatew
     except jwt.InvalidTokenError as exc:
         raise HTTPException(status_code=401, detail="invalid_token") from exc
 
+    user_id = payload["sub"]
+    roles = payload.get("roles", [])
+
+    # Rate limiting based on user tier
+    tier = "admin" if "admin" in roles else ("pro" if "pro" in roles else "user")
+    allowed, remaining = check_rate_limit(user_id, tier)
+    if not allowed:
+        raise HTTPException(status_code=429, detail="rate_limit_exceeded")
+
     return GatewayPrincipal(
-        user_id=payload["sub"],
+        user_id=user_id,
         email=payload.get("email"),
-        roles=payload.get("roles", []),
-        forwarded_headers={"X-User-ID": payload["sub"], **current_request_headers()},
+        roles=roles,
+        forwarded_headers={"X-User-ID": user_id, **current_request_headers()},
     )
 
 

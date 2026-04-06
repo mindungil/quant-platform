@@ -1,7 +1,9 @@
 import hmac
+import os
 import time
 from hashlib import sha256
 
+import redis
 from fastapi import APIRouter, Header, HTTPException, Request, Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
@@ -23,6 +25,16 @@ from app.models.auth import (
 from shared.health import check_sql, health_payload
 
 router = APIRouter()
+
+_redis_client = None
+
+
+def _get_redis():
+    global _redis_client
+    if _redis_client is None:
+        url = getattr(settings, "redis_url", None) or os.getenv("REDIS_URL", "redis://redis:6379/0")
+        _redis_client = redis.Redis.from_url(url, decode_responses=True)
+    return _redis_client
 
 
 def _require_bootstrap_token(x_bootstrap_token: str | None) -> None:
@@ -101,6 +113,22 @@ def refresh(payload: RefreshTokenRequest) -> TokenIssueResponse:
     if refreshed is None:
         raise HTTPException(status_code=401, detail="invalid_refresh_token")
     return refreshed
+
+
+@router.post("/auth/logout")
+def logout(authorization: str | None = Header(default=None)):
+    """Revoke access token by adding to Redis blacklist."""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="missing_token")
+    token = authorization.removeprefix("Bearer ").strip()
+    try:
+        result = verify_access_token(token)
+        # Add to Redis blacklist with TTL matching token expiry
+        ttl = max(int(result.claims.exp - time.time()), 0) if result.claims.exp else 3600
+        _get_redis().setex(f"token_blacklist:{token[:32]}", ttl, "revoked")
+        return {"status": "logged_out"}
+    except Exception:
+        return {"status": "logged_out"}  # graceful even if token invalid
 
 
 @router.post("/auth/verify", response_model=TokenVerificationResponse)

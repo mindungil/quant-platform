@@ -10,10 +10,13 @@ Responsibilities:
 from __future__ import annotations
 
 import logging
+import os
+import time
 from datetime import UTC, datetime
 from collections import defaultdict
 
 import httpx
+import redis
 
 from app.core.config import settings
 from app.db.repository import orchestrator_repository
@@ -37,6 +40,67 @@ AGENT_REGISTRY = {
         "enabled": True,
     },
 }
+
+
+# ---------------------------------------------------------------------------
+# Redis-based asset locking for conflict resolution
+# ---------------------------------------------------------------------------
+
+_redis = None
+
+
+def _get_redis():
+    global _redis
+    if _redis is None:
+        _redis = redis.Redis.from_url(os.getenv("REDIS_URL", "redis://redis:6379/0"))
+    return _redis
+
+
+LOCK_TTL = 300  # 5 minutes
+
+
+def acquire_asset_lock(asset: str, agent_name: str) -> bool:
+    """Try to lock an asset for exclusive trading. Returns True if acquired."""
+    r = _get_redis()
+    key = f"asset_lock:{asset}"
+    # Use SET NX (only set if not exists) with TTL
+    result = r.set(key, agent_name, nx=True, ex=LOCK_TTL)
+    return result is not None
+
+
+def release_asset_lock(asset: str, agent_name: str) -> bool:
+    """Release the lock only if we own it."""
+    r = _get_redis()
+    key = f"asset_lock:{asset}"
+    current = r.get(key)
+    if current and current.decode() == agent_name:
+        r.delete(key)
+        return True
+    return False
+
+
+def get_asset_lock_owner(asset: str) -> str | None:
+    """Check who holds the lock on an asset."""
+    r = _get_redis()
+    key = f"asset_lock:{asset}"
+    owner = r.get(key)
+    return owner.decode() if owner else None
+
+
+def get_all_asset_locks() -> list[dict]:
+    """Return all currently held asset locks."""
+    r = _get_redis()
+    locks = []
+    for key in r.scan_iter(match="asset_lock:*"):
+        asset = key.decode().removeprefix("asset_lock:")
+        owner = r.get(key)
+        ttl = r.ttl(key)
+        locks.append({
+            "asset": asset,
+            "owner": owner.decode() if owner else None,
+            "ttl_seconds": ttl if ttl > 0 else 0,
+        })
+    return locks
 
 
 def _probe(name: str, url: str) -> dict:
@@ -202,12 +266,32 @@ def detect_conflicts(agent_decisions: dict[str, list[dict]]) -> list[dict]:
 def run_agent_graph(asset: str, agent_type: str = "crypto") -> dict:
     """Call the appropriate agent's decision endpoint and return a standardized result.
 
+    Acquires a Redis-based asset lock before dispatching. If another agent
+    already holds the lock the request is rejected immediately.
+
     Returns a dict with: decision summary, phase_timings, errors, and raw response.
     """
     agent_key = f"{agent_type}-agent"
     agent_info = AGENT_REGISTRY.get(agent_key)
     if not agent_info:
         return {"error": f"unknown agent type: {agent_type}", "asset": asset}
+
+    # --- asset lock: prevent concurrent orders on the same asset ---
+    try:
+        if not acquire_asset_lock(asset, agent_key):
+            current_owner = get_asset_lock_owner(asset) or "unknown"
+            logger.info("asset_lock_rejected", extra={
+                "asset": asset, "agent": agent_key, "current_owner": current_owner,
+            })
+            return {
+                "asset": asset,
+                "agent": agent_key,
+                "error": f"asset locked by {current_owner}",
+                "success": False,
+            }
+    except Exception as exc:
+        # Redis unavailable — log but proceed (degrade gracefully)
+        logger.warning("asset_lock_acquire_failed", extra={"asset": asset, "error": str(exc)[:100]})
 
     base_url = agent_info["base_url"]
     result: dict = {"asset": asset, "agent": agent_key, "phase_timings": {}, "errors": []}
@@ -239,6 +323,12 @@ def run_agent_graph(asset: str, agent_type: str = "crypto") -> dict:
         logger.warning("run_agent_graph_failed", extra={
             "agent": agent_key, "asset": asset, "error": str(exc)[:100],
         })
+    finally:
+        # Always release the asset lock when done
+        try:
+            release_asset_lock(asset, agent_key)
+        except Exception:
+            pass
 
     return result
 

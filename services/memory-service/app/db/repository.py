@@ -11,6 +11,46 @@ from shared.persistence import SqlStore, deserialize_json, serialize_json
 
 logger = logging.getLogger("memory-service")
 
+# ---------------------------------------------------------------------------
+# Semantic embedding support (sentence-transformers with hash-based fallback)
+# ---------------------------------------------------------------------------
+_embedder = None
+_embedder_loaded = False
+
+
+def _get_embedder():
+    global _embedder, _embedder_loaded
+    if not _embedder_loaded:
+        _embedder_loaded = True
+        try:
+            from sentence_transformers import SentenceTransformer
+            _embedder = SentenceTransformer("all-MiniLM-L6-v2")
+            logger.info("Loaded sentence-transformers model for semantic search")
+        except Exception as e:
+            logger.warning("sentence-transformers not available, using hash embeddings: %s", e)
+    return _embedder
+
+
+def _hash_embedding(key_parts: list[str]) -> list[float]:
+    """Deterministic hash-based 384-dim embedding (fallback)."""
+    seed = hashlib.sha256("|".join(key_parts).encode()).digest()
+    rng = np.random.RandomState(int.from_bytes(seed[:4], "big"))
+    vec = rng.randn(384).astype(np.float32)
+    norm = np.linalg.norm(vec)
+    if norm > 0:
+        vec = vec / norm
+    return vec.tolist()
+
+
+def compute_embedding(text: str) -> list[float]:
+    """Compute a 384-dim embedding using sentence-transformers or hash fallback."""
+    model = _get_embedder()
+    if model is not None:
+        embedding = model.encode(text, normalize_embeddings=True)
+        return embedding.tolist()
+    else:
+        return _hash_embedding([text])
+
 
 class MemoryRepository:
     def __init__(self) -> None:
@@ -75,11 +115,27 @@ class MemoryRepository:
             pass  # column may already exist or vector extension not available
 
     def _compute_embedding(self, record_data: dict) -> list[float]:
-        """Compute a simple feature-based embedding for similarity search.
+        """Compute a 384-dim embedding for similarity search.
 
-        Uses a deterministic hash of key fields to create a 384-dim vector.
-        In production, replace with a real embedding model (e.g., sentence-transformers).
+        Uses sentence-transformers if available, otherwise falls back to
+        a deterministic hash of key fields.
         """
+        # Build a text representation of the record for semantic embedding
+        text_parts = [
+            str(record_data.get("asset", "")),
+            str(record_data.get("action", "")),
+            str(record_data.get("reasoning", "")),
+            str(record_data.get("formula_name", "")),
+            str(record_data.get("regime_label", "")),
+        ]
+        text = " ".join(p for p in text_parts if p)
+
+        model = _get_embedder()
+        if model is not None:
+            embedding = model.encode(text, normalize_embeddings=True)
+            return embedding.tolist()
+
+        # Fallback: deterministic hash-based embedding
         key_parts = [
             str(record_data.get("asset", "")),
             str(record_data.get("action", "")),
@@ -87,14 +143,7 @@ class MemoryRepository:
             str(record_data.get("formula_name", "")),
             str(record_data.get("regime_label", "")),
         ]
-        seed = hashlib.sha256("|".join(key_parts).encode()).digest()
-
-        rng = np.random.RandomState(int.from_bytes(seed[:4], "big"))
-        vec = rng.randn(384).astype(np.float32)
-        norm = np.linalg.norm(vec)
-        if norm > 0:
-            vec = vec / norm
-        return vec.tolist()
+        return _hash_embedding(key_parts)
 
     def save(self, record: MemoryRecord) -> None:
         self._items[record.id] = record
