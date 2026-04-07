@@ -1,4 +1,6 @@
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+
+UTC = timezone.utc
 
 from app.core.scoring import build_signal_response
 from app.db.repository import SignalRepository

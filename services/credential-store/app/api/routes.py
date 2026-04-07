@@ -30,22 +30,26 @@ def store_credential(payload: CredentialCreate, x_user_id: str | None = Header(d
 
 @router.get("/credentials/{user_id}", response_model=list[CredentialMaskedResponse])
 def list_credentials(user_id: str, x_user_id: str | None = Header(default=None)) -> list[CredentialMaskedResponse]:
-    effective_user = x_user_id or user_id
-    return credential_repository.list_for_user(effective_user)
+    if x_user_id is None:
+        raise HTTPException(status_code=401, detail="missing_user_context")
+    return credential_repository.list_for_user(x_user_id)
 
 
 @router.delete("/credentials/{user_id}/{exchange}")
 def delete_credential(user_id: str, exchange: str, x_user_id: str | None = Header(default=None)) -> dict:
-    effective_user = x_user_id or user_id
-    credential_repository.delete(effective_user, exchange)
+    if x_user_id is None:
+        raise HTTPException(status_code=401, detail="missing_user_context")
+    credential_repository.delete(x_user_id, exchange)
     return {"status": "deleted", "exchange": exchange}
 
 
 @router.get("/credentials/{user_id}/{exchange}", response_model=CredentialMaskedResponse)
 def get_credential(user_id: str, exchange: str, x_user_id: str | None = Header(default=None)) -> CredentialMaskedResponse:
-    if x_user_id is not None and x_user_id != user_id:
+    if x_user_id is None:
+        raise HTTPException(status_code=401, detail="missing_user_context")
+    if x_user_id != user_id:
         raise HTTPException(status_code=404, detail="credential_not_found")
-    credential = credential_repository.get_masked(user_id, exchange)
+    credential = credential_repository.get_masked(x_user_id, exchange)
     if credential is None:
         raise HTTPException(status_code=404, detail="credential_not_found")
     return credential
@@ -53,8 +57,9 @@ def get_credential(user_id: str, exchange: str, x_user_id: str | None = Header(d
 
 @router.get("/credentials/audit/{user_id}")
 def get_audit_log(user_id: str, limit: int = 50, x_user_id: str | None = Header(default=None)) -> list[dict]:
-    effective_user = x_user_id or user_id
-    return credential_repository.get_audit_log(effective_user, limit=limit)
+    if x_user_id is None:
+        raise HTTPException(status_code=401, detail="missing_user_context")
+    return credential_repository.get_audit_log(x_user_id, limit=limit)
 
 
 @router.get("/credentials/{user_id}/{exchange}/reveal", response_model=CredentialResponse)

@@ -1,5 +1,7 @@
 import os
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+UTC = timezone.utc
 
 from app.models.order import ExecutionConfig, OrderResponse
 from shared.persistence import SqlStore, deserialize_json, serialize_json

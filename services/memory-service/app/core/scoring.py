@@ -29,7 +29,8 @@ def search_formula_outcomes(
 
     Scoring: regime match (0.4), asset match (0.3), has outcome (0.2), recency (0.1)
     """
-    from datetime import UTC, datetime
+    from datetime import datetime, timezone
+    UTC = timezone.utc
 
     scored: list[tuple[float, MemoryRecord]] = []
     now = datetime.now(UTC)

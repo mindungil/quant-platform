@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { gatewayFetch } from "../../lib/api";
 import { AuthGuard } from "../../components/auth-guard";
+import { useToast } from "../../components/toast";
 import {
   PageTransition,
   StaggerContainer,
@@ -372,20 +373,35 @@ function DashboardContent() {
   const [recs, setRecs] = useState<Recommendation[]>([]);
   const [decisions, setDecisions] = useState<Decision[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<number | null>(null);
+  const toast = useToast();
 
-  useEffect(() => {
+  const loadData = useCallback(() => {
+    setLoading(true);
+    setError(false);
     Promise.all([
       gatewayFetch("/dashboard").catch(() => null),
       gatewayFetch("/recommendations/BTCUSDT").catch(() => []),
       gatewayFetch("/decisions/history/BTCUSDT").catch(() => []),
     ]).then(([dash, rec, dec]) => {
+      if (!dash && (!Array.isArray(rec) || rec.length === 0) && (!Array.isArray(dec) || dec.length === 0)) {
+        setError(true);
+        toast.show("error", "대시보드 데이터를 불러오지 못했습니다");
+      } else {
+        setLastUpdated(Date.now());
+      }
       setData(dash as DashboardData);
       setRecs(Array.isArray(rec) ? rec : []);
       const decArr = Array.isArray(dec) ? dec : [];
       setDecisions(decArr.slice(-5).reverse());
       setLoading(false);
     });
-  }, []);
+  }, [toast]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const portfolio = data?.portfolio;
   const stats = data?.statistics;
@@ -400,6 +416,19 @@ function DashboardContent() {
 
   if (loading) return <DashboardSkeleton />;
 
+  if (error) {
+    return (
+      <PageTransition>
+        <div className="flex flex-col items-center gap-3 py-12 text-center">
+          <p className="text-sm text-zinc-500">데이터를 불러오는 중 오류가 발생했습니다</p>
+          <button onClick={() => { setError(false); loadData(); }} className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black">
+            다시 시도
+          </button>
+        </div>
+      </PageTransition>
+    );
+  }
+
   const unrealizedPnl = portfolio?.unrealized_pnl ?? 0;
   const realizedPnl = portfolio?.realized_pnl ?? 0;
 
@@ -410,6 +439,11 @@ function DashboardContent() {
         {/* ── Hero Section ────────────────────────────────── */}
         <FadeInView>
           <section className="relative overflow-hidden rounded-3xl border border-white/[0.06] bg-gradient-to-br from-white/[0.03] via-white/[0.02] to-white/[0.01] p-8 sm:p-12">
+            {lastUpdated && (
+              <span className="absolute top-4 right-4 text-[10px] text-zinc-600">
+                마지막 업데이트: {new Date(lastUpdated).toLocaleTimeString("ko-KR")}
+              </span>
+            )}
             {/* Animated gradient background decoration */}
             <motion.div
               className="absolute -top-24 -right-24 w-64 h-64 rounded-full opacity-[0.04]"

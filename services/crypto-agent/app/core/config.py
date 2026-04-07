@@ -35,6 +35,20 @@ class Settings:
     default_trailing_stop_pct: float = float(os.getenv("DEFAULT_AGENT_TRAILING_STOP_PCT", "0.03"))
     agent_cycle_interval: int = int(os.getenv("AGENT_CYCLE_INTERVAL", "300"))
     monitored_assets_csv: str = os.getenv("MONITORED_ASSETS", "BTCUSDT,ETHUSDT,SOLUSDT")
+    order_service_base_url: str = os.getenv("ORDER_SERVICE_BASE_URL", "http://localhost:8006")
+    risk_service_base_url: str = os.getenv("RISK_SERVICE_BASE_URL", "http://localhost:8008")
+    feature_store_base_url: str = os.getenv("FEATURE_STORE_BASE_URL", "http://localhost:8009")
+    http_timeout: float = float(os.getenv("HTTP_TIMEOUT", "10.0"))
+    default_user_id: str = os.getenv("DEFAULT_USER_ID", "system")
+    default_quantity: float = float(os.getenv("DEFAULT_AGENT_QUANTITY", "0"))
+    default_notional: float = float(os.getenv("DEFAULT_AGENT_NOTIONAL", "1000"))
+    max_notional: float = float(os.getenv("DEFAULT_AGENT_MAX_NOTIONAL", "5000"))
+    current_drawdown: float = float(os.getenv("DEFAULT_AGENT_CURRENT_DRAWDOWN", "0.01"))
+    shadow_mode: bool = os.getenv("DEFAULT_SHADOW_MODE", "true").lower() == "true"
+    nats_subscribe_subject: str = os.getenv("NATS_SUBSCRIBE_SUBJECT", "signal.threshold.crossed.crypto")
+    nats_stream: str = os.getenv("NATS_STREAM", "SIGNAL_DATA")
+    nats_durable_name: str = os.getenv("NATS_DURABLE_NAME", "crypto-agent")
+    nats_publish_subject: str = os.getenv("NATS_PUBLISH_SUBJECT", "agent.crypto.action")
 
 
 settings = Settings()

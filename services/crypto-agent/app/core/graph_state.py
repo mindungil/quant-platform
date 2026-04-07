@@ -43,6 +43,7 @@ class AgentState(TypedDict):
     order_request: Optional[Dict]
     order_submitted: bool
     reasoning: Optional[str]
+    escalated: Optional[bool]
 
     # Phase 8: Record
     recorded: bool

@@ -28,9 +28,10 @@ def require_principal(authorization: str | None = Header(default=None)) -> Gatew
 
     user_id = payload["sub"]
     roles = payload.get("roles", [])
+    plan = payload.get("plan", "free")
 
-    # Rate limiting based on user tier
-    tier = "admin" if "admin" in roles else ("pro" if "pro" in roles else "user")
+    # Rate limiting based on user tier (use plan, not roles)
+    tier = "admin" if "admin" in roles else plan
     allowed, remaining = check_rate_limit(user_id, tier)
     if not allowed:
         raise HTTPException(status_code=429, detail="rate_limit_exceeded")
@@ -39,7 +40,8 @@ def require_principal(authorization: str | None = Header(default=None)) -> Gatew
         user_id=user_id,
         email=payload.get("email"),
         roles=roles,
-        forwarded_headers={"X-User-ID": user_id, **current_request_headers()},
+        plan=plan,
+        forwarded_headers={"X-User-ID": user_id, "X-Plan": plan, **current_request_headers()},
     )
 
 

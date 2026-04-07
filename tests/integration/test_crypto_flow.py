@@ -7,7 +7,9 @@ Verifies the data contract chain:
 Each service layer is tested with real business logic but stubbed I/O.
 """
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+
+UTC = timezone.utc
 from pathlib import Path
 import importlib
 import importlib.util

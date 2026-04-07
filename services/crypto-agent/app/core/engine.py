@@ -27,6 +27,12 @@ import shared.formulas.reversion
 import shared.formulas.breakout
 import shared.formulas.composite
 
+agent_escalations_total = Counter(
+    "agent_escalations_total",
+    "Total escalations to deep reasoning",
+    ["reason"],
+)
+
 agent_decisions_total = Counter(
     "agent_decisions_total",
     "Total agent decisions",
@@ -124,6 +130,108 @@ def _fail_phase(phase: PhaseResult, *, detail: str | None = None) -> PhaseResult
 # ---------------------------------------------------------------------------
 # Helpers (unchanged logic)
 # ---------------------------------------------------------------------------
+
+def _should_escalate(state: dict) -> bool:
+    """ULTRAPLAN-style escalation check.
+
+    Returns True if:
+    - risk_issues exist AND action is not HOLD (risk denied but agent wants to act)
+    - formula_score is within 0.05 of the entry threshold (borderline)
+    - regime changed in last 3 decisions (rapid regime shifts)
+    """
+    risk_issues = state.get("risk_issues") or []
+    action = state.get("action", "HOLD")
+
+    # Condition 1: risk-denied but wanting to act
+    if len(risk_issues) > 0 and action != "HOLD":
+        agent_escalations_total.labels(reason="risk_conflict").inc()
+        return True
+
+    # Condition 2: borderline formula score
+    formula_score = state.get("formula_score")
+    if formula_score is not None:
+        strategy = state.get("strategy") or {}
+        thresholds = strategy.get("thresholds", {})
+        entry_threshold = abs(
+            thresholds.get("entry", 0.6) if isinstance(thresholds, dict) else 0.6
+        )
+        distance = abs(abs(formula_score) - entry_threshold)
+        if distance <= 0.05:
+            agent_escalations_total.labels(reason="borderline_score").inc()
+            return True
+
+    # Condition 3: regime changed recently (check via memory)
+    asset = state.get("asset", "")
+    user_id = state.get("effective_user_id") or state.get("user_id") or "system"
+    try:
+        import httpx
+        resp = httpx.post(
+            f"{settings.memory_service_base_url}/memory/search",
+            json={"user_id": user_id, "asset": asset, "signal_score": 0.0, "top_k": 3},
+            headers={"X-User-ID": user_id},
+            timeout=3.0,
+        )
+        if resp.status_code == 200:
+            items = resp.json().get("items", [])
+            regimes = [
+                item.get("record", {}).get("regime_label")
+                for item in items
+                if item.get("record", {}).get("regime_label")
+            ]
+            if len(regimes) >= 2 and len(set(regimes)) >= 2:
+                agent_escalations_total.labels(reason="regime_shift").inc()
+                return True
+    except Exception:
+        pass
+
+    return False
+
+
+def _escalate_to_deep_reasoning(state: dict, asset: str) -> str:
+    """Call llm_gateway with full context from all 8 phases for enriched reasoning."""
+    context = {
+        "asset": asset,
+        "signal": state.get("signal"),
+        "regime": state.get("regime"),
+        "formula_scores": state.get("formula_scores"),
+        "selected_formula": state.get("selected_formula"),
+        "formula_score": state.get("formula_score"),
+        "formula_confidence": state.get("formula_confidence"),
+        "risk_issues": state.get("risk_issues"),
+        "action": state.get("action"),
+        "threshold_crossed": state.get("threshold_crossed"),
+        "features": state.get("features"),
+        "mab_stats": state.get("mab_stats"),
+        "strategy": state.get("strategy"),
+    }
+    try:
+        import httpx
+        resp = httpx.post(
+            f"{settings.llm_gateway_base_url}/reasoning/generate",
+            json={
+                "asset": asset,
+                "signal_score": state.get("formula_score", 0.0),
+                "strategy_name": (state.get("strategy") or {}).get("name", "unknown"),
+                "memory_count": 0,
+                "components": context,
+                "deep_reasoning": True,
+            },
+            timeout=10.0,
+        )
+        if resp.status_code == 200:
+            return resp.json().get("reasoning", "")
+    except Exception as exc:
+        logger.warning("deep_reasoning_failed", extra={"error": str(exc)[:100]})
+
+    # Fallback: build a structured summary
+    return (
+        f"[ESCALATED] {asset} | action={state.get('action')} "
+        f"formula_score={state.get('formula_score', 0):.4f} "
+        f"regime={state.get('regime')} "
+        f"risk_issues={state.get('risk_issues')} "
+        f"confidence={state.get('formula_confidence', 0):.2f}"
+    )
+
 
 def _fallback_reasoning(
     asset: str, strategy_name: str, signal_score: float, memory_count: int, components: dict[str, float]
@@ -854,6 +962,7 @@ def run_decision_loop(asset: str, *, user_id: str | None = None, correlation_id:
         "order_request": None,
         "order_submitted": False,
         "reasoning": None,
+        "escalated": False,
         "recorded": False,
         "errors": [],
         "phase_timings": {},

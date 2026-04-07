@@ -97,7 +97,8 @@ class SignalClient:
 
     @staticmethod
     def _neutral_signal(asset: str) -> SignalSnapshot:
-        from datetime import UTC, datetime
+        from datetime import datetime, timezone
+        UTC = timezone.utc
         return SignalSnapshot(
             asset=asset,
             timestamp=datetime.now(UTC),

@@ -61,6 +61,11 @@ def _get_engine_helpers():
     import app.core.engine as _engine_mod
     return _engine_mod._build_order_request, _engine_mod._fallback_reasoning, _engine_mod._risk_pre_check
 
+def _get_escalation_helpers():
+    """Get escalation functions (lazy import to avoid circular imports)."""
+    import app.core.engine as _engine_mod
+    return _engine_mod._should_escalate, _engine_mod._escalate_to_deep_reasoning
+
 
 # ---------------------------------------------------------------------------
 # Node implementations
@@ -259,7 +264,10 @@ def recall_node(state: AgentState) -> dict:
     errors = list(state.get("errors") or [])
     regime_label = state.get("regime") or "unknown"
     asset = state["asset"]
-    user_id = state.get("user_id") or "bootstrap"
+    user_id = state.get("user_id")
+    if user_id is None:
+        logger.warning("no_user_id_in_request", extra={"asset": asset})
+        user_id = settings.default_user_id
 
     formula_scores: dict = {}
     mab_stats: dict = {}
@@ -367,7 +375,10 @@ def select_node(state: AgentState) -> dict:
         logger.debug("graph_shadow_fetch_failed", extra={"error": str(exc)[:100]})
 
     strategy_user_id = getattr(signal, "strategy_user_id", None) or strategy.user_id
-    effective_user_id = user_id or strategy_user_id or "bootstrap"
+    effective_user_id = user_id or strategy_user_id
+    if not effective_user_id:
+        logger.warning("no_user_id_in_request", extra={"asset": state["asset"]})
+        effective_user_id = settings.default_user_id
     action = signal.direction
 
     duration = round((time.monotonic() - t0) * 1000, 2)
@@ -577,7 +588,7 @@ def execute_node(state: AgentState) -> dict:
     strategy = StrategySnapshot.model_validate(state["strategy"])
     asset = state["asset"]
     action = state.get("action", "HOLD")
-    effective_user_id = state.get("effective_user_id", "bootstrap")
+    effective_user_id = state.get("effective_user_id") or settings.default_user_id
     correlation_id = state.get("correlation_id")
     is_shadow = state.get("is_shadow", False)
     formula_name = state.get("selected_formula", "unknown")
@@ -629,6 +640,16 @@ def execute_node(state: AgentState) -> dict:
         f"[formula={formula_name} regime={regime_label}"
         f"{' SHADOW' if is_shadow else ''}] {reasoning}"
     )
+
+    # ULTRAPLAN-style escalation check
+    escalated = False
+    _should_escalate, _escalate_to_deep_reasoning = _get_escalation_helpers()
+    if _should_escalate(state):
+        deep_reasoning = _escalate_to_deep_reasoning(state, asset)
+        if deep_reasoning:
+            reasoning = deep_reasoning
+            escalated = True
+            logger.info("graph_escalated_reasoning", extra={"asset": asset})
 
     # Build decision record
     components = dict(signal.components)
@@ -682,6 +703,7 @@ def execute_node(state: AgentState) -> dict:
         "reasoning": reasoning,
         "action": action,
         "threshold_crossed": threshold_crossed,
+        "escalated": escalated,
         "phase_timings": timings,
         "errors": errors,
     }
@@ -698,7 +720,7 @@ def record_node(state: AgentState) -> dict:
     strategy_dict = state.get("strategy") or {}
     asset = state["asset"]
     action = state.get("action", "HOLD")
-    effective_user_id = state.get("effective_user_id", "bootstrap")
+    effective_user_id = state.get("effective_user_id") or settings.default_user_id
     decision_id = state.get("decision_id") or str(uuid4())
     reasoning = state.get("reasoning") or ""
     formula_score = state.get("formula_score", 0.0)

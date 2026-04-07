@@ -50,7 +50,7 @@ def _get_client(*_mocks):
 _client = _get_client()
 
 
-@patch("app.db.repository.strategy_repository")
+@patch("app.api.routes.strategy_repository")
 def test_get_strategy_no_user_id_non_bootstrap(mock_repo):
     """Non-bootstrap strategy without x-user-id header returns 403."""
     mock_repo.get.return_value = _make_strategy("s-1", "some-user")
@@ -58,7 +58,7 @@ def test_get_strategy_no_user_id_non_bootstrap(mock_repo):
     assert resp.status_code == 403
 
 
-@patch("app.db.repository.strategy_repository")
+@patch("app.api.routes.strategy_repository")
 def test_get_strategy_no_user_id_bootstrap(mock_repo):
     """Bootstrap strategy without x-user-id header returns 200."""
     mock_repo.get.return_value = _make_strategy("s-1", "bootstrap")
@@ -66,7 +66,7 @@ def test_get_strategy_no_user_id_bootstrap(mock_repo):
     assert resp.status_code == 200
 
 
-@patch("app.db.repository.strategy_repository")
+@patch("app.api.routes.strategy_repository")
 def test_delete_strategy_wrong_user(mock_repo):
     """Deleting another user's strategy returns 404 (not leaked info)."""
     mock_repo.get.return_value = _make_strategy("s-1", "user-B")

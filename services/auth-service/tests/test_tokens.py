@@ -24,7 +24,7 @@ def test_refresh_token_issues_new_access_token(monkeypatch) -> None:
     profile = repo.register(
         UserRegistrationRequest(
             email=f"refresh-{uuid4().hex}@example.com",
-            password="password123",
+            password="Password123!",
             display_name="Refresh User",
             plan="premium",
         )

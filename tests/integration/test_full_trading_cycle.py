@@ -8,7 +8,9 @@ Test 4: Kelly parameter update: backtest → strategy kelly-params → agent use
 Test 5: multi-timeframe candle resampling (1h → 4h)
 """
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+
+UTC = timezone.utc
 from pathlib import Path
 import importlib
 import sys

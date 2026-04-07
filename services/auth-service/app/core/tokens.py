@@ -1,5 +1,7 @@
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+UTC = timezone.utc
 from uuid import uuid4
 
 import jwt
@@ -25,6 +27,7 @@ def issue_access_token(payload: TokenIssueRequest) -> TokenIssueResponse:
         sub=payload.user_id,
         email=payload.email,
         roles=payload.roles,
+        plan=payload.plan,
         iat=int(issued_at.timestamp()),
         exp=int(expires_at.timestamp()),
         iss=settings.jwt_issuer,
@@ -72,6 +75,7 @@ def issue_for_profile(profile: UserProfile) -> TokenIssueResponse:
             user_id=profile.user_id,
             email=profile.email,
             roles=profile.roles,
+            plan=profile.plan,
         )
     )
 

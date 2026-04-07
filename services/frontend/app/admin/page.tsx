@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 
 import { AdminGuard } from "../../components/admin-guard";
 import { gatewayFetch } from "../../lib/api";
+import { useToast } from "../../components/toast";
+import { ConfirmDialog } from "../../components/confirm-dialog";
 import {
   PageTransition,
   StaggerContainer,
@@ -37,6 +39,8 @@ export default function AdminPage() {
   const [actionLoading, setActionLoading] = useState("");
   const [actionResult, setActionResult] = useState<{ type: "ok" | "error"; message: string } | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [showStopConfirm, setShowStopConfirm] = useState(false);
+  const toast = useToast();
 
   async function load() {
     await Promise.allSettled([
@@ -58,19 +62,29 @@ export default function AdminPage() {
       if (action === "emergency-stop") {
         await gatewayFetch("/admin/execution/emergency-stop", { method: "POST" });
         setActionResult({ type: "ok", message: "긴급 정지가 실행되었습니다." });
+        toast.show("warning", "긴급 정지가 실행되었습니다");
       } else if (action === "enable-live") {
         await gatewayFetch("/admin/execution/enable-live", { method: "POST" });
         setActionResult({ type: "ok", message: "실시간 트레이딩이 활성화되었습니다." });
+        toast.show("success", "실시간 트레이딩이 활성화되었습니다");
       } else {
         await gatewayFetch("/admin/execution/preflight", { method: "POST" });
         setActionResult({ type: "ok", message: "사전 점검을 통과했습니다." });
+        toast.show("success", "사전 점검을 통과했습니다");
       }
       await load();
     } catch (err) {
-      setActionResult({ type: "error", message: err instanceof Error ? err.message : "작업 실패" });
+      const msg = err instanceof Error ? err.message : "작업 실패";
+      setActionResult({ type: "error", message: msg });
+      toast.show("error", msg);
     } finally {
       setActionLoading("");
     }
+  }
+
+  async function handleEmergencyStop() {
+    setShowStopConfirm(false);
+    await handleAction("emergency-stop");
   }
 
   const serviceCount = health?.services ? Object.keys(health.services).length : 0;
@@ -177,12 +191,21 @@ export default function AdminPage() {
                 </motion.div>
               )}
             </AnimatePresence>
+            <ConfirmDialog
+              open={showStopConfirm}
+              title="긴급 정지"
+              message="모든 거래를 즉시 중지합니다. 진행하시겠습니까?"
+              confirmText="긴급 정지"
+              danger
+              onConfirm={handleEmergencyStop}
+              onCancel={() => setShowStopConfirm(false)}
+            />
             <StaggerContainer className="mt-4 flex flex-wrap gap-3">
               <StaggerItem>
                 <button
                   className="btn-danger px-6 py-3 font-semibold"
                   disabled={actionLoading === "emergency-stop"}
-                  onClick={() => handleAction("emergency-stop")}
+                  onClick={() => setShowStopConfirm(true)}
                 >
                   {actionLoading === "emergency-stop" ? "정지 중..." : "긴급 정지"}
                 </button>

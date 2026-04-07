@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Header, HTTPException
 
+from app.core.consolidation import consolidate_memories, prune_old_records
 from app.core.scoring import search_formula_outcomes, search_memories
 from app.db.repository import memory_repository
 from app.models.memory import FormulaOutcomeSearchRequest, MemoryRecord, MemorySearchRequest, MemorySearchResponse, MemorySearchResult
@@ -24,6 +25,8 @@ def record_memory(record: MemoryRecord, x_user_id: str | None = Header(default=N
 def search_memory(request: MemorySearchRequest, x_user_id: str | None = Header(default=None)) -> MemorySearchResponse:
     if x_user_id is not None:
         request.user_id = x_user_id
+    if not request.user_id:
+        raise HTTPException(status_code=400, detail="user_id_required")
     items = search_memories(memory_repository.list_all(user_id=request.user_id), request)
     return MemorySearchResponse(query=request, items=items)
 
@@ -65,6 +68,19 @@ def search_semantic(
     )
     results = [MemorySearchResult(record=r, score=0.9) for r in records]
     return MemorySearchResponse(query=request, items=results)
+
+
+@router.post("/memory/consolidate")
+def consolidate(payload: dict) -> dict:
+    """DREAM-style memory consolidation: archive stale memories & detect contradictions."""
+    user_id = payload.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id_required")
+    dry_run = payload.get("dry_run", False)
+    summary = consolidate_memories(user_id, memory_repository, dry_run=dry_run)
+    pruned = prune_old_records(user_id, memory_repository) if not dry_run else 0
+    summary["pruned"] = pruned
+    return summary
 
 
 @router.post("/memory/{memory_id}/reinforce")

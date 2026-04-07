@@ -1,5 +1,7 @@
 import os
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+
+UTC = timezone.utc
 
 from app.core.config import settings
 from app.models.risk import RiskApprovalRequest, RiskApprovalResponse, RiskIncident

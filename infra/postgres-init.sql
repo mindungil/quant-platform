@@ -55,3 +55,36 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 
 CREATE INDEX IF NOT EXISTS idx_chat_messages_conv ON chat_messages(conversation_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_conversations_user ON conversations(user_id, updated_at DESC);
+
+-- ---------------------------------------------------------------------------
+-- Row-Level Security (RLS)
+-- ---------------------------------------------------------------------------
+
+DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'admin') THEN CREATE ROLE admin; END IF; END $$;
+
+ALTER TABLE memory_records ENABLE ROW LEVEL SECURITY;
+ALTER TABLE memory_records FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS rls_user_isolation ON memory_records;
+CREATE POLICY rls_user_isolation ON memory_records
+    USING (user_id = current_setting('app.current_user_id', true)::text)
+    WITH CHECK (user_id = current_setting('app.current_user_id', true)::text);
+DROP POLICY IF EXISTS rls_admin_bypass ON memory_records;
+CREATE POLICY rls_admin_bypass ON memory_records TO admin USING (true) WITH CHECK (true);
+
+ALTER TABLE strategies ENABLE ROW LEVEL SECURITY;
+ALTER TABLE strategies FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS rls_user_isolation ON strategies;
+CREATE POLICY rls_user_isolation ON strategies
+    USING (user_id = current_setting('app.current_user_id', true)::text)
+    WITH CHECK (user_id = current_setting('app.current_user_id', true)::text);
+DROP POLICY IF EXISTS rls_admin_bypass ON strategies;
+CREATE POLICY rls_admin_bypass ON strategies TO admin USING (true) WITH CHECK (true);
+
+ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE conversations FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS rls_user_isolation ON conversations;
+CREATE POLICY rls_user_isolation ON conversations
+    USING (user_id = current_setting('app.current_user_id', true)::text)
+    WITH CHECK (user_id = current_setting('app.current_user_id', true)::text);
+DROP POLICY IF EXISTS rls_admin_bypass ON conversations;
+CREATE POLICY rls_admin_bypass ON conversations TO admin USING (true) WITH CHECK (true);

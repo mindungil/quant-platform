@@ -14,7 +14,9 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+UTC = timezone.utc
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]

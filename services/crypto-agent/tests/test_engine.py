@@ -1,4 +1,6 @@
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+
+UTC = timezone.utc
 
 from app.core import engine
 from app.models.agent import MemoryRecord, MemorySearchResponse, SignalSnapshot, StrategySnapshot

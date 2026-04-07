@@ -54,12 +54,14 @@ class TokenIssueRequest(BaseModel):
     user_id: str = Field(min_length=1)
     email: str | None = None
     roles: list[str] = Field(default_factory=lambda: ["user"])
+    plan: str = "free"
 
 
 class TokenClaims(BaseModel):
     sub: str
     email: str | None = None
     roles: list[str] = Field(default_factory=list)
+    plan: str = "free"
     iat: int
     exp: int
     iss: str

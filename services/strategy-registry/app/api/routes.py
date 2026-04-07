@@ -49,7 +49,8 @@ def list_strategies(
 
 @router.get("/strategies/active", response_model=Strategy)
 def get_active_strategy(asset_type: str, x_user_id: str | None = Header(default=None)) -> Strategy:
-    strategy = strategy_repository.get_active_for_user(asset_type, x_user_id or "anonymous")
+    effective_user = x_user_id or "anonymous"
+    strategy = strategy_repository.get_active_for_user(asset_type, effective_user)
     if strategy is None:
         raise HTTPException(status_code=404, detail="active_strategy_not_found")
     return strategy

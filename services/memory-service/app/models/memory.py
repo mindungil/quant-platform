@@ -1,4 +1,6 @@
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+
+UTC = timezone.utc
 from typing import Any
 from uuid import uuid4
 

@@ -1,4 +1,6 @@
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
+
+UTC = timezone.utc
 
 from app.core.validator import validate_candle_transition
 from app.models.candle import CandlePayload

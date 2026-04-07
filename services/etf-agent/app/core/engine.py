@@ -1,31 +1,26 @@
+"""ETF-agent decision engine — delegates to LangGraph StateGraph."""
 import logging
-import os
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
-import httpx
+UTC = timezone.utc
 
 from app.core.market_hours import is_korean_market_open
+from app.core.graph import agent_graph
 from app.models.agent import DecisionRecord
 
 logger = logging.getLogger("etf-agent")
 
-SIGNAL_SERVICE_URL = os.getenv("SIGNAL_SERVICE_BASE_URL", "http://localhost:8003")
-THRESHOLD = 0.4
 
-
-def _fetch_signal(asset: str) -> dict:
-    """Fetch the latest signal for *asset* from signal-service."""
-    url = f"{SIGNAL_SERVICE_URL}/signals/{asset}/latest"
-    resp = httpx.get(url, timeout=5.0)
-    resp.raise_for_status()
-    return resp.json()
-
-
-def run_decision_loop(asset: str, *, correlation_id: str | None = None) -> DecisionRecord:
+def run_decision_loop(
+    asset: str,
+    *,
+    user_id: str | None = None,
+    correlation_id: str | None = None,
+) -> DecisionRecord:
     """Execute a single decision cycle for the given ETF asset.
 
-    If the market is closed the agent immediately returns a HOLD decision.
-    When the market is open the signal-service is queried for the real signal.
+    If the Korean market is closed the agent immediately returns a HOLD decision.
+    Otherwise delegates to the full 8-phase LangGraph decision loop.
     """
     now = datetime.now()
     market_open = is_korean_market_open(now)
@@ -37,61 +32,87 @@ def run_decision_loop(asset: str, *, correlation_id: str | None = None) -> Decis
             asset_type="etf",
             action="HOLD",
             signal_score=0.0,
-            threshold_crossed=False,
             reasoning="market_closed",
             market_open=False,
             correlation_id=correlation_id,
         )
 
-    # --- real signal-service integration ---
+    # Invoke the LangGraph StateGraph
+    initial_state = {
+        "asset": asset,
+        "user_id": user_id,
+        "correlation_id": correlation_id,
+        "signal": None,
+        "signal_age_seconds": None,
+        "regime": None,
+        "suggested_formula_type": None,
+        "features": None,
+        "formula_scores": None,
+        "strategy": None,
+        "effective_user_id": user_id or "bootstrap",
+        "selected_formula": None,
+        "formula_score": None,
+        "formula_confidence": None,
+        "risk_issues": [],
+        "action": "HOLD",
+        "threshold_crossed": False,
+        "decision_id": None,
+        "order_request": None,
+        "order_submitted": False,
+        "reasoning": None,
+        "recorded": False,
+        "errors": [],
+        "phase_timings": {},
+        "abort": False,
+    }
+
     try:
-        data = _fetch_signal(asset)
+        result = agent_graph.invoke(initial_state)
     except Exception as exc:
-        logger.warning("signal_fetch_failed", extra={"asset": asset, "error": str(exc)[:200]})
+        logger.error("graph_invoke_failed", extra={"asset": asset, "error": str(exc)[:300]})
         return DecisionRecord(
             timestamp=datetime.now(UTC),
             asset=asset,
             asset_type="etf",
             action="HOLD",
             signal_score=0.0,
-            threshold_crossed=False,
-            reasoning=f"signal_fetch_failed: {exc}",
+            reasoning=f"graph_error: {exc}",
             market_open=True,
             correlation_id=correlation_id,
         )
 
-    signal_score = float(data.get("signal_score", 0.0))
-    direction = data.get("direction", "HOLD")
-    components = data.get("components", {})
-    reference_price = data.get("reference_price")
-
-    threshold_crossed = abs(signal_score) >= THRESHOLD
-
-    if not threshold_crossed:
-        action = "HOLD"
-    else:
-        action = direction if direction in ("BUY", "SELL") else ("BUY" if signal_score > 0 else "SELL")
-
-    reasoning = (
-        f"{asset} signal_score={signal_score:.4f} direction={direction} "
-        f"({'above' if threshold_crossed else 'below'} threshold {THRESHOLD}). "
-        f"Action: {action}."
-    )
+    # Build DecisionRecord from graph result
+    signal_dict = result.get("signal") or {}
+    strategy_dict = result.get("strategy") or {}
 
     decision = DecisionRecord(
+        decision_id=result.get("decision_id") or None,
         timestamp=datetime.now(UTC),
+        user_id=result.get("effective_user_id", "bootstrap"),
         asset=asset,
         asset_type="etf",
-        action=action,
-        signal_score=signal_score,
-        threshold_crossed=threshold_crossed,
-        reasoning=reasoning,
-        components=components,
-        reference_price=reference_price,
-        market_open=True,
+        action=result.get("action", "HOLD"),
+        signal_score=result.get("formula_score") or 0.0,
+        strategy_id=strategy_dict.get("id", "unknown"),
+        strategy_name=strategy_dict.get("name", "unknown"),
+        threshold_crossed=result.get("threshold_crossed", False),
+        reasoning=result.get("reasoning") or "",
+        components=signal_dict.get("components", {}),
         correlation_id=correlation_id,
+        reference_price=signal_dict.get("reference_price"),
+        market_open=True,
     )
-    if decision.correlation_id is None:
-        decision.correlation_id = decision.decision_id
+
+    if result.get("errors"):
+        logger.warning("graph_completed_with_errors", extra={
+            "asset": asset, "errors": result["errors"],
+        })
+
+    logger.info("decision_complete", extra={
+        "asset": asset,
+        "action": decision.action,
+        "score": decision.signal_score,
+        "phase_timings": result.get("phase_timings", {}),
+    })
 
     return decision

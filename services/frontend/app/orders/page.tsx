@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { gatewayFetch } from "../../lib/api";
 import { AuthGuard } from "../../components/auth-guard";
+import { useToast } from "../../components/toast";
+import { ConfirmDialog } from "../../components/confirm-dialog";
 import {
   PageTransition,
   StaggerContainer,
@@ -325,9 +327,13 @@ function OrdersContent() {
   const [filter, setFilter] = useState<StatusFilter>("ALL");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState<Set<string>>(new Set());
+  const [lastUpdated, setLastUpdated] = useState<number | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<string | null>(null);
+  const toast = useToast();
 
   const fetchOrders = useCallback(() => {
     setLoading(true);
+    setError(null);
     gatewayFetch("/orders")
       .then((data) => {
         const items = Array.isArray(data)
@@ -335,13 +341,15 @@ function OrdersContent() {
           : (data as { orders?: Order[] }).orders ?? [];
         setOrders(items as Order[]);
         setError(null);
+        setLastUpdated(Date.now());
       })
       .catch((e) => {
         setOrders([]);
         setError(e instanceof Error ? e.message : "주문 로드 실패");
+        toast.show("error", "주문 데이터를 불러오지 못했습니다");
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     fetchOrders();
@@ -356,10 +364,11 @@ function OrdersContent() {
     setCancelling((prev) => new Set(prev).add(orderId));
     try {
       await gatewayFetch(`/orders/${orderId}`, { method: "DELETE" });
+      toast.show("success", "주문이 취소되었습니다");
       fetchOrders();
     } catch (e) {
       const msg = e instanceof Error ? e.message : "취소 실패";
-      alert(msg);
+      toast.show("error", msg);
     } finally {
       setCancelling((prev) => {
         const next = new Set(prev);
@@ -371,6 +380,18 @@ function OrdersContent() {
 
   return (
     <PageTransition>
+      <ConfirmDialog
+        open={cancelTarget !== null}
+        title="주문 취소"
+        message="이 주문을 취소하시겠습니까? 이 작업은 되돌릴 수 없습니다."
+        confirmText="주문 취소"
+        danger
+        onConfirm={() => {
+          if (cancelTarget) cancelOrder(cancelTarget);
+          setCancelTarget(null);
+        }}
+        onCancel={() => setCancelTarget(null)}
+      />
       <main className="grid gap-6">
         {/* Header */}
         <section className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-6">
@@ -382,6 +403,11 @@ function OrdersContent() {
               <h2 className="mt-1 text-2xl font-semibold text-white">
                 주문 내역
               </h2>
+              {lastUpdated && (
+                <span className="text-[10px] text-zinc-600">
+                  마지막 업데이트: {new Date(lastUpdated).toLocaleTimeString("ko-KR")}
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-3">
               <button
@@ -483,11 +509,12 @@ function OrdersContent() {
             ))}
           </StaggerContainer>
         ) : error ? (
-          <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-8 text-center">
-            <p className="text-red-400 text-sm">{error}</p>
-            <p className="mt-2 text-sm text-neutral-400">
-              로그인 상태와 주문 서비스 연결을 확인해주세요.
-            </p>
+          <div className="flex flex-col items-center gap-3 py-12 text-center">
+            <p className="text-sm text-zinc-500">데이터를 불러오는 중 오류가 발생했습니다</p>
+            <p className="text-xs text-zinc-600">{error}</p>
+            <button onClick={() => { setError(null); fetchOrders(); }} className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black">
+              다시 시도
+            </button>
           </div>
         ) : filtered.length === 0 ? (
           <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-12 text-center">
@@ -509,7 +536,7 @@ function OrdersContent() {
                       expandedId === order.order_id ? null : order.order_id
                     )
                   }
-                  onCancel={() => cancelOrder(order.order_id)}
+                  onCancel={() => setCancelTarget(order.order_id)}
                   isCancelling={cancelling.has(order.order_id)}
                 />
               </StaggerItem>

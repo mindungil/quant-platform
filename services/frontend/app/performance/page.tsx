@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { gatewayFetch } from "../../lib/api";
 import { AuthGuard } from "../../components/auth-guard";
+import { useToast } from "../../components/toast";
 import {
   PageTransition,
   StaggerContainer,
@@ -100,17 +101,32 @@ function PerformanceContent() {
   const [portfolio, setPortfolio] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showExpert, setShowExpert] = useState(false);
+  const [error, setError] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<number | null>(null);
+  const toast = useToast();
 
-  useEffect(() => {
+  const loadData = useCallback(() => {
+    setLoading(true);
+    setError(false);
     Promise.all([
       gatewayFetch("/statistics").catch(() => null),
       gatewayFetch("/portfolio").catch(() => null),
     ]).then(([s, p]) => {
+      if (!s && !p) {
+        setError(true);
+        toast.show("error", "성과 데이터를 불러오지 못했습니다");
+      } else {
+        setLastUpdated(Date.now());
+      }
       setStats(s);
       setPortfolio(p);
       setLoading(false);
     });
-  }, []);
+  }, [toast]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   if (loading) {
     return (
@@ -122,6 +138,19 @@ function PerformanceContent() {
           />
         ))}
       </main>
+    );
+  }
+
+  if (error) {
+    return (
+      <PageTransition>
+        <div className="flex flex-col items-center gap-3 py-12 text-center">
+          <p className="text-sm text-zinc-500">데이터를 불러오는 중 오류가 발생했습니다</p>
+          <button onClick={() => { setError(false); loadData(); }} className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black">
+            다시 시도
+          </button>
+        </div>
+      </PageTransition>
     );
   }
 
@@ -147,6 +176,11 @@ function PerformanceContent() {
           <p className="mt-1 text-sm text-neutral-500">
             AI 에이전트의 트레이딩 성과를 한눈에 확인하세요
           </p>
+          {lastUpdated && (
+            <span className="text-[10px] text-zinc-600">
+              마지막 업데이트: {new Date(lastUpdated).toLocaleTimeString("ko-KR")}
+            </span>
+          )}
         </section>
 
         {/* ── Hero: 총 수익률 ──────────────────────────────────── */}

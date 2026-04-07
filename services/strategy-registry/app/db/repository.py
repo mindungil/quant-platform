@@ -1,4 +1,6 @@
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+UTC = timezone.utc
 
 from app.models.strategy import (
     Strategy,
@@ -193,6 +195,26 @@ class StrategyRepository:
             return None
         return self._hydrate(row)
 
+    def clone_bootstrap_for_user(self, user_id: str, asset_type: str) -> Strategy | None:
+        """Clone the bootstrap strategy for a specific user, persist and return it."""
+        bootstrap = self._get_bootstrap_active(asset_type)
+        if bootstrap is None:
+            return None
+        cloned = Strategy(
+            user_id=user_id,
+            name=bootstrap.name,
+            asset_type=bootstrap.asset_type,
+            indicators=list(bootstrap.indicators),
+            weights=dict(bootstrap.weights),
+            thresholds=dict(bootstrap.thresholds),
+            version=bootstrap.version,
+            status="ACTIVE",
+            backtest_results=dict(bootstrap.backtest_results),
+        )
+        self._items[cloned.id] = cloned
+        self._persist(cloned)
+        return cloned
+
     def get_active_for_user(self, asset_type: str, user_id: str) -> Strategy | None:
         row = self._store.fetch_one(
             """
@@ -204,7 +226,7 @@ class StrategyRepository:
         )
         if row is not None:
             return self._hydrate(row)
-        return self._get_bootstrap_active(asset_type)
+        return self.clone_bootstrap_for_user(user_id, asset_type)
 
     _ALLOWED_ASSET_TYPES = {"crypto", "stock", "etf", "forex"}
     _ALLOWED_STATUSES = {"DRAFT", "PENDING", "TESTED", "SHADOW", "ACTIVE", "DEPRECATED", "ARCHIVED"}

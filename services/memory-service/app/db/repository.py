@@ -231,7 +231,8 @@ class MemoryRepository:
         return [item for item in items if item.user_id == user_id]
 
     def reinforce(self, memory_id: str, trade_outcome: float, outcome_sharpe: float) -> None:
-        from datetime import UTC, datetime
+        from datetime import datetime, timezone
+        UTC = timezone.utc
 
         now = datetime.now(UTC)
         self._store.execute(
@@ -257,11 +258,10 @@ class MemoryRepository:
 
     def search_similar(self, query_embedding: list[float], user_id: str | None = None, top_k: int = 10) -> list:
         """Search for similar memories using pgvector cosine similarity."""
-        where_clause = "WHERE 1=1"
-        params: dict = {"vec": str(query_embedding), "top_k": top_k}
-        if user_id:
-            where_clause += " AND user_id = :user_id"
-            params["user_id"] = user_id
+        if user_id is None:
+            return []
+        where_clause = "WHERE user_id = :user_id"
+        params: dict = {"vec": str(query_embedding), "top_k": top_k, "user_id": user_id}
 
         try:
             rows = self._store.fetch_all(

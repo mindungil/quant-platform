@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { gatewayFetch } from "../../lib/api";
 import { AuthGuard } from "../../components/auth-guard";
+import { useToast } from "../../components/toast";
+import { ConfirmDialog } from "../../components/confirm-dialog";
 import {
   PageTransition,
   StaggerContainer,
@@ -247,11 +249,16 @@ function AgentContent() {
   const [recs, setRecs] = useState<Recommendation[]>([]);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<number | null>(null);
+  const [error, setError] = useState(false);
+  const [showRunConfirm, setShowRunConfirm] = useState(false);
+  const toast = useToast();
 
   const meta = ASSET_META[selectedAsset];
 
   const load = useCallback(() => {
     setLoading(true);
+    setError(false);
     Promise.all([
       gatewayFetch(`/decisions/history/${selectedAsset}`).catch(() => []),
       gatewayFetch(`/recommendations/${selectedAsset}`).catch(() => []),
@@ -259,9 +266,14 @@ function AgentContent() {
       const decArr = Array.isArray(dec) ? dec : [];
       setDecisions(decArr.slice(-20).reverse());
       setRecs(Array.isArray(rec) ? rec : []);
+      setLastUpdated(Date.now());
       setLoading(false);
+    }).catch(() => {
+      setError(true);
+      setLoading(false);
+      toast.show("error", "데이터를 불러오지 못했습니다");
     });
-  }, [selectedAsset]);
+  }, [selectedAsset, toast]);
 
   useEffect(() => {
     load();
@@ -274,9 +286,10 @@ function AgentContent() {
         method: "POST",
         body: JSON.stringify({}),
       });
+      toast.show("success", "에이전트 분석이 완료되었습니다");
       load();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "에이전트 실행 실패");
+      toast.show("error", e instanceof Error ? e.message : "에이전트 실행 실패");
     } finally {
       setRunning(false);
     }
@@ -286,8 +299,32 @@ function AgentContent() {
   const latest = decisions[0] ?? null;
   const latestAction = latest ? actionLabel(latest.action) : null;
 
+  if (error && !loading) {
+    return (
+      <PageTransition>
+        <div className="flex flex-col items-center gap-3 py-12 text-center">
+          <p className="text-sm text-zinc-500">데이터를 불러오는 중 오류가 발생했습니다</p>
+          <button onClick={() => { setError(false); load(); }} className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black">
+            다시 시도
+          </button>
+        </div>
+      </PageTransition>
+    );
+  }
+
   return (
     <PageTransition>
+      <ConfirmDialog
+        open={showRunConfirm}
+        title="분석 실행"
+        message={`${meta.label}에 대한 AI 분석을 실행하시겠습니까?`}
+        confirmText="분석 실행"
+        onConfirm={() => {
+          setShowRunConfirm(false);
+          runAgent();
+        }}
+        onCancel={() => setShowRunConfirm(false)}
+      />
       <main className="grid gap-6">
         {/* ── Header ──────────────────────────────────────────── */}
         <section className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-6">
@@ -297,6 +334,11 @@ function AgentContent() {
               <p className="mt-1 text-sm text-neutral-500">
                 실시간 시장 분석과 AI 추천을 확인하세요
               </p>
+              {lastUpdated && (
+                <span className="text-[10px] text-zinc-600">
+                  마지막 업데이트: {new Date(lastUpdated).toLocaleTimeString("ko-KR")}
+                </span>
+              )}
             </div>
 
             {/* Asset tabs */}
@@ -323,7 +365,7 @@ function AgentContent() {
               </div>
 
               <button
-                onClick={runAgent}
+                onClick={() => setShowRunConfirm(true)}
                 disabled={running}
                 className="ml-2 flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-black transition-all hover:shadow-[0_0_20px_rgba(255,255,255,0.15)] active:scale-[0.97] disabled:opacity-50"
               >

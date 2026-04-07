@@ -1,6 +1,8 @@
 import hmac
 import time
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+
+UTC = timezone.utc
 from hashlib import sha256
 
 import httpx
