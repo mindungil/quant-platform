@@ -48,14 +48,22 @@ class ArmState:
     def std(self) -> float:
         return math.sqrt(self.variance)
 
-    def update(self, reward: float) -> None:
-        """Online update using Welford's algorithm for numerical stability."""
+    def update(self, reward: float, gamma: float = 0.95) -> None:
+        """Online update using exponential discounting for regime adaptivity.
+
+        Recent observations are weighted more heavily than older ones,
+        allowing the bandit to adapt when formula performance shifts.
+        Falls back to simple initialization on first observation.
+        """
         self.n += 1
         self.total_reward += reward
-        delta = reward - self.mean
-        self.mean += delta / self.n
-        delta2 = reward - self.mean
-        self.m2 += delta * delta2
+        if self.n == 1:
+            self.mean = reward
+            self.m2 = 0.0
+        else:
+            self.mean = gamma * self.mean + (1 - gamma) * reward
+            delta = reward - self.mean
+            self.m2 = gamma * self.m2 + (1 - gamma) * delta * delta
         self.last_updated = datetime.now(UTC)
 
     def sample(self) -> float:

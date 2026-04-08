@@ -38,6 +38,7 @@ import shared.formulas.momentum  # noqa: F401
 import shared.formulas.reversion  # noqa: F401
 import shared.formulas.breakout  # noqa: F401
 import shared.formulas.composite  # noqa: F401
+import shared.formulas.factor_ensemble  # noqa: F401
 
 logger = get_logger("crypto-agent")
 
@@ -402,7 +403,7 @@ def select_node(state: AgentState) -> dict:
 
 
 def score_node(state: AgentState) -> dict:
-    """Phase 5 — Score: select and run the best formula."""
+    """Phase 5 — Score: run factor ensemble + MAB-selected style formula."""
     t0 = time.monotonic()
     errors = list(state.get("errors") or [])
     features = state.get("features") or {}
@@ -410,7 +411,13 @@ def score_node(state: AgentState) -> dict:
     suggested_type = state.get("suggested_formula_type") or "composite_adaptive"
     strategy_dict = state.get("strategy") or {}
 
-    selected_formula = None
+    # --- Always run factor ensemble first ---
+    from shared.formulas.factor_ensemble import FactorEnsembleFormula
+    _ensemble = FactorEnsembleFormula()
+    ensemble_result = _ensemble.compute(features)
+
+    # --- Select style formula via existing MAB/ML fallback chain ---
+    style_formula = None
     selection_method = "default"
 
     # Priority 1: ML-based selection
@@ -430,7 +437,7 @@ def score_node(state: AgentState) -> dict:
                     best_ml = ml_rankings[0]
                     candidate = formula_registry.get(best_ml.name)
                     if candidate:
-                        selected_formula = candidate
+                        style_formula = candidate
                         selection_method = "ml"
                         logger.info("graph_formula_ml", extra={
                             "formula": best_ml.name,
@@ -440,7 +447,7 @@ def score_node(state: AgentState) -> dict:
             logger.warning("graph_ml_failed", extra={"error": str(exc)[:100]})
 
     # Priority 2: Thompson Sampling MAB
-    if selected_formula is None and formula_scores:
+    if style_formula is None and formula_scores:
         try:
             resp = httpx.post(
                 f"{settings.memory_service_base_url}/memory/search/formula-outcomes",
@@ -460,33 +467,42 @@ def score_node(state: AgentState) -> dict:
         )
         candidate = formula_registry.get(mab_choice)
         if candidate:
-            selected_formula = candidate
+            style_formula = candidate
             selection_method = "mab"
             logger.info("graph_formula_mab", extra={"formula": mab_choice})
 
     # Priority 3: Memory heuristic
-    if selected_formula is None and formula_scores:
+    if style_formula is None and formula_scores:
         best_name = max(formula_scores, key=lambda f: formula_scores[f]["composite"])
         if formula_scores[best_name]["composite"] > 0:
             candidate = formula_registry.get(best_name)
             if candidate:
-                selected_formula = candidate
+                style_formula = candidate
                 selection_method = "memory"
 
     # Priority 4: Regime default
-    if selected_formula is None:
+    if style_formula is None:
         candidates = formula_registry.get_for_regime(suggested_type)
         if candidates:
-            selected_formula = candidates[0]
+            style_formula = candidates[0]
         else:
-            selected_formula = formula_registry.get_default()
+            style_formula = formula_registry.get_default()
         selection_method = "regime_default"
 
-    # Run the formula
-    result = selected_formula.compute(features)
-    formula_name = selected_formula.name
-    formula_score = result.score
-    formula_confidence = result.confidence
+    # Run the style formula
+    style_result = style_formula.compute(features)
+
+    # --- Blend: ensemble 70% + style 30% ---
+    formula_score = ensemble_result.score * 0.7 + style_result.score * 0.3
+    formula_confidence = ensemble_result.confidence * 0.7 + style_result.confidence * 0.3
+
+    # Use ensemble components for explainability, augmented with style info
+    components = dict(ensemble_result.components)
+    components["style_formula"] = style_formula.name
+    components["style_score"] = style_result.score
+    components["ensemble_score"] = ensemble_result.score
+
+    formula_name = f"ensemble+{style_formula.name}"
 
     # Determine action from formula score vs strategy thresholds
     action = state.get("action", "HOLD")
