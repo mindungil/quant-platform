@@ -32,6 +32,7 @@ class AgentState(TypedDict):
     selected_formula: Optional[str]
     formula_score: Optional[float]
     formula_confidence: Optional[float]
+    formula_components: Optional[Dict]
 
     # Phase 6: Check (risk pre-check)
     risk_issues: List[str]

@@ -706,10 +706,43 @@ def _phase_score(
         else:
             selected_formula = formula_registry.get_default()
 
-    # Run the formula
-    result = selected_formula.compute(features)
+    # Run the formula (style formula via MAB/ML)
+    style_result = selected_formula.compute(features)
 
-    _complete_phase(phase, detail=f"formula={selected_formula.name} score={result.score:.4f} conf={result.confidence:.2f}")
+    # Run factor ensemble (primary scoring engine)
+    try:
+        from shared.formulas.factor_ensemble import FactorEnsembleFormula
+        _ensemble = FactorEnsembleFormula()
+        ensemble_result = _ensemble.compute(features)
+
+        # Blend: ensemble 70% + style 30%
+        from shared.formulas.base import FormulaResult
+        blended_score = ensemble_result.score * 0.7 + style_result.score * 0.3
+        blended_confidence = ensemble_result.confidence * 0.7 + style_result.confidence * 0.3
+        blended_components = dict(ensemble_result.components)
+        blended_components["ensemble_score"] = round(ensemble_result.score, 4)
+        blended_components["style_score"] = round(style_result.score, 4)
+        blended_components["style_formula"] = selected_formula.name
+        blended_components["formula_confidence"] = round(blended_confidence, 4)
+
+        result = FormulaResult(
+            score=max(-1.0, min(1.0, blended_score)),
+            confidence=min(blended_confidence, 1.0),
+            components=blended_components,
+            formula_name=f"ensemble+{selected_formula.name}",
+            regime_label=ensemble_result.regime_label,
+        )
+        logger.info("ensemble_blend", extra={
+            "ensemble": round(ensemble_result.score, 4),
+            "style": round(style_result.score, 4),
+            "blended": round(blended_score, 4),
+            "style_formula": selected_formula.name,
+        })
+    except Exception as exc:
+        logger.warning("ensemble_fallback", extra={"error": str(exc)[:200]})
+        result = style_result  # fallback to style formula only
+
+    _complete_phase(phase, detail=f"formula={result.formula_name} score={result.score:.4f} conf={result.confidence:.2f}")
     phases.append(phase)
     return selected_formula, result
 
@@ -955,6 +988,7 @@ def run_decision_loop(asset: str, *, user_id: str | None = None, correlation_id:
         "selected_formula": None,
         "formula_score": None,
         "formula_confidence": None,
+        "formula_components": None,
         "risk_issues": [],
         "action": "HOLD",
         "threshold_crossed": False,
@@ -975,7 +1009,12 @@ def run_decision_loop(asset: str, *, user_id: str | None = None, correlation_id:
     # Reconstruct DecisionRecord from final state
     signal_dict = final_state.get("signal") or {}
     strategy_dict = final_state.get("strategy") or {}
-    components = dict(signal_dict.get("components") or {})
+    # Use ensemble components if available, fallback to signal components
+    formula_components = final_state.get("formula_components")
+    if formula_components and "ensemble_score" in formula_components:
+        components = dict(formula_components)
+    else:
+        components = dict(signal_dict.get("components") or {})
     components["formula_confidence"] = round(final_state.get("formula_confidence") or 0.0, 4)
 
     decision_id = final_state.get("decision_id") or str(__import__("uuid").uuid4())

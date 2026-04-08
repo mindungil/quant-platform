@@ -540,6 +540,7 @@ def score_node(state: AgentState) -> dict:
         "selected_formula": formula_name,
         "formula_score": formula_score,
         "formula_confidence": formula_confidence,
+        "formula_components": components,
         "action": action,
         "threshold_crossed": threshold_crossed,
         "phase_timings": timings,
