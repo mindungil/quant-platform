@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { gatewayFetch } from "../../lib/api";
 import { AuthGuard } from "../../components/auth-guard";
 import { useToast } from "../../components/toast";
+import { parseReasoning, cleanReasoning } from "../../lib/reasoning";
 import { ConfirmDialog } from "../../components/confirm-dialog";
 import {
   PageTransition,
@@ -99,102 +100,60 @@ function relativeTime(iso: string): string {
 /* ── Reasoning Card ──────────────────────────────────────────── */
 
 function ReasoningCard({ reasoning }: { reasoning: string }) {
-  // Try to parse structured reasoning
-  let data: any = null;
-  try {
-    const parsed = JSON.parse(reasoning);
-    if (parsed.structured) data = parsed.structured;
-  } catch {
-    // fallback: plain text
-  }
+  const { structured: data, text } = parseReasoning(reasoning);
 
   if (!data) {
-    // Strip [formula=...] prefix for plain text display
-    const cleanText = reasoning.replace(/^\[.*?\]\s*/, '');
-    return <p className="text-sm text-zinc-400 leading-relaxed">{cleanText}</p>;
+    return <p className="text-sm text-zinc-400 leading-relaxed">{text}</p>;
   }
 
   return (
-    <div className="space-y-3">
-      {/* Summary with emphasis */}
-      <p className="text-sm font-semibold text-white">
-        {data.summary}
-      </p>
+    <div className="space-y-2.5">
+      <p className="text-sm font-medium text-white">{data.summary}</p>
 
-      {/* Score + Regime badges */}
-      <div className="flex flex-wrap gap-2">
-        <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-          data.action === 'BUY' ? 'bg-emerald-500/15 text-emerald-400' :
-          data.action === 'SELL' ? 'bg-red-500/15 text-red-400' :
-          'bg-white/[0.08] text-zinc-400'
-        }`}>
-          {data.direction} &middot; {data.strength}
-        </span>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.06] px-2.5 py-0.5 text-xs text-zinc-500">
-          {data.regime}
-        </span>
-        {data.formula && (
-          <span className="inline-flex items-center rounded-full bg-white/[0.06] px-2.5 py-0.5 text-xs text-zinc-500">
-            {data.formula}
+      <div className="flex flex-wrap gap-1.5">
+        {data.strength && (
+          <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] text-zinc-400">
+            {data.direction} · {data.strength}
+          </span>
+        )}
+        {data.regime && (
+          <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] text-zinc-500">
+            {data.regime}
+          </span>
+        )}
+        {data.strategy && (
+          <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] text-zinc-500">
+            {data.strategy}
           </span>
         )}
       </div>
 
-      {/* Signal strength bar */}
-      <div className="space-y-1">
-        <div className="flex justify-between text-[10px] text-zinc-500">
-          <span>시그널 강도</span>
-          <span>{(data.abs_score * 100).toFixed(0)}%</span>
-        </div>
-        <div className="h-1.5 rounded-full bg-white/[0.06]">
-          <div
-            className={`h-full rounded-full transition-all ${
-              data.score >= 0 ? 'bg-emerald-500' : 'bg-red-500'
-            }`}
-            style={{ width: `${Math.min(data.abs_score * 100, 100)}%` }}
-          />
-        </div>
-      </div>
-
-      {/* Indicators */}
-      {data.bullish_indicators?.length > 0 && (
-        <div className="space-y-1">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-400">상승 지표</p>
-          <div className="flex flex-wrap gap-1.5">
-            {data.bullish_indicators.map((ind: any) => (
-              <span key={ind.name} className="rounded bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-400">
-                {ind.name} {ind.value > 0 ? '+' : ''}{(ind.value * 100).toFixed(0)}%
-              </span>
-            ))}
-          </div>
+      {data.bullish_indicators && data.bullish_indicators.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {data.bullish_indicators.map((ind: any) => (
+            <span key={ind.name} className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-400">
+              {ind.name} +{Math.round(ind.value * 100)}%
+            </span>
+          ))}
         </div>
       )}
 
-      {data.bearish_indicators?.length > 0 && (
-        <div className="space-y-1">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-400">하락 지표</p>
-          <div className="flex flex-wrap gap-1.5">
-            {data.bearish_indicators.map((ind: any) => (
-              <span key={ind.name} className="rounded bg-red-500/10 px-2 py-0.5 text-[11px] text-red-400">
-                {ind.name} {(ind.value * 100).toFixed(0)}%
-              </span>
-            ))}
-          </div>
+      {data.bearish_indicators && data.bearish_indicators.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {data.bearish_indicators.map((ind: any) => (
+            <span key={ind.name} className="rounded bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-400">
+              {ind.name} {Math.round(ind.value * 100)}%
+            </span>
+          ))}
         </div>
       )}
 
-      {/* Conflicts warning */}
-      {data.conflicts?.length > 0 && (
-        <p className="text-[11px] text-zinc-500">
-          {data.conflicts.join(', ')}에서 반대 신호 감지
-        </p>
+      {data.conflicts && data.conflicts.length > 0 && (
+        <p className="text-[10px] text-zinc-500">⚠ {data.conflicts.join(", ")}에서 반대 신호</p>
       )}
 
-      {/* Memory refs */}
       {data.memory_refs > 0 && (
-        <p className="text-[10px] text-zinc-500">
-          과거 유사 상황 {data.memory_refs}건 참조
-        </p>
+        <p className="text-[10px] text-zinc-500">유사 상황 {data.memory_refs}건 참조</p>
       )}
     </div>
   );
@@ -425,7 +384,7 @@ function AgentContent() {
                         <p className="mt-1 text-base font-bold text-white">{r.name}</p>
 
                         <p className="mt-2.5 text-sm leading-relaxed text-neutral-400">
-                          {r.reasoning}
+                          {cleanReasoning(r.reasoning)}
                         </p>
 
                         {/* Confidence bar */}

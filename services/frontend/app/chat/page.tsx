@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { gatewayFetch } from "../../lib/api";
+import { cleanReasoning } from "../../lib/reasoning";
 
 /* ── Types ──────────────────────────────────────────────────── */
 
@@ -174,11 +175,34 @@ function ToolPill({
                 {JSON.stringify(tc.arguments, null, 2)}
               </pre>
             )}
-            {tc.result && (
-              <pre className="max-h-28 overflow-auto rounded bg-neutral-950/80 p-2 text-[11px] leading-relaxed text-neutral-400">
-                {tc.result.length > 400 ? tc.result.slice(0, 400) + "..." : tc.result}
-              </pre>
-            )}
+            {tc.result && (() => {
+              // Try to show friendly summary for structured reasoning results
+              try {
+                const parsed = JSON.parse(tc.result);
+                if (parsed.structured?.summary) {
+                  return (
+                    <div className="rounded bg-neutral-950/80 p-2 text-[11px] leading-relaxed text-neutral-300">
+                      {parsed.structured.summary}
+                    </div>
+                  );
+                }
+              } catch {
+                // Not JSON or no structured field — check if cleanReasoning can parse it
+                const cleaned = cleanReasoning(tc.result);
+                if (cleaned !== tc.result && cleaned !== "분석 중...") {
+                  return (
+                    <div className="rounded bg-neutral-950/80 p-2 text-[11px] leading-relaxed text-neutral-300">
+                      {cleaned}
+                    </div>
+                  );
+                }
+              }
+              return (
+                <pre className="max-h-28 overflow-auto rounded bg-neutral-950/80 p-2 text-[11px] leading-relaxed text-neutral-400">
+                  {tc.result.length > 400 ? tc.result.slice(0, 400) + "..." : tc.result}
+                </pre>
+              );
+            })()}
             {tc.error && (
               <p className="text-xs text-red-400">{tc.error}</p>
             )}
