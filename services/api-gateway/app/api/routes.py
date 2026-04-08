@@ -1,12 +1,13 @@
 import json
+from datetime import date
 
-from fastapi import APIRouter, Depends, Request, Response, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 import httpx
 import jwt
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
-from app.core.auth import build_internal_admin_headers, require_principal, require_role
+from app.core.auth import build_internal_admin_headers, check_feature, get_tier_features, require_principal, require_role
 from app.core.config import settings
 from app.core.dashboard import build_dashboard_summary
 from app.core.summary import gateway_summary
@@ -31,7 +32,8 @@ llm_client = GatewayClient(settings.llm_gateway_base_url, timeout=120.0)
 orchestrator_client = GatewayClient(settings.orchestrator_agent_base_url)
 portfolio_client = GatewayClient(settings.portfolio_service_base_url)
 statistics_client = GatewayClient(settings.statistics_service_base_url)
-realtime_bus = RealtimeBus(RedisStore(settings.redis_url), replay_limit=settings.realtime_replay_limit)
+_redis_store = RedisStore(settings.redis_url)
+realtime_bus = RealtimeBus(_redis_store, replay_limit=settings.realtime_replay_limit)
 
 
 def _proxy_json(response: httpx.Response) -> JSONResponse:
@@ -289,6 +291,11 @@ def gateway_risk_check(payload: dict, principal: GatewayPrincipal = Depends(requ
 
 @router.post("/gateway/orders")
 def gateway_create_order(payload: dict, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    if not check_feature(principal, "can_trade"):
+        raise HTTPException(
+            status_code=403,
+            detail="upgrade_required: 주문 실행은 Pro 이상 플랜에서 이용 가능합니다",
+        )
     merged = {"user_id": principal.user_id, **payload}
     response = order_client.request(
         "POST", "/orders",
@@ -415,6 +422,14 @@ def get_statistics(principal: GatewayPrincipal = Depends(require_principal)) -> 
     return _proxy_json(response)
 
 
+@router.get("/statistics/hindsight/{asset}")
+def get_hindsight(asset: str, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    response = statistics_client.request(
+        "GET", f"/statistics/hindsight/{asset}", headers=principal.forwarded_headers
+    )
+    return _proxy_json(response)
+
+
 # ── Agent Decisions (proxy to crypto-agent) ─────────────────────────────
 
 
@@ -435,6 +450,12 @@ def get_latest_decision(asset: str, principal: GatewayPrincipal = Depends(requir
 @router.get("/decisions/history/{asset}")
 def get_decision_history(asset: str, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
     result = agent_client.get(f"/decisions/history/{asset}", headers=principal.forwarded_headers)
+    # Apply tier-based decisions limit
+    plan = getattr(principal, "plan", "FREE") or "FREE"
+    features = get_tier_features(plan)
+    limit = features["decisions_limit"]
+    if isinstance(result, list) and len(result) > limit:
+        result = result[-limit:]  # keep the most recent entries
     return JSONResponse(result)
 
 
@@ -456,6 +477,26 @@ def get_recommendations(asset: str, principal: GatewayPrincipal = Depends(requir
 @router.post("/chat")
 async def chat(request: Request, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
     """에이전트 채팅 — LLM Gateway의 에이전틱 루프 호출."""
+    # Check daily chat limit based on tier
+    plan = getattr(principal, "plan", "FREE") or "FREE"
+    features = get_tier_features(plan)
+    daily_key = f"chat_daily:{principal.user_id}:{date.today()}"
+    try:
+        r = _redis_store._client
+        if r is not None:
+            count = r.incr(daily_key)
+            if count == 1:
+                r.expire(daily_key, 86400)
+            if count > features["chat_daily_limit"]:
+                raise HTTPException(
+                    status_code=429,
+                    detail="chat_limit_exceeded: 일일 채팅 한도를 초과했습니다. 플랜을 업그레이드하세요.",
+                )
+    except HTTPException:
+        raise
+    except Exception:
+        pass  # fail open if Redis is unavailable
+
     body = await request.json()
     response = llm_client.request(
         "POST", "/chat",

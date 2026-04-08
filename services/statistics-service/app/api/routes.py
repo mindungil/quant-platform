@@ -1,7 +1,12 @@
+import os
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Response
+import httpx
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from app.core.engine import compute_statistics
 from app.core.config import settings
+from app.core.hindsight import analyze_decision_hindsight, compute_accuracy_report
 from app.db.repository import statistics_repository
 from app.models.statistics import StatisticsInput, StatisticsSnapshot
 from shared.health import check_redis, check_sql, check_tcp, health_payload
@@ -103,3 +108,47 @@ def strategy_comparison(user_id: str) -> list[dict]:
     # Sort by Sharpe descending
     strategies.sort(key=lambda s: s.get("sharpe", 0), reverse=True)
     return strategies
+
+
+@router.get("/statistics/hindsight/{asset}")
+def get_hindsight_report(asset: str):
+    """Get agent decision accuracy report for an asset."""
+    # 1. Fetch recent decisions from crypto-agent
+    agent_url = os.environ.get("CRYPTO_AGENT_BASE_URL", "http://localhost:8006")
+    try:
+        resp = httpx.get(f"{agent_url}/decisions/history/{asset}?limit=100", timeout=5.0)
+        decisions = resp.json() if resp.status_code == 200 else []
+    except Exception:
+        decisions = []
+
+    # 2. Fetch current price from market-data
+    market_url = os.environ.get("MARKET_DATA_BASE_URL", "http://localhost:8001")
+    try:
+        resp = httpx.get(f"{market_url}/candles/{asset}/latest", timeout=5.0)
+        current_price = resp.json().get("close", 0) if resp.status_code == 200 else 0
+    except Exception:
+        current_price = 0
+
+    # 3. Analyze each decision
+    analyses = []
+    for d in decisions:
+        ref_price = d.get("reference_price") or d.get("signal_score", 0)
+        if ref_price and ref_price > 0 and current_price > 0:
+            # Calculate hours elapsed
+            try:
+                dt = datetime.fromisoformat(d["timestamp"].replace("Z", "+00:00"))
+                hours = (datetime.now(timezone.utc) - dt).total_seconds() / 3600
+            except Exception:
+                hours = 0
+
+            d["hours_elapsed"] = round(hours, 1)
+            analysis = analyze_decision_hindsight(d, current_price, ref_price)
+            analyses.append(analysis)
+
+    # 4. Compute report
+    report = compute_accuracy_report(analyses)
+    report["asset"] = asset
+    report["current_price"] = current_price
+    report["analyses"] = analyses[:20]  # latest 20 for detail view
+
+    return report

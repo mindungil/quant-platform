@@ -372,6 +372,7 @@ function DashboardContent() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [recs, setRecs] = useState<Recommendation[]>([]);
   const [decisions, setDecisions] = useState<Decision[]>([]);
+  const [hindsight, setHindsight] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
@@ -380,6 +381,7 @@ function DashboardContent() {
   const loadData = useCallback(() => {
     setLoading(true);
     setError(false);
+    gatewayFetch("/statistics/hindsight/BTCUSDT").then(setHindsight).catch(() => {});
     Promise.all([
       gatewayFetch("/dashboard").catch(() => null),
       gatewayFetch("/recommendations/BTCUSDT").catch(() => []),
@@ -566,6 +568,37 @@ function DashboardContent() {
         {/* ── Market Chart ────────────────────────────────── */}
         <FadeInView delay={0.1}>
           <MarketChart asset="BTCUSDT" />
+        </FadeInView>
+
+        {/* ── Agent Accuracy Widget ────────────────────────── */}
+        <FadeInView delay={0.12}>
+          <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6 animate-card-reveal">
+            <h3 className="text-lg font-semibold text-white text-glow">에이전트 성과</h3>
+            <p className="mt-0.5 text-xs text-zinc-500">최근 결정의 사후 검증 결과</p>
+
+            {hindsight ? (
+              <div className="mt-4 grid grid-cols-3 gap-4">
+                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 text-center">
+                  <p className="text-2xl font-bold text-white text-glow-strong">
+                    {(hindsight.accuracy * 100).toFixed(0)}%
+                  </p>
+                  <p className="mt-1 text-[10px] text-zinc-500">적중률</p>
+                </div>
+                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 text-center">
+                  <p className="text-2xl font-bold text-white">{hindsight.total}</p>
+                  <p className="mt-1 text-[10px] text-zinc-500">총 결정</p>
+                </div>
+                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 text-center">
+                  <p className={`text-2xl font-bold ${hindsight.avg_score > 0 ? "text-emerald-400 profit-glow" : "text-red-400 loss-glow"}`}>
+                    {(hindsight.avg_score * 100).toFixed(0)}%
+                  </p>
+                  <p className="mt-1 text-[10px] text-zinc-500">평균 점수</p>
+                </div>
+              </div>
+            ) : (
+              <p className="mt-4 text-sm text-zinc-500">분석 데이터를 수집 중입니다...</p>
+            )}
+          </section>
         </FadeInView>
 
         {/* ── Agent Status + Positions ────────────────────── */}

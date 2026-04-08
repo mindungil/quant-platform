@@ -45,6 +45,45 @@ def require_principal(authorization: str | None = Header(default=None)) -> Gatew
     )
 
 
+TIER_FEATURES = {
+    "FREE": {
+        "can_trade": False,
+        "can_automate": False,
+        "chat_daily_limit": 5,
+        "signal_delay_minutes": 5,
+        "max_assets": 0,
+        "decisions_limit": 1,
+    },
+    "PRO": {
+        "can_trade": True,
+        "can_automate": True,
+        "chat_daily_limit": 50,
+        "signal_delay_minutes": 0,
+        "max_assets": 1,
+        "decisions_limit": 100,
+    },
+    "PREMIUM": {
+        "can_trade": True,
+        "can_automate": True,
+        "chat_daily_limit": 9999,
+        "signal_delay_minutes": 0,
+        "max_assets": 99,
+        "decisions_limit": 9999,
+    },
+}
+
+
+def get_tier_features(plan: str) -> dict:
+    return TIER_FEATURES.get(plan.upper(), TIER_FEATURES["FREE"])
+
+
+def check_feature(principal, feature: str) -> bool:
+    """Check if user's tier allows a specific feature."""
+    plan = getattr(principal, "plan", "FREE") or "FREE"
+    features = get_tier_features(plan)
+    return features.get(feature, False)
+
+
 def require_role(role: str):
     def wrapper(authorization: str | None = Header(default=None)) -> GatewayPrincipal:
         principal = require_principal(authorization)

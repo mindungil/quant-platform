@@ -571,12 +571,54 @@ function SettingsContent() {
               </section>
             </FadeInView>
 
-            {/* AI 연동 (OAuth) */}
+            {/* 구독 플랜 */}
             <FadeInView delay={0.12}>
               <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6 space-y-4">
                 <div>
-                  <h3 className="text-lg font-semibold text-white">AI 에이전트 연동</h3>
-                  <p className="mt-0.5 text-xs text-neutral-500">Claude 또는 Codex 계정을 연동하면 AI 채팅이 활성화됩니다</p>
+                  <h3 className="text-lg font-semibold text-white">구독 플랜</h3>
+                  <p className="mt-0.5 text-xs text-zinc-500">현재 플랜과 사용량을 확인하세요</p>
+                </div>
+
+                {/* Current tier display */}
+                <div className="rounded-xl border border-white/[0.08] bg-white/[0.04] p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">현재 플랜</p>
+                      <p className="mt-1 text-lg font-bold text-white">{profile?.plan || "FREE"}</p>
+                    </div>
+                    <span className="rounded-full bg-white/[0.08] px-3 py-1 text-xs text-zinc-400">
+                      {profile?.plan === "PREMIUM" ? "모든 기능" : profile?.plan === "PRO" ? "자동매매 1자산" : "시그널 조회"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Tier comparison */}
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { name: "Free", price: "0원", features: ["시그널 조회 (지연)", "대시보드", "AI 채팅 5회/일"] },
+                    { name: "Pro", price: "29,000원/월", features: ["실시간 시그널", "자동매매 (1자산)", "AI 채팅 50회/일"] },
+                    { name: "Premium", price: "89,000원/월", features: ["전체 자산", "무제한 자동매매", "커스텀 전략", "우선 실행"] },
+                  ].map(tier => (
+                    <div key={tier.name} className={`rounded-xl border p-4 ${profile?.plan === tier.name.toUpperCase() ? "border-white/[0.20] bg-white/[0.06]" : "border-white/[0.06] bg-white/[0.02]"}`}>
+                      <p className="text-sm font-semibold text-white">{tier.name}</p>
+                      <p className="mt-1 text-lg font-bold text-white">{tier.price}</p>
+                      <ul className="mt-3 space-y-1">
+                        {tier.features.map(f => (
+                          <li key={f} className="text-[11px] text-zinc-400">• {f}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </FadeInView>
+
+            {/* 고급: 자체 LLM 연동 (선택사항) */}
+            <FadeInView delay={0.14}>
+              <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6 space-y-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-white">고급: 자체 LLM 연동 (선택사항)</h3>
+                  <p className="mt-0.5 text-xs text-neutral-500">자체 Claude/Codex 계정을 연동하면 프리미엄 모델을 사용할 수 있습니다. 연동하지 않아도 플랫폼 AI가 기본 제공됩니다.</p>
                 </div>
                 <AiProviderCard
                   provider="claude"

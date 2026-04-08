@@ -182,6 +182,15 @@ class FormulaMAB:
                 if formula_name in regime_arms:
                     regime_arms[formula_name].update(reward)
 
+    def update_from_hindsight(self, formula_name: str, price_change_pct: float, regime: str = "") -> None:
+        """Update MAB arm from hindsight analysis (no actual trade needed).
+
+        Reward = price_change_pct normalized to [-1, 1].
+        Positive for correct direction, negative for wrong.
+        """
+        reward = max(-1.0, min(1.0, price_change_pct / 5.0))  # 5% = full reward
+        self.update(formula_name, reward, regime=regime or None)
+
     def load_from_memory(self, memory_items: list[dict]) -> int:
         """Bootstrap arm states from historical memory records.
 

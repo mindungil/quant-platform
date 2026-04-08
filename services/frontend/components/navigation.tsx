@@ -12,6 +12,7 @@ const baseLinks = [
   ["/strategies", "전략"],
   ["/performance", "성과"],
   ["/orders", "주문"],
+  ["/pricing", "플랜"],
   ["/settings", "설정"],
 ];
 
