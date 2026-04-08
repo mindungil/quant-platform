@@ -145,13 +145,30 @@ class LearningScheduler:
             if verified_count > 0:
                 logger.info("fast_loop_complete", extra={"verified": verified_count, "current_price": current_price})
 
-            # Update accuracy metric
+            # Update accuracy metric and select protocol based on conditions
             if total_evaluated > 0:
                 try:
-                    from shared.factors.dynamic_weights import set_recent_accuracy
+                    from shared.factors.dynamic_weights import set_recent_accuracy, set_active_protocol
                     accuracy = correct / total_evaluated
                     set_recent_accuracy(accuracy)
                     logger.info("accuracy_updated", extra={"accuracy": round(accuracy, 4), "total": total_evaluated})
+
+                    # Get market conditions for protocol selection
+                    fear_greed = 50
+                    try:
+                        async with httpx.AsyncClient(timeout=5) as client:
+                            resp = await client.get("http://localhost:8020/external/context/BTCUSDT")
+                            if resp.status_code == 200:
+                                ext = resp.json()
+                                fear_greed = ext.get("fear_greed_index", 50)
+                    except Exception:
+                        pass
+
+                    from app.core.protocol_router import select_protocol
+                    protocol = select_protocol(accuracy, fear_greed)
+                    set_active_protocol(protocol["name"])
+                    logger.info("fast_loop_protocol_updated", extra={"protocol": protocol["name"]})
+
                 except Exception as e:
                     logger.debug("accuracy_update_failed", extra={"error": str(e)[:100]})
 

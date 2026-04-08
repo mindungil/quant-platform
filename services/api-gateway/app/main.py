@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import router
 from app.api.admin_dlq import router as dlq_router
+from app.api.public_api import router as public_api_router
 from app.core.config import settings
 from shared.health import check_redis, check_tcp
 from shared.observability import install_http_observability, startup_dependency_guard
@@ -23,6 +24,7 @@ app.add_middleware(
 install_http_observability(app, "api-gateway")
 app.include_router(router)
 app.include_router(dlq_router)
+app.include_router(public_api_router)
 
 
 @app.on_event("startup")

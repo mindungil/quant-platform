@@ -14,3 +14,9 @@ def health() -> dict[str, str]:
 @router.get("/external/context/{asset}", response_model=ExternalContextSnapshot)
 def get_external_context(asset: str) -> ExternalContextSnapshot:
     return build_external_context(asset)
+
+
+@router.get("/external/news/{asset}")
+async def get_news_sentiment(asset: str):
+    from app.core.sentiment import compute_news_sentiment
+    return await compute_news_sentiment(asset)

@@ -2,18 +2,27 @@ global:
   scrape_interval: 15s
 
 scrape_configs:
-  - job_name: quant-backend
-    metrics_path: /metrics
+  - job_name: 'quant-backend'
     static_configs:
       - targets:
-          - "backend:8001"   # market-data
-          - "backend:8002"   # feature-store
-          - "backend:8003"   # signal-service
-          - "backend:8006"   # crypto-agent
-          - "backend:8008"   # exchange-adapter
-          - "backend:8009"   # risk-service
-          - "backend:8011"   # order-service
-          - "backend:8012"   # portfolio-service
-          - "backend:8013"   # statistics-service
-          - "backend:8017"   # api-gateway
-          - "backend:8019"   # auth-service
+        - 'backend:8001'   # market-data
+        - 'backend:8002'   # feature-store
+        - 'backend:8003'   # signal-service
+        - 'backend:8004'   # memory-service
+        - 'backend:8005'   # strategy-registry
+        - 'backend:8006'   # crypto-agent
+        - 'backend:8007'   # backtest-service
+        - 'backend:8008'   # exchange-adapter
+        - 'backend:8009'   # risk-service
+        - 'backend:8010'   # credential-store
+        - 'backend:8011'   # order-service
+        - 'backend:8012'   # portfolio-service
+        - 'backend:8013'   # statistics-service
+        - 'backend:8014'   # orchestrator-agent
+        - 'backend:8015'   # etf-agent
+        - 'backend:8016'   # stock-agent
+        - 'backend:8017'   # api-gateway
+        - 'backend:8019'   # auth-service
+        - 'backend:8020'   # external-data-service
+        - 'backend:8021'   # llm-gateway
+    metrics_path: '/metrics'

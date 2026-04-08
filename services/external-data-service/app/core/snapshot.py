@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 import httpx
 
+from app.core.sentiment import _keyword_score, CACHE_TTL as _NEWS_CACHE_TTL
 from app.models.external_data import ExternalContextSnapshot
 
 logger = logging.getLogger("external-data-service")
@@ -380,6 +381,65 @@ def _derivatives_weighted_avg(
 
 
 # ---------------------------------------------------------------------------
+# 7. News Sentiment (synchronous, keyword-based + CryptoPanic)
+# ---------------------------------------------------------------------------
+
+def _fetch_news_sentiment(asset: str) -> float:
+    """Returns news sentiment score [-1, 1] using sync HTTP."""
+    symbol = _extract_symbol(asset)
+    cache_key = f"news_sent_{symbol}"
+    cached = _get_cached(cache_key)
+    if cached is not None:
+        return cached
+
+    scores: list[float] = []
+
+    # CryptoPanic public feed
+    try:
+        resp = httpx.get(
+            f"https://cryptopanic.com/api/free/v1/posts/?currencies={symbol}&public=true",
+            timeout=8.0,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            for item in data.get("results", [])[:20]:
+                title = item.get("title", "")
+                votes = item.get("votes", {})
+                positive = votes.get("positive", 0)
+                negative = votes.get("negative", 0)
+                if positive + negative > 0:
+                    scores.append((positive - negative) / (positive + negative))
+                else:
+                    scores.append(_keyword_score(title))
+    except Exception as exc:
+        logger.debug("news_sentiment cryptopanic failed: %s", exc)
+
+    # Fallback: CoinDesk RSS keyword analysis
+    if not scores:
+        try:
+            import re
+            resp = httpx.get(
+                "https://www.coindesk.com/arc/outboundfeeds/rss/",
+                timeout=8.0,
+            )
+            if resp.status_code == 200:
+                titles = re.findall(r"<title><!\[CDATA\[(.*?)\]\]></title>", resp.text)
+                for title in titles[:10]:
+                    scores.append(_keyword_score(title))
+        except Exception as exc:
+            logger.debug("news_sentiment rss failed: %s", exc)
+
+    if not scores:
+        _set_cached(cache_key, 0.0, 300)
+        return 0.0
+
+    avg = sum(scores) / len(scores)
+    result = _clamp(avg)
+    _set_cached(cache_key, result, 600)
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Composite builder
 # ---------------------------------------------------------------------------
 
@@ -468,13 +528,21 @@ def build_external_context(asset: str) -> ExternalContextSnapshot:
         (oi_score, 0.15),
     ])
 
+    # 7. News Sentiment
+    try:
+        news_sentiment_score = _fetch_news_sentiment(asset)
+    except Exception as exc:
+        logger.warning("news_sentiment source failed: %s", exc)
+        news_sentiment_score = 0.0
+        missing.append("news_sentiment")
+
     # --- Composite scores ---
 
-    # Sentiment composite: FG 35%, CoinGecko 35%, news placeholder 15%, derivatives 15%
+    # Sentiment composite: FG 30%, CoinGecko 30%, news 25%, derivatives 15%
     sentiment_composite = _clamp(
-        fear_greed_norm * 0.35
-        + coingecko_sentiment * 0.35
-        + 0.0 * 0.15  # news_sentiment placeholder
+        fear_greed_norm * 0.30
+        + coingecko_sentiment * 0.30
+        + news_sentiment_score * 0.25
         + (derivatives_sentiment or 0.0) * 0.15
     )
 
@@ -525,6 +593,7 @@ def build_external_context(asset: str) -> ExternalContextSnapshot:
             "n_tx_score": round(n_tx_score, 4),
             "hash_rate_score": round(hash_rate_score, 4),
             "volume_score": round(volume_score, 4),
+            "news_sentiment": round(news_sentiment_score, 4),
             "price_change_24h": round(price_change_24h, 4) if price_change_24h is not None else 0.0,
             "sentiment_composite": round(sentiment_composite, 4),
             "onchain_composite": round(onchain_composite, 4),

@@ -75,3 +75,15 @@ def run_backtrader(payload: dict) -> dict:
         trailing_stop_pct=settings.trailing_stop_pct,
     )
     return result
+
+
+@router.post("/backtests/monte-carlo")
+def run_monte_carlo_simulation(payload: dict):
+    """Run Monte Carlo simulation on a strategy's trade returns."""
+    from app.core.monte_carlo import run_monte_carlo
+
+    returns = payload.get("trade_returns", [])
+    n = payload.get("simulations", 1000)
+    confidence = payload.get("confidence_level", 0.95)
+    result = run_monte_carlo(returns, n_simulations=n, confidence_level=confidence)
+    return result
