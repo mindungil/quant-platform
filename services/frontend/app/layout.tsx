@@ -7,8 +7,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ko" className="dark">
       <head>
-        <title>Quant</title>
-        <meta name="description" content="AI 자율 트레이딩 플랫폼" />
+        <title>Quant — AI Trading</title>
+        <meta name="description" content="AI 자동 매매 플랫폼" />
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <link
           href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
           rel="stylesheet"
