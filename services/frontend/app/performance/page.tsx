@@ -167,14 +167,11 @@ function PerformanceContent() {
       <main className="grid gap-6">
         {/* Header */}
         <section className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-6">
-          <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
-            Performance
-          </p>
-          <h2 className="mt-1 text-2xl font-semibold tracking-tight text-zinc-50">
-            에이전트 성과
+          <h2 className="text-2xl font-semibold tracking-tight text-zinc-50">
+            AI 성과 리포트
           </h2>
           <p className="mt-1 text-sm text-zinc-400 leading-relaxed">
-            AI 에이전트의 트레이딩 성과를 한눈에 확인하세요
+            AI가 얼마나 잘하고 있는지 한눈에 확인해보세요
           </p>
           {lastUpdated && (
             <span className="text-[10px] text-zinc-500">
@@ -205,10 +202,11 @@ function PerformanceContent() {
         {/* ── Key Metrics (friendly) ──────────────────────────── */}
         <FadeInView delay={0.05}>
           <StaggerContainer className="grid gap-4 sm:grid-cols-3">
-            {/* 승률 */}
+            {/* 적중률 */}
             <StaggerItem>
               <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-6">
-                <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">승률</p>
+                <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">적중률</p>
+                <p className="text-[10px] text-zinc-600">맞춘 비율</p>
                 <div className="mt-2 flex items-end gap-2">
                   <span className="font-mono text-3xl font-bold tracking-tighter tabular-nums text-zinc-50">
                     <AnimatedNumber value={winRatePct} decimals={1} />
@@ -240,10 +238,11 @@ function PerformanceContent() {
               </div>
             </StaggerItem>
 
-            {/* 최대 하락폭 */}
+            {/* 최대 손실폭 */}
             <StaggerItem>
               <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-6">
-                <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">최대 하락폭</p>
+                <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">최대 손실폭</p>
+                <p className="text-[10px] text-zinc-600">가장 많이 떨어진 적</p>
                 <div className="mt-2 flex items-end gap-2">
                   <span className="font-mono text-3xl font-bold tracking-tighter tabular-nums text-red-500">
                     <AnimatedNumber value={Math.abs(maxDrawdownPct)} decimals={1} />
@@ -266,12 +265,10 @@ function PerformanceContent() {
         {/* ── Portfolio Cards ─────────────────────────────────── */}
         <FadeInView delay={0.1}>
           <section className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-6">
-            <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
-              Portfolio
-            </p>
-            <h3 className="mt-1 text-base font-semibold tracking-tight text-zinc-50">
-              포트폴리오
+            <h3 className="text-base font-semibold tracking-tight text-zinc-50">
+              내 투자 현황
             </h3>
+            <p className="mt-0.5 text-xs text-zinc-500">현재 투자 중인 금액과 수익을 보여드려요</p>
 
             <StaggerContainer className="mt-5 grid gap-4 sm:grid-cols-3">
               {/* 총 투자금 */}
@@ -353,12 +350,10 @@ function PerformanceContent() {
         {stats?.recent_trade_pnls && stats.recent_trade_pnls.length > 0 && (
           <FadeInView delay={0.15}>
             <section className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-6">
-              <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
-                Recent PnL
-              </p>
-              <h3 className="mt-1 text-base font-semibold tracking-tight text-zinc-50">
-                최근 거래 손익
+              <h3 className="text-base font-semibold tracking-tight text-zinc-50">
+                최근 거래 결과
               </h3>
+              <p className="mt-0.5 text-xs text-zinc-500">초록색은 이익, 빨간색은 손실이에요</p>
               <div className="mt-4 flex items-end gap-1 h-32">
                 {stats.recent_trade_pnls.map((pnl: number, i: number) => {
                   const maxAbs = Math.max(
@@ -386,12 +381,10 @@ function PerformanceContent() {
               className="flex w-full items-center justify-between p-6 text-left"
             >
               <div>
-                <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
-                  Advanced
-                </p>
-                <h3 className="mt-1 text-base font-semibold tracking-tight text-zinc-50">
-                  전문가 지표
+                <h3 className="text-base font-semibold tracking-tight text-zinc-50">
+                  상세 분석 지표
                 </h3>
+                <p className="mt-0.5 text-xs text-zinc-500">더 자세히 알고 싶다면 펼쳐보세요</p>
               </div>
               <motion.span
                 animate={{ rotate: showExpert ? 180 : 0 }}
@@ -418,26 +411,26 @@ function PerformanceContent() {
                 <StaggerContainer className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   {[
                     {
-                      label: "샤프 비율 (Sharpe)",
-                      tip: "위험 대비 수익 효율",
+                      label: "위험 대비 수익률",
+                      tip: "같은 위험을 감수했을 때 얼마나 효율적으로 벌었는지",
                       value: stats?.sharpe,
                       fmt: (v: number) => v.toFixed(2),
                     },
                     {
-                      label: "소르티노 비율 (Sortino)",
-                      tip: "하방 위험 대비 수익",
+                      label: "하락 대비 수익률",
+                      tip: "손실 위험 대비 얼마나 수익을 냈는지",
                       value: stats?.sortino,
                       fmt: (v: number) => v.toFixed(2),
                     },
                     {
-                      label: "수익 팩터 (Profit Factor)",
-                      tip: "총이익 / 총손실",
+                      label: "수익 배수",
+                      tip: "번 돈이 잃은 돈의 몇 배인지",
                       value: stats?.profit_factor,
                       fmt: (v: number) => v.toFixed(2),
                     },
                     {
-                      label: "기대값 (Expectancy)",
-                      tip: "거래당 평균 기대 수익",
+                      label: "평균 기대 수익",
+                      tip: "한 번 거래할 때 평균적으로 기대할 수 있는 수익",
                       value: stats?.expectancy,
                       fmt: (v: number) => v.toFixed(4),
                       color: (v: number) =>

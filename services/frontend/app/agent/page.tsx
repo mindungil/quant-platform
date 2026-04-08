@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { gatewayFetch } from "../../lib/api";
 import { AuthGuard } from "../../components/auth-guard";
 import { useToast } from "../../components/toast";
-import { parseReasoning, cleanReasoning, formatIndicatorName, formatStrategyDescription, formatRegime, formatConfidence } from "../../lib/reasoning";
+import { parseReasoning, cleanReasoning, formatIndicatorName, formatStrategyDescription, formatRegime, formatConfidence, beginnerAction, explainScore, explainRegime, beginnerIndicatorName, beginnerIndicatorStrength, beginnerFriendly } from "../../lib/reasoning";
 import { ConfirmDialog } from "../../components/confirm-dialog";
 import {
   PageTransition,
@@ -133,22 +133,29 @@ function DecisionCard({ decision, expanded, onToggle }: { decision: Decision; ex
         </div>
       </div>
 
-      {/* Subtitle: Regime + Strength */}
+      {/* Subtitle: Beginner-friendly regime explanation */}
       <p className="mt-1.5 text-xs text-zinc-500">
-        {regimeKo}{strength ? ` · 시그널 ${strength}` : ""}
+        {explainRegime(regime)}{strength ? ` · 신호 ${strength === "강함" ? "강해요" : strength === "약함" ? "약해요" : "보통이에요"}` : ""}
       </p>
 
-      {/* Indicators (inline chips) */}
+      {/* Signal score explanation */}
+      {decision.signal_score != null && (
+        <p className="mt-1 text-xs text-zinc-400">
+          {explainScore(decision.signal_score)}
+        </p>
+      )}
+
+      {/* Indicators (inline chips — beginner-friendly) */}
       {indicators.length > 0 && (
         <div className="mt-2.5 flex flex-wrap gap-1.5">
           {indicators.slice(0, 4).map((ind: any) => (
-            <span key={ind.name} className="rounded-md border border-green-500/15 bg-green-500/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-green-500">
-              {formatIndicatorName(ind.name)} +{Math.round(ind.value * 100)}%
+            <span key={ind.name} className="rounded-md border border-green-500/15 bg-green-500/10 px-1.5 py-0.5 text-[10px] font-medium text-green-500">
+              {beginnerIndicatorName(ind.name)}: {beginnerIndicatorStrength(ind.value)}
             </span>
           ))}
           {bearish.slice(0, 2).map((ind: any) => (
-            <span key={ind.name} className="rounded-md border border-red-500/15 bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-red-500">
-              {formatIndicatorName(ind.name)} {Math.round(ind.value * 100)}%
+            <span key={ind.name} className="rounded-md border border-red-500/15 bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium text-red-500">
+              {beginnerIndicatorName(ind.name)}: {beginnerIndicatorStrength(ind.value)}
             </span>
           ))}
         </div>
@@ -162,33 +169,27 @@ function DecisionCard({ decision, expanded, onToggle }: { decision: Decision; ex
         </div>
       )}
 
-      {/* Expanded detail (shown on click) */}
+      {/* Expanded detail (shown on click — beginner-friendly) */}
       {expanded && (
         <div className="mt-3 border-t border-white/[0.04] pt-3 space-y-2">
           <div className="grid grid-cols-2 gap-2 text-[11px]">
             <div>
-              <span className="text-zinc-500 uppercase tracking-wider">시그널 점수</span>
-              <span className="ml-2 font-mono tabular-nums text-zinc-300">{decision.signal_score?.toFixed(4)}</span>
+              <span className="text-zinc-500">신호 강도</span>
+              <span className="ml-2 text-zinc-300">{explainScore(decision.signal_score ?? 0)}</span>
             </div>
             <div>
-              <span className="text-zinc-500 uppercase tracking-wider">전략</span>
-              <span className="ml-2 text-zinc-300">{decision.strategy_name || decision.formula_name || "-"}</span>
+              <span className="text-zinc-500">분석 방식</span>
+              <span className="ml-2 text-zinc-300">{beginnerFriendly(decision.strategy_name || decision.formula_name || "종합 분석")}</span>
             </div>
             {decision.confidence != null && (
               <div>
-                <span className="text-zinc-500 uppercase tracking-wider">확신도</span>
-                <span className="ml-2 font-mono tabular-nums text-zinc-300">{Math.round(decision.confidence * 100)}%</span>
-              </div>
-            )}
-            {decision.decision_id && (
-              <div>
-                <span className="text-zinc-500 uppercase tracking-wider">결정 ID</span>
-                <span className="ml-2 text-zinc-500 font-mono text-[10px]">{decision.decision_id.slice(0, 8)}</span>
+                <span className="text-zinc-500">AI 확신도</span>
+                <span className="ml-2 text-zinc-300">{Math.round(decision.confidence * 100)}%</span>
               </div>
             )}
           </div>
-          {/* Full reasoning text — formatted */}
-          <p className="text-xs text-zinc-500 leading-relaxed">{formatStrategyDescription(cleanReasoning(decision.reasoning || ""))}</p>
+          {/* Full reasoning text — formatted for beginners */}
+          <p className="text-xs text-zinc-400 leading-relaxed">{beginnerFriendly(formatStrategyDescription(cleanReasoning(decision.reasoning || "")))}</p>
         </div>
       )}
     </div>
@@ -326,9 +327,9 @@ function AgentContent() {
         <section className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-6">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-2xl font-semibold tracking-tight text-zinc-50">AI 에이전트</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-zinc-50">AI 분석 도우미</h2>
               <p className="mt-1 text-sm text-zinc-400 leading-relaxed">
-                실시간 시장 분석과 AI 추천을 확인하세요
+                AI가 시장을 분석하고 사야 할지, 팔아야 할지 알려드려요
               </p>
               {lastUpdated && (
                 <span className="text-[10px] text-zinc-500">
@@ -418,10 +419,10 @@ function AgentContent() {
                           </span>
                         )}
 
-                        <p className="mt-1 text-sm font-medium text-zinc-200">{formatIndicatorName(r.name)}</p>
+                        <p className="mt-1 text-sm font-medium text-zinc-200">{beginnerFriendly(formatIndicatorName(r.name))}</p>
 
                         <p className="mt-2.5 text-sm text-zinc-400 leading-relaxed">
-                          {formatStrategyDescription(cleanReasoning(r.reasoning))}
+                          {beginnerFriendly(formatStrategyDescription(cleanReasoning(r.reasoning)))}
                         </p>
 
                         {/* Confidence bar */}
@@ -448,11 +449,12 @@ function AgentContent() {
               ) : (
                 <div className="flex items-center justify-center rounded-xl border border-dashed border-white/[0.06] bg-white/[0.02] py-12">
                   <div className="text-center">
-                    <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-white/[0.06]">
-                      <CoinIcon asset={selectedAsset} size={24} />
-                    </div>
+                    <p className="text-3xl mb-3">{"\uD83D\uDCE1"}</p>
                     <p className="text-sm text-neutral-400">
-                      시장 데이터를 수집 중입니다...
+                      시장 데이터를 모으고 있어요...
+                    </p>
+                    <p className="mt-1 text-xs text-neutral-500">
+                      잠시만 기다리면 AI 추천이 나타나요
                     </p>
                   </div>
                 </div>
@@ -472,9 +474,9 @@ function AgentContent() {
           >
             <FadeInView delay={0.1}>
               <section className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-6">
-                <h3 className="text-base font-semibold tracking-tight text-zinc-50">최근 판단</h3>
+                <h3 className="text-base font-semibold tracking-tight text-zinc-50">최근 분석 기록</h3>
                 <p className="mt-1 text-sm text-zinc-400 leading-relaxed">
-                  AI 에이전트의 최근 분석 기록
+                  AI가 최근에 내린 판단들이에요. 클릭하면 자세한 설명을 볼 수 있어요.
                 </p>
 
                 {loading ? (
@@ -492,14 +494,12 @@ function AgentContent() {
                   </div>
                 ) : decisions.length === 0 ? (
                   <div className="mt-8 flex flex-col items-center py-8 text-center">
-                    <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-white/[0.06] text-xl">
-                      📊
-                    </div>
+                    <p className="text-3xl mb-3">{"\uD83D\uDD0D"}</p>
                     <p className="text-sm text-neutral-400">
-                      아직 판단 이력이 없습니다
+                      아직 분석 기록이 없어요
                     </p>
-                    <p className="mt-1 text-xs text-neutral-300">
-                      에이전트가 시장 데이터를 수집하면 자동으로 분석을 시작합니다
+                    <p className="mt-1 text-xs text-neutral-500">
+                      위의 &quot;분석 실행&quot; 버튼을 눌러보세요. AI가 시장을 분석해드릴게요!
                     </p>
                   </div>
                 ) : (

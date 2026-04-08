@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { gatewayFetch } from "../../lib/api";
 import { cleanReasoning } from "../../lib/reasoning";
+import { cleanLLMResponse, beginnerFriendly } from "../../lib/reasoning";
 
 /* ── Types ──────────────────────────────────────────────────── */
 
@@ -328,10 +329,10 @@ export default function ChatPage() {
   }
 
   const suggestions = [
-    { text: "BTC 현재 상황 분석해줘", icon: "📊" },
-    { text: "ETH 매수 타이밍이야?", icon: "⏱" },
-    { text: "포트폴리오 현황 보여줘", icon: "💼" },
-    { text: "모멘텀 공식 백테스트 해봐", icon: "🧪" },
+    { text: "비트코인 지금 사도 될까요?", icon: "\uD83D\uDCB0" },
+    { text: "시장이 위험한 상태인가요?", icon: "\u26A0\uFE0F" },
+    { text: "내 포트폴리오 어때요?", icon: "\uD83D\uDCCA" },
+    { text: "초보자인데 어떻게 시작하나요?", icon: "\uD83E\uDD14" },
   ];
 
   return (
@@ -446,9 +447,9 @@ export default function ChatPage() {
                   transition={{ delay: 0.25 }}
                   className="mb-10 max-w-md text-sm text-zinc-400 leading-relaxed"
                 >
-                  시장 분석, 매매 실행, 공식 평가를 자연어로 요청하세요.
+                  궁금한 점을 편하게 물어보세요.
                   <br />
-                  에이전트가 필요한 도구를 자동으로 호출합니다.
+                  AI가 시장을 분석하고 쉽게 설명해드려요.
                 </motion.p>
                 <motion.div
                   initial="hidden"
@@ -529,7 +530,7 @@ export default function ChatPage() {
                       {/* Text content */}
                       <div className="border-l-2 border-white/[0.15] pl-4">
                         <div className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-300">
-                          {msg.content}
+                          {beginnerFriendly(cleanLLMResponse(msg.content))}
                         </div>
                         {/* Subtle elapsed time */}
                         {msg.elapsed_ms !== undefined && msg.elapsed_ms > 0 && (

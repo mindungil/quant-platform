@@ -81,8 +81,13 @@ export default function HomePage() {
           <h1 className="text-xl font-bold tracking-tight text-white">
             {isLogin ? "로그인" : "계정 만들기"}
           </h1>
-          <p className="mt-2 text-sm text-neutral-500">
-            AI 자율 트레이딩 플랫폼
+          <p className="mt-2 text-sm text-neutral-400 leading-relaxed">
+            투자를 모르셔도 괜찮아요.
+            <br />
+            AI가 대신 분석해드릴게요.
+          </p>
+          <p className="mt-3 text-[11px] text-neutral-500">
+            24시간 자동 분석 {"\u00B7"} 2,000+ 분석 완료 {"\u00B7"} 초보자 맞춤 설명
           </p>
         </motion.div>
 

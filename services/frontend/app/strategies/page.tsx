@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { gatewayFetch } from "../../lib/api";
 import { AuthGuard } from "../../components/auth-guard";
 import { ErrorBoundary, EmptyState, LoadingSkeleton } from "../../components/error-boundary";
-import { formatIndicatorName } from "../../lib/reasoning";
+import { formatIndicatorName, beginnerFriendly, beginnerIndicatorName } from "../../lib/reasoning";
 import {
   PageTransition,
   StaggerContainer,
@@ -191,8 +191,8 @@ function StrategiesContent() {
     return (
       <main className="grid gap-6">
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight text-zinc-50">전략 분석</h2>
-          <p className="mt-1 text-sm text-zinc-400 leading-relaxed">전략 성과와 드리프트 상태</p>
+          <h2 className="text-2xl font-semibold tracking-tight text-zinc-50">AI 분석 전략</h2>
+          <p className="mt-1 text-sm text-zinc-400 leading-relaxed">데이터를 불러오고 있어요...</p>
         </div>
         <LoadingSkeleton rows={4} />
       </main>
@@ -203,7 +203,7 @@ function StrategiesContent() {
     return (
       <main className="grid gap-6">
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight text-zinc-50">전략 분석</h2>
+          <h2 className="text-2xl font-semibold tracking-tight text-zinc-50">AI 분석 전략</h2>
         </div>
         <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-6 text-center">
           <p className="text-sm text-red-400">{error}</p>
@@ -226,9 +226,9 @@ function StrategiesContent() {
       <main className="grid gap-6">
         {/* Header */}
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight text-zinc-50">전략 분석</h2>
+          <h2 className="text-2xl font-semibold tracking-tight text-zinc-50">AI 분석 전략</h2>
           <p className="mt-1 text-sm text-zinc-400 leading-relaxed">
-            백테스트 기준 대비 실시간 성과를 비교하고 드리프트 상태를 확인하세요
+            AI가 어떤 방법으로 시장을 분석하고 있는지 확인해보세요
           </p>
         </div>
 
@@ -237,12 +237,10 @@ function StrategiesContent() {
           <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
-                  DRIFT STATUS
-                </p>
-                <h3 className="mt-1 text-base font-semibold tracking-tight text-zinc-50">
-                  전략 드리프트
+                <h3 className="text-base font-semibold tracking-tight text-zinc-50">
+                  전략 상태
                 </h3>
+                <p className="mt-0.5 text-xs text-zinc-500">AI 전략이 예상대로 잘 작동하고 있는지 보여드려요</p>
               </div>
               <DriftBadge stats={stats} />
             </div>
@@ -278,19 +276,19 @@ function StrategiesContent() {
                 color: totalReturn >= 0 ? "text-emerald-400" : "text-red-400",
               },
               {
-                label: "승률",
+                label: "적중률",
                 value: winRate * 100,
                 suffix: "%",
                 color: "text-white",
               },
               {
-                label: "거래 횟수",
+                label: "분석 횟수",
                 value: tradeCount,
                 suffix: "건",
                 color: "text-white",
               },
               {
-                label: "최대 하락폭",
+                label: "최대 손실폭",
                 value: (stats?.max_drawdown ?? 0) * 100,
                 suffix: "%",
                 color: "text-red-400",
@@ -314,10 +312,8 @@ function StrategiesContent() {
         {/* Active Strategies */}
         <FadeInView delay={0.1}>
           <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6">
-            <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
-              ACTIVE STRATEGIES
-            </p>
-            <h3 className="mt-1 text-base font-semibold tracking-tight text-zinc-50">활성 전략</h3>
+            <h3 className="text-base font-semibold tracking-tight text-zinc-50">현재 사용 중인 분석 방법</h3>
+            <p className="mt-0.5 text-xs text-zinc-500">AI가 시장을 분석할 때 사용하는 방법들이에요</p>
 
             {strategies.length === 0 ? (
               <EmptyState
@@ -331,9 +327,17 @@ function StrategiesContent() {
                     <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-medium text-zinc-200">{strat.name}</p>
+                          <p className="text-sm font-medium text-zinc-200">{
+                            strat.name.includes("composite_adaptive") ? "종합 분석" :
+                            strat.name.includes("factor_ensemble") ? "AI 팩터 분석" :
+                            strat.name.includes("momentum") ? "모멘텀 분석" :
+                            strat.name.includes("mean_revert") ? "평균 회귀 분석" :
+                            strat.name.includes("trend") ? "추세 추종 분석" :
+                            strat.name.includes("breakout") ? "돌파 분석" :
+                            beginnerFriendly(strat.name)
+                          }</p>
                           <p className="mt-0.5 text-xs text-zinc-500">
-                            {strat.asset_type} / {strat.version ?? "v1"}
+                            {strat.asset_type === "crypto" ? "암호화폐" : strat.asset_type}
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
@@ -358,7 +362,7 @@ function StrategiesContent() {
                               key={ind}
                               className="text-xs font-medium text-zinc-400 bg-white/[0.05] border border-white/[0.06] rounded-md px-2 py-0.5"
                             >
-                              {formatIndicatorName(ind)}
+                              {beginnerIndicatorName(ind)}
                             </span>
                           ))}
                         </div>
@@ -375,16 +379,14 @@ function StrategiesContent() {
         {stats && tradeCount > 0 && (
           <FadeInView delay={0.15}>
             <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6">
-              <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
-                STRATEGY METRICS
-              </p>
-              <h3 className="mt-1 text-base font-semibold tracking-tight text-zinc-50">전략 지표</h3>
+              <h3 className="text-base font-semibold tracking-tight text-zinc-50">상세 성과 지표</h3>
+              <p className="mt-0.5 text-xs text-zinc-500">AI 전략의 성과를 더 자세히 보여드려요</p>
               <StaggerContainer className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 {[
-                  { label: "샤프 비율", value: stats.sharpe, fmt: 2 },
-                  { label: "소르티노 비율", value: stats.sortino, fmt: 2 },
-                  { label: "수익 팩터", value: stats.profit_factor, fmt: 2 },
-                  { label: "기대값", value: stats.expectancy, fmt: 4 },
+                  { label: "위험 대비 수익률", value: stats.sharpe, fmt: 2 },
+                  { label: "하락 대비 수익률", value: stats.sortino, fmt: 2 },
+                  { label: "수익 배수", value: stats.profit_factor, fmt: 2 },
+                  { label: "평균 기대 수익", value: stats.expectancy, fmt: 4 },
                 ].map((m, i) => (
                   <StaggerItem key={i}>
                     <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
@@ -406,27 +408,25 @@ function StrategiesContent() {
         {recommendations.length > 0 && (
           <FadeInView delay={0.2}>
             <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6">
-              <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
-                RECOMMENDATIONS
-              </p>
-              <h3 className="mt-1 text-base font-semibold tracking-tight text-zinc-50">전략 추천</h3>
+              <h3 className="text-base font-semibold tracking-tight text-zinc-50">AI 추천 전략</h3>
+              <p className="mt-0.5 text-xs text-zinc-500">현재 시장 상황에 맞는 분석 방법을 추천해드려요</p>
               <StaggerContainer className="mt-4 space-y-3">
                 {recommendations.map((rec, i) => (
                   <StaggerItem key={i}>
                     <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
                       <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium text-zinc-200">{rec.name}</p>
-                        <span className="font-mono text-xs font-medium tabular-nums text-zinc-50 bg-white/[0.05] border border-white/[0.06] rounded-md px-2 py-0.5">
-                          {(rec.confidence * 100).toFixed(0)}%
+                        <p className="text-sm font-medium text-zinc-200">{beginnerFriendly(rec.name)}</p>
+                        <span className="text-xs font-medium tabular-nums text-zinc-50 bg-white/[0.05] border border-white/[0.06] rounded-md px-2 py-0.5">
+                          신뢰도 {(rec.confidence * 100).toFixed(0)}%
                         </span>
                       </div>
-                      <p className="mt-1 text-sm text-zinc-400 leading-relaxed">{rec.description}</p>
+                      <p className="mt-1 text-sm text-zinc-400 leading-relaxed">{beginnerFriendly(rec.description)}</p>
                       <div className="mt-2 flex gap-2">
                         <span className="rounded-md bg-white/[0.05] px-2 py-0.5 text-[10px] text-neutral-400">
-                          {rec.formula_name}
+                          {beginnerFriendly(rec.formula_name)}
                         </span>
                         <span className="rounded-md bg-white/[0.05] px-2 py-0.5 text-[10px] text-neutral-400">
-                          {rec.regime}
+                          {beginnerFriendly(rec.regime)}
                         </span>
                       </div>
                     </div>

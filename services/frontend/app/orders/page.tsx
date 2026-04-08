@@ -397,12 +397,12 @@ function OrdersContent() {
         <section className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
-                Orders
-              </p>
-              <h2 className="mt-1 text-2xl font-semibold tracking-tight text-zinc-50">
+              <h2 className="text-2xl font-semibold tracking-tight text-zinc-50">
                 주문 내역
               </h2>
+              <p className="mt-1 text-sm text-zinc-400 leading-relaxed">
+                AI가 실행한 주문을 확인할 수 있어요
+              </p>
               {lastUpdated && (
                 <span className="text-[10px] text-zinc-500">
                   마지막 업데이트: {new Date(lastUpdated).toLocaleTimeString("ko-KR")}
@@ -518,10 +518,14 @@ function OrdersContent() {
           </div>
         ) : filtered.length === 0 ? (
           <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-12 text-center">
+            <p className="text-3xl mb-3">{"\uD83D\uDCCB"}</p>
             <p className="text-sm text-zinc-400">
               {filter === "ALL"
-                ? "아직 주문이 없습니다"
-                : `${FILTER_LABELS[filter] ?? filter} 주문이 없습니다`}
+                ? "아직 주문 내역이 없어요"
+                : `${FILTER_LABELS[filter] ?? filter} 주문이 없어요`}
+            </p>
+            <p className="text-xs text-zinc-500 mt-1">
+              AI 에이전트가 좋은 기회를 발견하면 자동으로 주문을 실행해요
             </p>
           </div>
         ) : (

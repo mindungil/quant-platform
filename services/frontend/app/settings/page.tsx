@@ -240,7 +240,7 @@ function SettingsContent() {
         <div>
           <h2 className="text-2xl font-semibold tracking-tight text-zinc-50">설정</h2>
           <p className="mt-1 text-sm text-zinc-400 leading-relaxed">
-            거래소 연결, 리스크 관리, 계정 정보
+            거래소를 연결하고, AI 자동 매매를 설정해보세요
           </p>
         </div>
 
@@ -254,11 +254,11 @@ function SettingsContent() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/10">
-                  <span className="text-sm">?</span>
+                  <span className="text-sm">{"\uD83D\uDE80"}</span>
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-zinc-200">시작 가이드</p>
-                  <p className="text-xs text-zinc-500">플랫폼 사용법과 거래소 연결 방법</p>
+                  <p className="text-sm font-medium text-zinc-200">처음이신가요? 시작 가이드</p>
+                  <p className="text-xs text-zinc-500">3단계만 따라하면 AI 자동 매매를 시작할 수 있어요</p>
                 </div>
               </div>
               <motion.span
@@ -282,12 +282,13 @@ function SettingsContent() {
                   <div className="mt-4 space-y-4 border-t border-white/[0.06] pt-4">
                     <div className="grid gap-3 md:grid-cols-3">
                       {[
-                        { step: "1", title: "거래소 API 발급", desc: "아래에서 거래소를 선택하고 API 키를 등록하세요. 읽기+거래 권한이 필요합니다." },
-                        { step: "2", title: "AI 에이전트 연결", desc: "AI 에이전트 탭에서 Claude 또는 Codex 계정을 OAuth로 연결하세요." },
-                        { step: "3", title: "자동 매매 시작", desc: "에이전트가 시장을 분석하고 자동으로 매매합니다. 대시보드에서 모니터링하세요." },
+                        { step: "1", icon: "\uD83D\uDD17", title: "거래소 연결하기", desc: "아래에서 거래소를 선택하고 API 키를 등록해주세요. 거래소에서 발급받은 키를 복사해서 붙여넣기만 하면 돼요." },
+                        { step: "2", icon: "\uD83E\uDD16", title: "AI 연결하기", desc: "아래 AI 연동 섹션에서 연결 버튼을 누르세요. 클릭 한 번이면 끝나요." },
+                        { step: "3", icon: "\u2705", title: "자동 매매 시작!", desc: "끝! AI가 알아서 시장을 분석하고 좋은 기회에 자동으로 매매해요. 대시보드에서 확인하세요." },
                       ].map((item) => (
                         <div key={item.step} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-                          <div className="mb-2 flex h-6 w-6 items-center justify-center rounded-full bg-white text-xs font-bold text-black">
+                          <div className="mb-2 text-2xl">{item.icon}</div>
+                          <div className="mb-1 flex h-6 w-6 items-center justify-center rounded-full bg-white text-xs font-bold text-black">
                             {item.step}
                           </div>
                           <p className="text-sm font-medium text-zinc-200">{item.title}</p>
@@ -297,7 +298,7 @@ function SettingsContent() {
                     </div>
 
                     <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-                      <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-zinc-500">거래소별 API 발급 방법</p>
+                      <p className="mb-2 text-xs font-medium text-zinc-400">거래소별 연결 방법</p>
                       {EXCHANGES.map((ex) => (
                         <div key={ex.id} className="flex items-start gap-2 py-1.5">
                           <span className="mt-0.5 text-xs font-semibold text-zinc-50">{ex.name}</span>
@@ -317,8 +318,8 @@ function SettingsContent() {
           <FadeInView delay={0.05}>
             <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6 space-y-5">
               <div>
-                <h3 className="text-base font-semibold tracking-tight text-zinc-50">거래소 연결</h3>
-                <p className="mt-0.5 text-xs text-neutral-500">거래소 API 키를 등록하면 자동 매매가 가능합니다</p>
+                <h3 className="text-base font-semibold tracking-tight text-zinc-50">거래소 연결하기</h3>
+                <p className="mt-0.5 text-xs text-neutral-500">거래소에서 발급받은 키를 입력하면 AI가 자동으로 매매할 수 있어요</p>
               </div>
 
               <AnimatePresence mode="wait">
@@ -404,7 +405,11 @@ function SettingsContent() {
                     ))}
                   </div>
                 ) : credentials.length === 0 ? (
-                  <p className="text-sm text-neutral-500">아직 연결된 거래소가 없습니다</p>
+                  <div className="text-center py-4">
+                    <p className="text-xl mb-2">{"\uD83D\uDD0C"}</p>
+                    <p className="text-sm text-neutral-500">아직 연결된 거래소가 없어요</p>
+                    <p className="text-xs text-neutral-600 mt-1">위에서 거래소를 선택하고 키를 입력해보세요</p>
+                  </div>
                 ) : (
                   <StaggerContainer className="space-y-2">
                     {credentials.map((cred) => (
@@ -617,8 +622,8 @@ function SettingsContent() {
             <FadeInView delay={0.14}>
               <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6 space-y-4">
                 <div>
-                  <h3 className="text-base font-semibold tracking-tight text-zinc-50">고급: 자체 LLM 연동 (선택사항)</h3>
-                  <p className="mt-0.5 text-sm text-zinc-400 leading-relaxed">자체 Claude/Codex 계정을 연동하면 프리미엄 모델을 사용할 수 있습니다. 연동하지 않아도 플랫폼 AI가 기본 제공됩니다.</p>
+                  <h3 className="text-base font-semibold tracking-tight text-zinc-50">AI 연동 (선택사항)</h3>
+                  <p className="mt-0.5 text-sm text-zinc-400 leading-relaxed">더 똑똑한 AI를 사용하고 싶다면 연동해보세요. 연동하지 않아도 기본 AI가 제공돼요.</p>
                 </div>
                 <AiProviderCard
                   provider="claude"
