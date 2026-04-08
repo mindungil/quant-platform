@@ -77,8 +77,8 @@ function AiProviderCard({ provider, name, description, color, iconColor }: {
     <div className={`rounded-xl border p-4 ${color}`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className={`flex h-10 w-10 items-center justify-center rounded-lg bg-white/10 text-lg ${iconColor}`}>
-            {provider === "claude" ? "🤖" : "⚡"}
+          <div className={`flex h-10 w-10 items-center justify-center rounded-lg bg-white/10 text-sm font-bold ${iconColor}`}>
+            {provider === "claude" ? "C" : "G"}
           </div>
           <div>
             <p className="text-sm font-medium text-zinc-200">{name}</p>
@@ -239,9 +239,7 @@ function SettingsContent() {
         {/* Header */}
         <div>
           <h2 className="text-2xl font-semibold tracking-tight text-zinc-50">설정</h2>
-          <p className="mt-1 text-sm text-zinc-400 leading-relaxed">
-            거래소를 연결하고, AI 자동 매매를 설정해보세요
-          </p>
+          <p className="mt-1 text-xs text-zinc-500">거래소 연결 및 AI 설정</p>
         </div>
 
         {/* Quick start guide */}
@@ -253,12 +251,9 @@ function SettingsContent() {
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/10">
-                  <span className="text-sm">{"\uD83D\uDE80"}</span>
-                </div>
                 <div>
-                  <p className="text-sm font-medium text-zinc-200">처음이신가요? 시작 가이드</p>
-                  <p className="text-xs text-zinc-500">3단계만 따라하면 AI 자동 매매를 시작할 수 있어요</p>
+                  <p className="text-sm font-medium text-zinc-200">시작 가이드</p>
+                  <p className="text-xs text-zinc-500">3단계로 시작</p>
                 </div>
               </div>
               <motion.span
@@ -282,17 +277,16 @@ function SettingsContent() {
                   <div className="mt-4 space-y-4 border-t border-white/[0.06] pt-4">
                     <div className="grid gap-3 md:grid-cols-3">
                       {[
-                        { step: "1", icon: "\uD83D\uDD17", title: "거래소 연결하기", desc: "아래에서 거래소를 선택하고 API 키를 등록해주세요. 거래소에서 발급받은 키를 복사해서 붙여넣기만 하면 돼요." },
-                        { step: "2", icon: "\uD83E\uDD16", title: "AI 연결하기", desc: "아래 AI 연동 섹션에서 연결 버튼을 누르세요. 클릭 한 번이면 끝나요." },
-                        { step: "3", icon: "\u2705", title: "자동 매매 시작!", desc: "끝! AI가 알아서 시장을 분석하고 좋은 기회에 자동으로 매매해요. 대시보드에서 확인하세요." },
+                        { step: "1", title: "거래소 연결", desc: "API 키 등록" },
+                        { step: "2", title: "AI 연동", desc: "연결 버튼 클릭" },
+                        { step: "3", title: "자동 매매 시작", desc: "대시보드에서 확인" },
                       ].map((item) => (
                         <div key={item.step} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-                          <div className="mb-2 text-2xl">{item.icon}</div>
-                          <div className="mb-1 flex h-6 w-6 items-center justify-center rounded-full bg-white text-xs font-bold text-black">
+                          <div className="mb-2 flex h-6 w-6 items-center justify-center rounded-full bg-white text-xs font-bold text-black">
                             {item.step}
                           </div>
                           <p className="text-sm font-medium text-zinc-200">{item.title}</p>
-                          <p className="mt-1 text-sm text-zinc-400 leading-relaxed">{item.desc}</p>
+                          <p className="mt-1 text-xs text-zinc-500">{item.desc}</p>
                         </div>
                       ))}
                     </div>
@@ -319,7 +313,7 @@ function SettingsContent() {
             <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6 space-y-5">
               <div>
                 <h3 className="text-base font-semibold tracking-tight text-zinc-50">거래소 연결하기</h3>
-                <p className="mt-0.5 text-xs text-neutral-500">거래소에서 발급받은 키를 입력하면 AI가 자동으로 매매할 수 있어요</p>
+                <p className="mt-0.5 text-xs text-neutral-500">API 키 등록</p>
               </div>
 
               <AnimatePresence mode="wait">
@@ -406,9 +400,7 @@ function SettingsContent() {
                   </div>
                 ) : credentials.length === 0 ? (
                   <div className="text-center py-4">
-                    <p className="text-xl mb-2">{"\uD83D\uDD0C"}</p>
-                    <p className="text-sm text-neutral-500">아직 연결된 거래소가 없어요</p>
-                    <p className="text-xs text-neutral-600 mt-1">위에서 거래소를 선택하고 키를 입력해보세요</p>
+                    <p className="text-sm text-neutral-500">거래소 연결 필요</p>
                   </div>
                 ) : (
                   <StaggerContainer className="space-y-2">
@@ -623,7 +615,7 @@ function SettingsContent() {
               <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6 space-y-4">
                 <div>
                   <h3 className="text-base font-semibold tracking-tight text-zinc-50">AI 연동 (선택사항)</h3>
-                  <p className="mt-0.5 text-sm text-zinc-400 leading-relaxed">더 똑똑한 AI를 사용하고 싶다면 연동해보세요. 연동하지 않아도 기본 AI가 제공돼요.</p>
+                  <p className="mt-0.5 text-xs text-zinc-500">선택사항 - 기본 AI 제공</p>
                 </div>
                 <AiProviderCard
                   provider="claude"

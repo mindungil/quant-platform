@@ -66,7 +66,7 @@ export default function PricingPage() {
           transition={{ delay: 0.2 }}
           className="mt-3 text-sm text-zinc-400 leading-relaxed"
         >
-          AI 에이전트가 24시간 시장을 분석합니다. 당신은 구독만 하세요.
+          AI 자동 매매 구독
         </motion.p>
 
         <div className="mt-16 grid grid-cols-1 gap-6 md:grid-cols-3">

@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { gatewayFetch } from "../../lib/api";
 import { AuthGuard } from "../../components/auth-guard";
 import { useToast } from "../../components/toast";
-import { parseReasoning, cleanReasoning, formatIndicatorName, formatStrategyDescription, formatRegime, formatConfidence, beginnerAction, explainScore, beginnerIndicatorName, beginnerIndicatorStrength } from "../../lib/reasoning";
+import { parseReasoning, cleanReasoning, formatIndicatorName, formatStrategyDescription, formatRegime, formatConfidence, beginnerAction, beginnerIndicatorName, beginnerIndicatorStrength } from "../../lib/reasoning";
 import {
   PageTransition,
   StaggerContainer,
@@ -14,6 +14,7 @@ import {
   motion,
 } from "../../components/motion";
 import { MarketChart } from "../../components/market-chart";
+import { IconUp, IconDown, IconPause, IconEmpty } from "../../components/icons";
 
 /* ── Types ───────────────────────────────────────────────────── */
 
@@ -364,13 +365,6 @@ function DashboardContent() {
   const stats = data?.statistics;
   const topRec = recs[0];
 
-  const agentMessage = useMemo(() => {
-    if (!topRec) return "시장 데이터를 수집하고 있습니다. 잠시 후 분석이 시작됩니다.";
-    const regime = formatRegime(topRec.regime);
-    const method = friendlyFormula(topRec.formula_name);
-    return `현재 시장은 ${regime} 국면으로, ${method}을 통해 매매 전략을 운용 중입니다.`;
-  }, [topRec]);
-
   if (loading) return <DashboardSkeleton />;
 
   if (error) {
@@ -424,31 +418,16 @@ function DashboardContent() {
             />
 
             <div className="relative z-10">
-              <h2 className="text-2xl font-semibold tracking-tight text-zinc-50">
-                안녕하세요 {"\uD83D\uDC4B"}
-              </h2>
-              <p className="mt-2 text-sm text-zinc-400 leading-relaxed">
-                AI가 24시간 시장을 분석하고 있어요. 현재 상태를 확인해보세요.
-              </p>
-
-              {/* Simple status card */}
-              <div className="mt-4 rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+              {/* Agent status card — icon + action only */}
+              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
                 <div className="flex items-center gap-3">
-                  <span className="text-2xl">{beginnerAction(decisions[0]?.action).emoji}</span>
-                  <div>
-                    <p className="text-sm font-medium text-zinc-50">
-                      {beginnerAction(decisions[0]?.action).text}
-                    </p>
-                    <p className="text-xs text-zinc-400">
-                      {beginnerAction(decisions[0]?.action).description}
-                    </p>
-                  </div>
-                </div>
-                {decisions[0]?.signal_score != null && (
-                  <p className="mt-2 text-xs text-zinc-500">
-                    {explainScore(decisions[0].signal_score)}
+                  <span>
+                    {decisions[0]?.action === "BUY" ? <IconUp /> : decisions[0]?.action === "SELL" ? <IconDown /> : <IconPause />}
+                  </span>
+                  <p className="text-sm font-medium text-zinc-50">
+                    {beginnerAction(decisions[0]?.action).text}
                   </p>
-                )}
+                </div>
               </div>
 
               {topRec && (
@@ -535,21 +514,19 @@ function DashboardContent() {
         <FadeInView delay={0.12}>
           <section className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 animate-card-reveal">
             <h3 className="text-base font-semibold tracking-tight text-zinc-50">AI 분석 정확도</h3>
-            <p className="mt-0.5 text-xs font-medium text-zinc-500">AI가 얼마나 정확하게 분석하고 있는지 보여드려요</p>
 
             {hindsight ? (
               <div className="mt-4">
-                <p className="text-sm text-zinc-400">AI 에이전트 학습 현황</p>
-                <p className="text-xs text-zinc-500 mt-1">
-                  지금까지 {hindsight.total.toLocaleString()}번 분석했어요. 매수 판단의 {(hindsight.accuracy * 100).toFixed(0)}%가 맞았어요.
-                </p>
-                <div className="mt-3 h-2 rounded-full bg-white/[0.06]">
+                <div className="flex items-center justify-between text-xs text-zinc-400">
+                  <span>{hindsight.total.toLocaleString()}회 분석</span>
+                  <span>적중률 {(hindsight.accuracy * 100).toFixed(0)}%</span>
+                </div>
+                <div className="mt-2 h-2 rounded-full bg-white/[0.06]">
                   <div className="h-full rounded-full bg-green-500 transition-all duration-700" style={{width: `${Math.min(hindsight.accuracy * 100, 100)}%`}} />
                 </div>
-                <p className="mt-1.5 text-[10px] text-zinc-500">AI가 더 많이 분석할수록 정확도가 올라가요</p>
               </div>
             ) : (
-              <p className="mt-4 text-sm text-zinc-500">AI가 학습 데이터를 수집하고 있어요...</p>
+              <p className="mt-4 text-sm text-zinc-500">데이터 수집 중</p>
             )}
           </section>
         </FadeInView>
@@ -628,10 +605,9 @@ function DashboardContent() {
               {portfolio?.positions && Object.keys(portfolio.positions).length > 0 ? (
                 <PositionCards positions={portfolio.positions} />
               ) : (
-                <div className="mt-5 text-center py-8">
-                  <p className="text-3xl mb-3">{"\uD83D\uDCBC"}</p>
-                  <p className="text-sm text-zinc-400">아직 보유 자산이 없어요</p>
-                  <p className="text-xs text-zinc-500 mt-1">설정에서 거래소를 연결하면 자동 매매를 시작할 수 있어요</p>
+                <div className="mt-5 flex flex-col items-center py-8">
+                  <IconEmpty />
+                  <p className="mt-3 text-sm text-zinc-400">보유 자산 없음</p>
                 </div>
               )}
             </section>
@@ -644,14 +620,9 @@ function DashboardContent() {
             <h2 className="text-base font-semibold tracking-tight text-zinc-50 mb-4">최근 매매 결정</h2>
 
             {decisions.length === 0 ? (
-              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-8 text-center">
-                <p className="text-3xl mb-3">{"\uD83D\uDCCA"}</p>
-                <p className="text-sm text-zinc-400 leading-relaxed">
-                  아직 매매 기록이 없어요
-                </p>
-                <p className="text-xs text-zinc-500 mt-1">
-                  AI가 시장을 분석하고 좋은 기회를 발견하면 자동으로 알려드려요
-                </p>
+              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-8 flex flex-col items-center text-center">
+                <IconEmpty />
+                <p className="mt-3 text-sm text-zinc-400">아직 매매 기록 없음</p>
               </div>
             ) : (
               <StaggerContainer className="space-y-3">

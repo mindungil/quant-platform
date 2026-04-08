@@ -14,6 +14,7 @@ import {
   AnimatePresence,
   motion,
 } from "../../components/motion";
+import { IconEmpty, IconSearch, IconSignal } from "../../components/icons";
 
 /* ── Types ─────────────────────────────────────────────────────── */
 
@@ -328,9 +329,7 @@ function AgentContent() {
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-2xl font-semibold tracking-tight text-zinc-50">AI 분석 도우미</h2>
-              <p className="mt-1 text-sm text-zinc-400 leading-relaxed">
-                AI가 시장을 분석하고 사야 할지, 팔아야 할지 알려드려요
-              </p>
+              <p className="mt-1 text-sm text-zinc-400">AI 매매 분석</p>
               {lastUpdated && (
                 <span className="text-[10px] text-zinc-500">
                   마지막 업데이트: {new Date(lastUpdated).toLocaleTimeString("ko-KR")}
@@ -447,16 +446,9 @@ function AgentContent() {
                   ))}
                 </StaggerContainer>
               ) : (
-                <div className="flex items-center justify-center rounded-xl border border-dashed border-white/[0.06] bg-white/[0.02] py-12">
-                  <div className="text-center">
-                    <p className="text-3xl mb-3">{"\uD83D\uDCE1"}</p>
-                    <p className="text-sm text-neutral-400">
-                      시장 데이터를 모으고 있어요...
-                    </p>
-                    <p className="mt-1 text-xs text-neutral-500">
-                      잠시만 기다리면 AI 추천이 나타나요
-                    </p>
-                  </div>
+                <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-white/[0.06] bg-white/[0.02] py-12">
+                  <IconSignal />
+                  <p className="mt-3 text-sm text-neutral-400">데이터 수집 중</p>
                 </div>
               )}
             </section>
@@ -475,9 +467,7 @@ function AgentContent() {
             <FadeInView delay={0.1}>
               <section className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-6">
                 <h3 className="text-base font-semibold tracking-tight text-zinc-50">최근 분석 기록</h3>
-                <p className="mt-1 text-sm text-zinc-400 leading-relaxed">
-                  AI가 최근에 내린 판단들이에요. 클릭하면 자세한 설명을 볼 수 있어요.
-                </p>
+                <p className="mt-1 text-xs text-zinc-500">클릭하여 상세 보기</p>
 
                 {loading ? (
                   <div className="mt-6 space-y-4">
@@ -494,13 +484,8 @@ function AgentContent() {
                   </div>
                 ) : decisions.length === 0 ? (
                   <div className="mt-8 flex flex-col items-center py-8 text-center">
-                    <p className="text-3xl mb-3">{"\uD83D\uDD0D"}</p>
-                    <p className="text-sm text-neutral-400">
-                      아직 분석 기록이 없어요
-                    </p>
-                    <p className="mt-1 text-xs text-neutral-500">
-                      위의 &quot;분석 실행&quot; 버튼을 눌러보세요. AI가 시장을 분석해드릴게요!
-                    </p>
+                    <IconEmpty />
+                    <p className="mt-3 text-sm text-neutral-400">분석 기록 없음</p>
                   </div>
                 ) : (
                   <StaggerContainer className="mt-6 space-y-3">

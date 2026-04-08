@@ -227,9 +227,7 @@ function StrategiesContent() {
         {/* Header */}
         <div>
           <h2 className="text-2xl font-semibold tracking-tight text-zinc-50">AI 분석 전략</h2>
-          <p className="mt-1 text-sm text-zinc-400 leading-relaxed">
-            AI가 어떤 방법으로 시장을 분석하고 있는지 확인해보세요
-          </p>
+          <p className="mt-1 text-xs text-zinc-500">AI 분석 방법 및 성과</p>
         </div>
 
         {/* Drift Overview */}
@@ -240,7 +238,7 @@ function StrategiesContent() {
                 <h3 className="text-base font-semibold tracking-tight text-zinc-50">
                   전략 상태
                 </h3>
-                <p className="mt-0.5 text-xs text-zinc-500">AI 전략이 예상대로 잘 작동하고 있는지 보여드려요</p>
+                <p className="mt-0.5 text-xs text-zinc-500">실시간 전략 모니터링</p>
               </div>
               <DriftBadge stats={stats} />
             </div>
@@ -258,9 +256,7 @@ function StrategiesContent() {
                 />
               </div>
             ) : (
-              <p className="mt-4 text-sm text-neutral-500">
-                아직 거래 데이터가 없습니다. 에이전트가 거래를 시작하면 여기에 성과가 표시됩니다.
-              </p>
+              <p className="mt-4 text-sm text-neutral-500">거래 데이터 없음</p>
             )}
           </section>
         </FadeInView>
@@ -313,12 +309,12 @@ function StrategiesContent() {
         <FadeInView delay={0.1}>
           <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6">
             <h3 className="text-base font-semibold tracking-tight text-zinc-50">현재 사용 중인 분석 방법</h3>
-            <p className="mt-0.5 text-xs text-zinc-500">AI가 시장을 분석할 때 사용하는 방법들이에요</p>
+            <p className="mt-0.5 text-xs text-zinc-500">활성 분석 방법</p>
 
             {strategies.length === 0 ? (
               <EmptyState
                 title="활성 전략 없음"
-                description="등록된 활성 전략이 없습니다. 에이전트가 시장 분석을 시작하면 전략이 자동으로 등록됩니다."
+                description="분석 시작 시 자동 등록"
               />
             ) : (
               <StaggerContainer className="mt-4 space-y-3">
@@ -380,7 +376,7 @@ function StrategiesContent() {
           <FadeInView delay={0.15}>
             <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6">
               <h3 className="text-base font-semibold tracking-tight text-zinc-50">상세 성과 지표</h3>
-              <p className="mt-0.5 text-xs text-zinc-500">AI 전략의 성과를 더 자세히 보여드려요</p>
+              <p className="mt-0.5 text-xs text-zinc-500">상세 지표</p>
               <StaggerContainer className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 {[
                   { label: "위험 대비 수익률", value: stats.sharpe, fmt: 2 },
@@ -409,7 +405,7 @@ function StrategiesContent() {
           <FadeInView delay={0.2}>
             <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6">
               <h3 className="text-base font-semibold tracking-tight text-zinc-50">AI 추천 전략</h3>
-              <p className="mt-0.5 text-xs text-zinc-500">현재 시장 상황에 맞는 분석 방법을 추천해드려요</p>
+              <p className="mt-0.5 text-xs text-zinc-500">현재 시장 기반 추천</p>
               <StaggerContainer className="mt-4 space-y-3">
                 {recommendations.map((rec, i) => (
                   <StaggerItem key={i}>

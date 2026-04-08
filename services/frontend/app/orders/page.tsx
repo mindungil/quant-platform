@@ -13,6 +13,7 @@ import {
   AnimatedNumber,
   motion,
 } from "../../components/motion";
+import { IconEmpty } from "../../components/icons";
 
 /* ── friendly mappings ───────────────────────────────────────── */
 const ASSET_NAMES: Record<string, string> = {
@@ -400,9 +401,7 @@ function OrdersContent() {
               <h2 className="text-2xl font-semibold tracking-tight text-zinc-50">
                 주문 내역
               </h2>
-              <p className="mt-1 text-sm text-zinc-400 leading-relaxed">
-                AI가 실행한 주문을 확인할 수 있어요
-              </p>
+              <p className="mt-1 text-xs text-zinc-500">AI 실행 주문</p>
               {lastUpdated && (
                 <span className="text-[10px] text-zinc-500">
                   마지막 업데이트: {new Date(lastUpdated).toLocaleTimeString("ko-KR")}
@@ -517,15 +516,12 @@ function OrdersContent() {
             </button>
           </div>
         ) : filtered.length === 0 ? (
-          <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-12 text-center">
-            <p className="text-3xl mb-3">{"\uD83D\uDCCB"}</p>
-            <p className="text-sm text-zinc-400">
+          <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-12 flex flex-col items-center text-center">
+            <IconEmpty />
+            <p className="mt-3 text-sm text-zinc-400">
               {filter === "ALL"
-                ? "아직 주문 내역이 없어요"
-                : `${FILTER_LABELS[filter] ?? filter} 주문이 없어요`}
-            </p>
-            <p className="text-xs text-zinc-500 mt-1">
-              AI 에이전트가 좋은 기회를 발견하면 자동으로 주문을 실행해요
+                ? "주문 내역 없음"
+                : `${FILTER_LABELS[filter] ?? filter} 주문 없음`}
             </p>
           </div>
         ) : (

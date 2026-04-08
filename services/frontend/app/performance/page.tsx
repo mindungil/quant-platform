@@ -170,9 +170,7 @@ function PerformanceContent() {
           <h2 className="text-2xl font-semibold tracking-tight text-zinc-50">
             AI 성과 리포트
           </h2>
-          <p className="mt-1 text-sm text-zinc-400 leading-relaxed">
-            AI가 얼마나 잘하고 있는지 한눈에 확인해보세요
-          </p>
+          <p className="mt-1 text-xs text-zinc-500">AI 매매 성과</p>
           {lastUpdated && (
             <span className="text-[10px] text-zinc-500">
               마지막 업데이트: {new Date(lastUpdated).toLocaleTimeString("ko-KR")}
@@ -268,7 +266,7 @@ function PerformanceContent() {
             <h3 className="text-base font-semibold tracking-tight text-zinc-50">
               내 투자 현황
             </h3>
-            <p className="mt-0.5 text-xs text-zinc-500">현재 투자 중인 금액과 수익을 보여드려요</p>
+            <p className="mt-0.5 text-xs text-zinc-500">투자 현황</p>
 
             <StaggerContainer className="mt-5 grid gap-4 sm:grid-cols-3">
               {/* 총 투자금 */}

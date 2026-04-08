@@ -239,15 +239,15 @@ export function beginnerFriendly(text: string): string {
   return result;
 }
 
-/** Format action for beginners with emoji */
-export function beginnerAction(action: string | undefined): { text: string; emoji: string; description: string } {
+/** Format action for beginners — icon is now a string key, rendered via icons.tsx */
+export function beginnerAction(action: string | undefined): { text: string; icon: "up" | "down" | "pause"; description: string } {
   switch (action?.toUpperCase()) {
     case "BUY":
-      return { text: "매수 추천", emoji: "\uD83D\uDCC8", description: "지금 사는 것이 유리해 보여요" };
+      return { text: "매수 추천", icon: "up", description: "지금 사는 것이 유리해 보여요" };
     case "SELL":
-      return { text: "매도 추천", emoji: "\uD83D\uDCC9", description: "지금 파는 것이 유리해 보여요" };
+      return { text: "매도 추천", icon: "down", description: "지금 파는 것이 유리해 보여요" };
     default:
-      return { text: "관망 추천", emoji: "\u23F8", description: "지금은 지켜보는 것이 좋아요" };
+      return { text: "관망 중", icon: "pause", description: "" };
   }
 }
 

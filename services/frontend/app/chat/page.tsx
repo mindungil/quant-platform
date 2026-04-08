@@ -329,10 +329,10 @@ export default function ChatPage() {
   }
 
   const suggestions = [
-    { text: "비트코인 지금 사도 될까요?", icon: "\uD83D\uDCB0" },
-    { text: "시장이 위험한 상태인가요?", icon: "\u26A0\uFE0F" },
-    { text: "내 포트폴리오 어때요?", icon: "\uD83D\uDCCA" },
-    { text: "초보자인데 어떻게 시작하나요?", icon: "\uD83E\uDD14" },
+    { text: "비트코인 지금 사도 될까요?" },
+    { text: "시장이 위험한 상태인가요?" },
+    { text: "내 포트폴리오 어때요?" },
+    { text: "초보자인데 어떻게 시작하나요?" },
   ];
 
   return (
@@ -447,9 +447,7 @@ export default function ChatPage() {
                   transition={{ delay: 0.25 }}
                   className="mb-10 max-w-md text-sm text-zinc-400 leading-relaxed"
                 >
-                  궁금한 점을 편하게 물어보세요.
-                  <br />
-                  AI가 시장을 분석하고 쉽게 설명해드려요.
+                  무엇이든 물어보세요.
                 </motion.p>
                 <motion.div
                   initial="hidden"
@@ -478,7 +476,6 @@ export default function ChatPage() {
                       }}
                       className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3.5 text-left text-sm text-zinc-300 transition-all duration-150 hover:border-white/[0.10] hover:bg-white/[0.04] hover:text-zinc-50"
                     >
-                      <span className="mr-2">{s.icon}</span>
                       {s.text}
                     </motion.button>
                   ))}

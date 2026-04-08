@@ -70,25 +70,16 @@ export default function HomePage() {
       >
         {/* Logo */}
         <motion.div
-          className="mb-10 text-center"
+          className="mb-8 text-center"
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.15, type: "spring", stiffness: 200, damping: 20 }}
         >
-          <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-white shadow-[0_0_20px_rgba(255,255,255,0.15)]">
-            <span className="text-lg font-bold text-black">Q</span>
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-white">
+            <span className="text-xl font-black text-black">Q</span>
           </div>
-          <h1 className="text-xl font-bold tracking-tight text-white">
-            {isLogin ? "로그인" : "계정 만들기"}
-          </h1>
-          <p className="mt-2 text-sm text-neutral-400 leading-relaxed">
-            투자를 모르셔도 괜찮아요.
-            <br />
-            AI가 대신 분석해드릴게요.
-          </p>
-          <p className="mt-3 text-[11px] text-neutral-500">
-            24시간 자동 분석 {"\u00B7"} 2,000+ 분석 완료 {"\u00B7"} 초보자 맞춤 설명
-          </p>
+          <h1 className="mt-4 text-xl font-semibold tracking-tight text-zinc-50">QUANT</h1>
+          <p className="mt-1 text-xs text-zinc-500">AI Trading Platform</p>
         </motion.div>
 
         {/* Form */}
