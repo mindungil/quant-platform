@@ -112,63 +112,63 @@ function formatMoney(v: number | undefined | null): string {
   return v.toLocaleString("ko-KR", { maximumFractionDigits: 0 });
 }
 
-/* ── Reasoning Card ──────────────────────────────────────────── */
+/* ── Decision Card (compact, scannable) ──────────────────────── */
 
-function ReasoningCard({ reasoning }: { reasoning: string }) {
-  const { structured: data, text } = parseReasoning(reasoning);
+function DecisionCard({ decision }: { decision: Decision }) {
+  const { structured, text } = parseReasoning(decision.reasoning || "");
+  const action = friendlyAction(decision.action);
+  const timeStr = decision.timestamp ? timeAgo(decision.timestamp) : "";
 
-  if (!data) {
-    return <p className="text-sm text-zinc-400 leading-relaxed">{text}</p>;
-  }
+  // Use structured data if available, otherwise parse from components
+  const indicators = structured?.bullish_indicators || [];
+  const bearish = structured?.bearish_indicators || [];
+  const conflicts = structured?.conflicts || [];
+  const regime = structured?.regime || "";
+  const strength = structured?.strength || "";
+  const memRefs = structured?.memory_refs || 0;
 
   return (
-    <div className="space-y-2.5">
-      <p className="text-sm font-medium text-zinc-200">{data.summary}</p>
-
-      <div className="flex flex-wrap gap-1.5">
-        {data.strength && (
-          <span className="text-xs font-medium text-zinc-400 bg-white/[0.05] border border-white/[0.06] rounded-md px-2 py-0.5">
-            {data.direction} · {data.strength}
+    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 hover:bg-white/[0.04] transition-all duration-150">
+      {/* Header: Asset + Action + Time */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-zinc-50">{friendlyAsset(decision.asset)}</span>
+          <span className={`rounded-md px-2 py-0.5 text-[11px] font-medium border ${decision.action === "BUY" ? "text-green-500 bg-green-500/10 border-green-500/15" : decision.action === "SELL" ? "text-red-500 bg-red-500/10 border-red-500/15" : "text-zinc-400 bg-white/[0.05] border-white/[0.06]"}`}>
+            {action.label}
           </span>
-        )}
-        {data.regime && (
-          <span className="text-xs font-medium text-zinc-400 bg-white/[0.05] border border-white/[0.06] rounded-md px-2 py-0.5">
-            {data.regime}
-          </span>
-        )}
-        {data.strategy && (
-          <span className="text-xs font-medium text-zinc-400 bg-white/[0.05] border border-white/[0.06] rounded-md px-2 py-0.5">
-            {data.strategy}
-          </span>
-        )}
+        </div>
+        <span className="text-[11px] text-zinc-500">{timeStr}</span>
       </div>
 
-      {data.bullish_indicators && data.bullish_indicators.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {data.bullish_indicators.map((ind: any) => (
-            <span key={ind.name} className="text-xs font-medium text-green-500 bg-green-500/10 border border-green-500/15 rounded-md px-2 py-0.5">
+      {/* Subtitle: Regime + Strength */}
+      {(regime || strength) && (
+        <p className="mt-1.5 text-xs text-zinc-500">
+          {regime}{regime && strength ? " \u00B7 " : ""}{strength ? `\uC2DC\uADF8\uB110 ${strength}` : ""}
+        </p>
+      )}
+
+      {/* Indicators (inline chips) */}
+      {indicators.length > 0 && (
+        <div className="mt-2.5 flex flex-wrap gap-1.5">
+          {indicators.slice(0, 4).map((ind: any) => (
+            <span key={ind.name} className="rounded-md border border-green-500/15 bg-green-500/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-green-500">
               {formatIndicatorName(ind.name)} +{Math.round(ind.value * 100)}%
             </span>
           ))}
-        </div>
-      )}
-
-      {data.bearish_indicators && data.bearish_indicators.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {data.bearish_indicators.map((ind: any) => (
-            <span key={ind.name} className="text-xs font-medium text-red-500 bg-red-500/10 border border-red-500/15 rounded-md px-2 py-0.5">
+          {bearish.slice(0, 2).map((ind: any) => (
+            <span key={ind.name} className="rounded-md border border-red-500/15 bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-red-500">
               {formatIndicatorName(ind.name)} {Math.round(ind.value * 100)}%
             </span>
           ))}
         </div>
       )}
 
-      {data.conflicts && data.conflicts.length > 0 && (
-        <p className="text-[11px] text-zinc-500">⚠ {data.conflicts.join(", ")}에서 반대 신호</p>
-      )}
-
-      {data.memory_refs > 0 && (
-        <p className="text-[11px] text-zinc-500">유사 상황 {data.memory_refs}건 참조</p>
+      {/* Conflicts + Memory (compact footer) */}
+      {(conflicts.length > 0 || memRefs > 0) && (
+        <div className="mt-2 flex items-center gap-3 text-[10px] text-zinc-500">
+          {conflicts.length > 0 && <span>{conflicts.map((c: string) => formatIndicatorName(c)).join(", ")} \uBC18\uB300 \uC2E0\uD638</span>}
+          {memRefs > 0 && <span>\uC720\uC0AC {memRefs}\uAC74 \uCC38\uC870</span>}
+        </div>
       )}
     </div>
   );
@@ -653,58 +653,11 @@ function DashboardContent() {
               </div>
             ) : (
               <StaggerContainer className="space-y-3">
-                {decisions.map((d, i) => {
-                  const act = friendlyAction(d.action);
-                  return (
-                    <StaggerItem key={d.decision_id ?? i}>
-                      <motion.div
-                        className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 hover:bg-white/[0.04] hover:border-white/[0.10] transition-all duration-150"
-                        whileHover={{ y: -2 }}
-                      >
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                          {/* Asset + Action */}
-                          <div className="flex items-center gap-3 flex-1">
-                            <span className="text-sm font-medium text-zinc-200">
-                              {friendlyAsset(d.asset)}
-                            </span>
-                            <span className={`text-xs font-medium rounded-md px-2 py-0.5 border ${d.action === "BUY" ? "text-green-500 bg-green-500/10 border-green-500/15" : d.action === "SELL" ? "text-red-500 bg-red-500/10 border-red-500/15" : "text-zinc-400 bg-white/[0.05] border-white/[0.06]"}`}>
-                              {act.label}
-                            </span>
-                            {d.threshold_crossed && (
-                              <span className="text-xs font-medium text-amber-500 bg-amber-500/10 border border-amber-500/15 rounded-md px-2 py-0.5">
-                                매매 신호 발생
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Signal strength + Time */}
-                          <div className="flex items-center gap-4 sm:flex-shrink-0">
-                            <div className="w-24">
-                              <SignalBar value={d.signal_score} label="시장 신호" />
-                            </div>
-                            {d.timestamp && (
-                              <span className="text-xs text-zinc-500 whitespace-nowrap">
-                                {timeAgo(d.timestamp)}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Reasoning */}
-                        {d.reasoning && (
-                          <div className="mt-3">
-                            <ReasoningCard reasoning={d.reasoning} />
-                          </div>
-                        )}
-
-                        {/* Components as bars */}
-                        {d.components && Object.keys(d.components).length > 0 && (
-                          <ComponentBars components={d.components} />
-                        )}
-                      </motion.div>
-                    </StaggerItem>
-                  );
-                })}
+                {decisions.map((d, i) => (
+                  <StaggerItem key={d.decision_id ?? i}>
+                    <DecisionCard decision={d} />
+                  </StaggerItem>
+                ))}
               </StaggerContainer>
             )}
           </section>

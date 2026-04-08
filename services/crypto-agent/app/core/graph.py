@@ -672,11 +672,7 @@ def execute_node(state: AgentState) -> dict:
     except Exception as exc:
         logger.warning("graph_llm_fallback", extra={"error": str(exc)[:100]})
 
-    # Prefix with formula/regime info
-    reasoning = (
-        f"[formula={formula_name} regime={regime_label}"
-        f"{' SHADOW' if is_shadow else ''}] {reasoning}"
-    )
+    # No longer prefix reasoning with formula/regime metadata — keep it clean text
 
     # ULTRAPLAN-style escalation check
     escalated = False

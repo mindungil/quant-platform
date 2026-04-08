@@ -1,6 +1,6 @@
 /**
  * Parse reasoning string into structured data.
- * Handles: JSON structured, plain text with [formula=...] prefix, plain text.
+ * Handles: JSON structured, plain text with [formula=...] prefix, plain text, null/empty.
  */
 export interface StructuredReasoning {
   summary: string;
@@ -24,23 +24,28 @@ export interface ParsedReasoning {
   text: string;
 }
 
-export function parseReasoning(raw: string): ParsedReasoning {
+export function parseReasoning(raw: string | null | undefined): ParsedReasoning {
   if (!raw) return { structured: null, text: "" };
 
-  try {
-    const parsed = JSON.parse(raw);
-    if (parsed.structured) {
-      return {
-        structured: parsed.structured,
-        text: parsed.text || parsed.structured.summary || "",
-      };
+  // Only attempt JSON parse if it starts with {
+  if (raw.trimStart().startsWith("{")) {
+    try {
+      const parsed = JSON.parse(raw);
+      // Format 1: {"structured": {...}, "text": "..."}
+      if (parsed.structured && typeof parsed.structured === "object") {
+        return {
+          structured: parsed.structured,
+          text: parsed.text || parsed.structured.summary || "",
+        };
+      }
+      // JSON but no structured field — extract text if present, otherwise treat as plain text
+      if (parsed.text && typeof parsed.text === "string") {
+        return { structured: null, text: parsed.text };
+      }
+      // Some other JSON object we don't recognize — treat as plain text
+    } catch {
+      // Starts with { but isn't valid JSON — treat as plain text
     }
-    // JSON but no structured field
-    if (parsed.text) {
-      return { structured: null, text: parsed.text };
-    }
-  } catch {
-    // Not JSON — plain text
   }
 
   // Strip [formula=...] prefix
@@ -92,9 +97,20 @@ export function formatIndicatorName(raw: string): string {
   return map[raw] || raw.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
 }
 
-/** Clean reasoning for display — always returns human-readable text */
+/** Clean reasoning for display — always returns human-readable text, never JSON */
 export function cleanReasoning(raw: string): string {
   const { structured, text } = parseReasoning(raw);
   if (structured) return structured.summary;
   return text || "분석 중...";
+}
+
+/** Relative time display in Korean */
+export function timeAgo(timestamp: string): string {
+  const now = Date.now();
+  const then = new Date(timestamp).getTime();
+  const diff = Math.floor((now - then) / 1000);
+  if (diff < 60) return "방금 전";
+  if (diff < 3600) return `${Math.floor(diff / 60)}분 전`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}시간 전`;
+  return `${Math.floor(diff / 86400)}일 전`;
 }

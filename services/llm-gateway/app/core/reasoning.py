@@ -4,7 +4,6 @@
 API key 환경변수(OPENAI_API_KEY, ANTHROPIC_API_KEY) 사용 가능.
 토큰/키 미등록 시 데이터 기반 자동 추론 (deterministic but detailed).
 """
-import json
 import logging
 import math
 import os
@@ -295,9 +294,8 @@ def _call_llm_with_api_key(messages: list[dict], max_tokens: int = 512) -> str |
 
 
 def _build_combined_reasoning(text: str, payload: ReasoningRequest) -> str:
-    """Combine structured JSON + readable text into a single reasoning string."""
-    structured = _generate_reasoning_structured(payload)
-    return json.dumps({"structured": structured, "text": text}, ensure_ascii=False)
+    """Return clean human-readable reasoning text (no JSON wrapping)."""
+    return text
 
 
 def build_reasoning_text(payload: ReasoningRequest, user_id: str | None = None) -> ReasoningResponse:
@@ -315,9 +313,8 @@ def build_reasoning_text(payload: ReasoningRequest, user_id: str | None = None) 
             regime=payload.regime,
             formula_name=payload.formula_name,
         )
-        combined = json.dumps({"structured": structured, "text": plain_text}, ensure_ascii=False)
         return ReasoningResponse(
-            reasoning=combined,
+            reasoning=plain_text,
             provider="structured-reasoning",
             structured=structured,
         )
@@ -334,21 +331,18 @@ def build_reasoning_text(payload: ReasoningRequest, user_id: str | None = None) 
         if has_valid_token(uid, provider):
             result = call_with_oauth(uid, provider, messages, max_tokens=settings.max_tokens)
             if result:
-                combined = json.dumps({"structured": structured, "text": result}, ensure_ascii=False)
-                return ReasoningResponse(reasoning=combined, provider=f"{provider}/oauth", structured=structured)
+                return ReasoningResponse(reasoning=result, provider=f"{provider}/oauth", structured=structured)
 
     # Try API key-based LLM call
     api_result = _call_llm_with_api_key(messages, max_tokens=settings.max_tokens)
     if api_result:
         provider_name = "anthropic/api-key" if os.getenv("ANTHROPIC_API_KEY") else "openai/api-key"
-        combined = json.dumps({"structured": structured, "text": api_result}, ensure_ascii=False)
-        return ReasoningResponse(reasoning=combined, provider=provider_name, structured=structured)
+        return ReasoningResponse(reasoning=api_result, provider=provider_name, structured=structured)
 
     # Smart fallback — detailed data-driven reasoning
     fallback_text = _smart_fallback(payload)
-    combined = json.dumps({"structured": structured, "text": fallback_text}, ensure_ascii=False)
     return ReasoningResponse(
-        reasoning=combined,
+        reasoning=fallback_text,
         provider="auto-reasoning",
         structured=structured,
     )
