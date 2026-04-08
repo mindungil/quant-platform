@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { gatewayFetch } from "../../lib/api";
 import { AuthGuard } from "../../components/auth-guard";
 import { useToast } from "../../components/toast";
-import { parseReasoning, cleanReasoning } from "../../lib/reasoning";
+import { parseReasoning, cleanReasoning, formatIndicatorName } from "../../lib/reasoning";
 import { ConfirmDialog } from "../../components/confirm-dialog";
 import {
   PageTransition,
@@ -108,21 +108,21 @@ function ReasoningCard({ reasoning }: { reasoning: string }) {
 
   return (
     <div className="space-y-2.5">
-      <p className="text-sm font-medium text-white">{data.summary}</p>
+      <p className="text-sm font-medium text-zinc-200">{data.summary}</p>
 
       <div className="flex flex-wrap gap-1.5">
         {data.strength && (
-          <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] text-zinc-400">
+          <span className="text-xs font-medium text-zinc-400 bg-white/[0.05] border border-white/[0.06] rounded-md px-2 py-0.5">
             {data.direction} · {data.strength}
           </span>
         )}
         {data.regime && (
-          <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] text-zinc-500">
+          <span className="text-xs font-medium text-zinc-400 bg-white/[0.05] border border-white/[0.06] rounded-md px-2 py-0.5">
             {data.regime}
           </span>
         )}
         {data.strategy && (
-          <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] text-zinc-500">
+          <span className="text-xs font-medium text-zinc-400 bg-white/[0.05] border border-white/[0.06] rounded-md px-2 py-0.5">
             {data.strategy}
           </span>
         )}
@@ -131,8 +131,8 @@ function ReasoningCard({ reasoning }: { reasoning: string }) {
       {data.bullish_indicators && data.bullish_indicators.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {data.bullish_indicators.map((ind: any) => (
-            <span key={ind.name} className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-400">
-              {ind.name} +{Math.round(ind.value * 100)}%
+            <span key={ind.name} className="text-xs font-medium text-green-500 bg-green-500/10 border border-green-500/15 rounded-md px-2 py-0.5">
+              {formatIndicatorName(ind.name)} +{Math.round(ind.value * 100)}%
             </span>
           ))}
         </div>
@@ -141,19 +141,19 @@ function ReasoningCard({ reasoning }: { reasoning: string }) {
       {data.bearish_indicators && data.bearish_indicators.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {data.bearish_indicators.map((ind: any) => (
-            <span key={ind.name} className="rounded bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-400">
-              {ind.name} {Math.round(ind.value * 100)}%
+            <span key={ind.name} className="text-xs font-medium text-red-500 bg-red-500/10 border border-red-500/15 rounded-md px-2 py-0.5">
+              {formatIndicatorName(ind.name)} {Math.round(ind.value * 100)}%
             </span>
           ))}
         </div>
       )}
 
       {data.conflicts && data.conflicts.length > 0 && (
-        <p className="text-[10px] text-zinc-500">⚠ {data.conflicts.join(", ")}에서 반대 신호</p>
+        <p className="text-[11px] text-zinc-500">⚠ {data.conflicts.join(", ")}에서 반대 신호</p>
       )}
 
       {data.memory_refs > 0 && (
-        <p className="text-[10px] text-zinc-500">유사 상황 {data.memory_refs}건 참조</p>
+        <p className="text-[11px] text-zinc-500">유사 상황 {data.memory_refs}건 참조</p>
       )}
     </div>
   );
@@ -289,8 +289,8 @@ function AgentContent() {
         <section className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-6">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-2xl font-bold text-white text-glow">AI 에이전트</h2>
-              <p className="mt-1 text-sm text-neutral-500">
+              <h2 className="text-2xl font-semibold tracking-tight text-zinc-50">AI 에이전트</h2>
+              <p className="mt-1 text-sm text-zinc-400 leading-relaxed">
                 실시간 시장 분석과 AI 추천을 확인하세요
               </p>
               {lastUpdated && (
@@ -357,7 +357,7 @@ function AgentContent() {
             <section>
               <div className="mb-4 flex items-center gap-2">
                 <CoinIcon asset={selectedAsset} size={28} />
-                <h3 className="text-lg font-bold text-white">
+                <h3 className="text-base font-semibold tracking-tight text-zinc-50">
                   {meta.label} AI 추천
                 </h3>
               </div>
@@ -381,17 +381,17 @@ function AgentContent() {
                           </span>
                         )}
 
-                        <p className="mt-1 text-base font-bold text-white">{r.name}</p>
+                        <p className="mt-1 text-sm font-medium text-zinc-200">{r.name}</p>
 
-                        <p className="mt-2.5 text-sm leading-relaxed text-neutral-400">
+                        <p className="mt-2.5 text-sm text-zinc-400 leading-relaxed">
                           {cleanReasoning(r.reasoning)}
                         </p>
 
                         {/* Confidence bar */}
                         <div className="mt-4">
                           <div className="mb-1.5 flex items-center justify-between">
-                            <span className="text-xs font-medium text-neutral-500">신뢰도</span>
-                            <span className="text-xs font-bold text-neutral-300 text-glow">
+                            <span className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">신뢰도</span>
+                            <span className="font-mono text-xs font-medium tabular-nums text-zinc-50">
                               {(r.confidence * 100).toFixed(0)}%
                             </span>
                           </div>
@@ -435,8 +435,8 @@ function AgentContent() {
           >
             <FadeInView delay={0.1}>
               <section className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-6">
-                <h3 className="text-lg font-bold text-white">최근 판단</h3>
-                <p className="mt-1 text-sm text-neutral-400">
+                <h3 className="text-base font-semibold tracking-tight text-zinc-50">최근 판단</h3>
+                <p className="mt-1 text-sm text-zinc-400 leading-relaxed">
                   AI 에이전트의 최근 분석 기록
                 </p>
 
@@ -520,10 +520,10 @@ function AgentContent() {
                                 {/* Signal strength */}
                                 <div className="mt-3 max-w-xs">
                                   <div className="mb-1 flex items-center justify-between">
-                                    <span className="text-[11px] font-medium text-neutral-400">
+                                    <span className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
                                       신호 강도
                                     </span>
-                                    <span className="text-[11px] font-bold text-neutral-500">
+                                    <span className="font-mono text-[11px] font-medium tabular-nums text-zinc-50">
                                       {(normalizedScore * 100).toFixed(0)}%
                                     </span>
                                   </div>
@@ -542,7 +542,7 @@ function AgentContent() {
 
                                 {/* Formula name if present */}
                                 {(d.formula_name || d.strategy_name) && (
-                                  <p className="mt-2 text-[11px] text-neutral-400">
+                                  <p className="mt-2 text-[11px] text-zinc-500">
                                     분석 방식: {d.formula_name || d.strategy_name}
                                   </p>
                                 )}

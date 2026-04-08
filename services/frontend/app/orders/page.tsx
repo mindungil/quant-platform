@@ -164,7 +164,7 @@ function OrderItem({
   const isBuy = order.side === "BUY";
 
   return (
-    <article className="relative rounded-xl border border-white/[0.06] bg-white/[0.03] transition-all hover:border-white/[0.10] hover-lift">
+    <article className="relative rounded-xl border border-white/[0.06] bg-white/[0.02] transition-all duration-150 hover:bg-white/[0.04] hover:border-white/[0.10]">
       {/* main row — clickable */}
       <button
         onClick={onToggle}
@@ -184,7 +184,7 @@ function OrderItem({
         {/* content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-base font-semibold text-white">
+            <span className="text-sm font-medium text-zinc-200">
               {friendlyAsset(order.asset)}
             </span>
 
@@ -206,8 +206,8 @@ function OrderItem({
           </div>
 
           {/* price + qty summary */}
-          <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-neutral-500">
-            <span>
+          <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-zinc-400">
+            <span className="font-mono tabular-nums">
               {formatQty(order.filled_quantity ?? order.quantity)}
               {order.filled_price != null
                 ? ` @ ${formatPrice(order.filled_price)}`
@@ -217,7 +217,7 @@ function OrderItem({
             </span>
             {order.filled_quantity != null &&
               order.filled_price != null && (
-                <span className="font-mono text-xs text-neutral-400">
+                <span className="font-mono text-xs font-medium tabular-nums text-zinc-50">
                   총 {formatPrice(order.filled_quantity * order.filled_price)}
                 </span>
               )}
@@ -236,7 +236,7 @@ function OrderItem({
                 onCancel();
               }}
               disabled={isCancelling}
-              className="rounded-full border border-white/[0.06] px-3 py-1 text-[11px] font-medium text-neutral-500 transition hover:border-white/[0.10] hover:text-neutral-300 disabled:opacity-40"
+              className="rounded-full border border-white/[0.06] px-3 py-1 text-[11px] font-medium text-zinc-500 transition duration-150 hover:border-white/[0.10] hover:text-zinc-300 disabled:opacity-40"
             >
               {isCancelling ? "취소 중..." : "주문 취소"}
             </button>
@@ -249,8 +249,8 @@ function OrderItem({
         <div className="border-t border-white/[0.06] px-5 pb-5 pt-4">
           <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
             <div>
-              <p className="text-[11px] text-neutral-400">주문 유형</p>
-              <p className="mt-0.5 text-neutral-300">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">주문 유형</p>
+              <p className="mt-0.5 text-sm text-zinc-200">
                 {order.order_type === "LIMIT"
                   ? "지정가"
                   : order.order_type === "MARKET"
@@ -259,20 +259,20 @@ function OrderItem({
               </p>
             </div>
             <div>
-              <p className="text-[11px] text-neutral-400">거래소</p>
-              <p className="mt-0.5 text-neutral-300">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">거래소</p>
+              <p className="mt-0.5 text-sm text-zinc-200">
                 {order.exchange ?? "--"}
               </p>
             </div>
             <div>
-              <p className="text-[11px] text-neutral-400">주문 수량</p>
-              <p className="mt-0.5 font-mono text-neutral-300">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">주문 수량</p>
+              <p className="mt-0.5 font-mono text-sm font-medium tabular-nums text-zinc-50">
                 {formatQty(order.quantity)}
               </p>
             </div>
             <div>
-              <p className="text-[11px] text-neutral-400">주문 가격</p>
-              <p className="mt-0.5 font-mono text-neutral-300">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">주문 가격</p>
+              <p className="mt-0.5 font-mono text-sm font-medium tabular-nums text-zinc-50">
                 {formatPrice(order.price)}
               </p>
             </div>
@@ -280,11 +280,11 @@ function OrderItem({
 
           {/* fill info */}
           {order.filled_quantity != null && (
-            <div className="mt-4 rounded-lg bg-emerald-500/15 p-3">
-              <p className="text-[11px] font-medium text-emerald-400">
+            <div className="mt-4 rounded-lg bg-green-500/10 border border-green-500/15 p-3">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-green-500">
                 체결 정보
               </p>
-              <p className="mt-1 font-mono text-sm text-emerald-300">
+              <p className="mt-1 font-mono text-sm font-medium tabular-nums text-zinc-50">
                 {formatQty(order.filled_quantity)} @ {formatPrice(order.filled_price)}
               </p>
             </div>
@@ -292,18 +292,18 @@ function OrderItem({
 
           {/* reject reason */}
           {order.reject_reason && (
-            <div className="mt-4 rounded-lg bg-red-500/15 p-3">
-              <p className="text-[11px] font-medium text-red-400">
+            <div className="mt-4 rounded-lg bg-red-500/10 border border-red-500/15 p-3">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-red-500">
                 거부 사유
               </p>
-              <p className="mt-1 text-sm text-red-300">
+              <p className="mt-1 text-sm text-zinc-400">
                 {order.reject_reason}
               </p>
             </div>
           )}
 
           {/* timestamps */}
-          <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 text-[11px] text-neutral-400">
+          <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 text-[11px] text-zinc-500">
             <span>
               생성: {order.created_at ? new Date(order.created_at).toLocaleString("ko-KR") : "--"}
             </span>
@@ -397,10 +397,10 @@ function OrdersContent() {
         <section className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
                 Orders
               </p>
-              <h2 className="mt-1 text-2xl font-semibold text-white">
+              <h2 className="mt-1 text-2xl font-semibold tracking-tight text-zinc-50">
                 주문 내역
               </h2>
               {lastUpdated && (
@@ -412,7 +412,7 @@ function OrdersContent() {
             <div className="flex items-center gap-3">
               <button
                 onClick={fetchOrders}
-                className="rounded-full border border-white/[0.06] px-4 py-1.5 text-xs font-medium text-neutral-400 transition hover:border-white/[0.10]"
+                className="rounded-full border border-white/[0.06] px-4 py-1.5 text-xs font-medium text-zinc-400 transition duration-150 hover:border-white/[0.10]"
               >
                 새로고침
               </button>
@@ -428,7 +428,7 @@ function OrdersContent() {
                 className={`relative rounded-full px-4 py-1.5 text-xs font-medium transition ${
                   filter === f
                     ? "bg-white text-black"
-                    : "text-neutral-400 hover:bg-white/[0.06] hover:text-neutral-200"
+                    : "text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200"
                 }`}
               >
                 {FILTER_LABELS[f] ?? f}
@@ -481,8 +481,8 @@ function OrdersContent() {
                 key={s.label}
                 className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-4 text-center"
               >
-                <p className="text-xs text-neutral-400">{s.label}</p>
-                <p className={`mt-1 font-mono text-2xl font-bold ${s.color}`}>
+                <p className="text-xs font-medium text-zinc-500">{s.label}</p>
+                <p className={`mt-1 font-mono text-2xl font-bold tracking-tighter tabular-nums ${s.color === "text-white" ? "text-zinc-50" : s.color}`}>
                   <AnimatedNumber value={s.count} decimals={0} />
                 </p>
               </div>
@@ -518,7 +518,7 @@ function OrdersContent() {
           </div>
         ) : filtered.length === 0 ? (
           <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-12 text-center">
-            <p className="text-lg text-neutral-300">
+            <p className="text-sm text-zinc-400">
               {filter === "ALL"
                 ? "아직 주문이 없습니다"
                 : `${FILTER_LABELS[filter] ?? filter} 주문이 없습니다`}

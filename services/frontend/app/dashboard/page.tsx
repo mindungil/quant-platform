@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo, useCallback } from "react";
 import { gatewayFetch } from "../../lib/api";
 import { AuthGuard } from "../../components/auth-guard";
 import { useToast } from "../../components/toast";
-import { parseReasoning, cleanReasoning } from "../../lib/reasoning";
+import { parseReasoning, cleanReasoning, formatIndicatorName } from "../../lib/reasoning";
 import {
   PageTransition,
   StaggerContainer,
@@ -123,21 +123,21 @@ function ReasoningCard({ reasoning }: { reasoning: string }) {
 
   return (
     <div className="space-y-2.5">
-      <p className="text-sm font-medium text-white">{data.summary}</p>
+      <p className="text-sm font-medium text-zinc-200">{data.summary}</p>
 
       <div className="flex flex-wrap gap-1.5">
         {data.strength && (
-          <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] text-zinc-400">
+          <span className="text-xs font-medium text-zinc-400 bg-white/[0.05] border border-white/[0.06] rounded-md px-2 py-0.5">
             {data.direction} · {data.strength}
           </span>
         )}
         {data.regime && (
-          <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] text-zinc-500">
+          <span className="text-xs font-medium text-zinc-400 bg-white/[0.05] border border-white/[0.06] rounded-md px-2 py-0.5">
             {data.regime}
           </span>
         )}
         {data.strategy && (
-          <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] text-zinc-500">
+          <span className="text-xs font-medium text-zinc-400 bg-white/[0.05] border border-white/[0.06] rounded-md px-2 py-0.5">
             {data.strategy}
           </span>
         )}
@@ -146,8 +146,8 @@ function ReasoningCard({ reasoning }: { reasoning: string }) {
       {data.bullish_indicators && data.bullish_indicators.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {data.bullish_indicators.map((ind: any) => (
-            <span key={ind.name} className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-400">
-              {ind.name} +{Math.round(ind.value * 100)}%
+            <span key={ind.name} className="text-xs font-medium text-green-500 bg-green-500/10 border border-green-500/15 rounded-md px-2 py-0.5">
+              {formatIndicatorName(ind.name)} +{Math.round(ind.value * 100)}%
             </span>
           ))}
         </div>
@@ -156,19 +156,19 @@ function ReasoningCard({ reasoning }: { reasoning: string }) {
       {data.bearish_indicators && data.bearish_indicators.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {data.bearish_indicators.map((ind: any) => (
-            <span key={ind.name} className="rounded bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-400">
-              {ind.name} {Math.round(ind.value * 100)}%
+            <span key={ind.name} className="text-xs font-medium text-red-500 bg-red-500/10 border border-red-500/15 rounded-md px-2 py-0.5">
+              {formatIndicatorName(ind.name)} {Math.round(ind.value * 100)}%
             </span>
           ))}
         </div>
       )}
 
       {data.conflicts && data.conflicts.length > 0 && (
-        <p className="text-[10px] text-zinc-500">⚠ {data.conflicts.join(", ")}에서 반대 신호</p>
+        <p className="text-[11px] text-zinc-500">⚠ {data.conflicts.join(", ")}에서 반대 신호</p>
       )}
 
       {data.memory_refs > 0 && (
-        <p className="text-[10px] text-zinc-500">유사 상황 {data.memory_refs}건 참조</p>
+        <p className="text-[11px] text-zinc-500">유사 상황 {data.memory_refs}건 참조</p>
       )}
     </div>
   );
@@ -184,7 +184,7 @@ function SignalBar({ value, label }: { value: number; label?: string }) {
 
   return (
     <div className="space-y-1">
-      {label && <p className="text-xs text-neutral-400">{label}</p>}
+      {label && <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">{label}</p>}
       <div className="h-1.5 w-full rounded-full bg-white/[0.06] overflow-hidden">
         <motion.div
           className={`h-full rounded-full ${
@@ -214,7 +214,7 @@ function ConfidenceBar({ value }: { value: number }) {
           transition={{ duration: 1, ease: "easeOut", delay: 0.3 }}
         />
       </div>
-      <span className="text-sm font-medium text-neutral-300 tabular-nums w-10 text-right">
+      <span className="font-mono text-sm font-medium tabular-nums text-zinc-50 w-10 text-right">
         {pct}%
       </span>
     </div>
@@ -234,17 +234,15 @@ function ComponentBars({ components }: { components: Record<string, number> }) {
 
   return (
     <div className="space-y-2 mt-3">
-      <p className="text-xs text-neutral-400">주요 분석 요소</p>
+      <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">주요 분석 요소</p>
       {sorted.map(([key, val]) => {
         const pct = Math.min(100, (Math.abs(val) / maxVal) * 100);
-        const friendlyKey = key
-          .replace(/_/g, " ")
-          .replace(/\b\w/g, (c) => c.toUpperCase());
+        const friendlyKey = formatIndicatorName(key);
         return (
           <div key={key} className="space-y-0.5">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-neutral-500">{friendlyKey}</span>
-              <span className={`text-xs font-medium tabular-nums ${val >= 0 ? "text-emerald-400" : "text-red-500"}`}>
+              <span className="text-xs text-zinc-400">{friendlyKey}</span>
+              <span className={`font-mono text-xs font-medium tabular-nums ${val >= 0 ? "text-green-500" : "text-red-500"}`}>
                 {val >= 0 ? "+" : ""}{(val * 100).toFixed(0)}%
               </span>
             </div>
@@ -268,7 +266,7 @@ function ComponentBars({ components }: { components: Record<string, number> }) {
 function PositionCards({ positions }: { positions: Record<string, number> }) {
   const entries = Object.entries(positions);
   if (entries.length === 0) {
-    return <p className="text-sm text-neutral-400 mt-3">현재 보유 자산이 없습니다</p>;
+    return <p className="text-sm text-zinc-400 leading-relaxed mt-3">현재 보유 자산이 없습니다</p>;
   }
 
   return (
@@ -276,14 +274,14 @@ function PositionCards({ positions }: { positions: Record<string, number> }) {
       {entries.map(([asset, amount]) => (
         <motion.div
           key={asset}
-          className="rounded-xl border border-white/[0.06] bg-white/[0.03] backdrop-blur-sm p-3 hover:border-white/[0.10] transition-all duration-200"
+          className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 hover:bg-white/[0.04] hover:border-white/[0.10] transition-all duration-150"
           whileHover={{ scale: 1.02, y: -2 }}
         >
-          <p className="text-xs text-neutral-400">보유</p>
-          <p className="text-base font-semibold text-white mt-0.5">
+          <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">보유</p>
+          <p className="text-sm font-medium text-zinc-200 mt-0.5">
             {friendlyAsset(asset)}
           </p>
-          <p className="text-sm font-medium text-neutral-400 mt-1 tabular-nums">
+          <p className="font-mono text-sm font-medium tabular-nums text-zinc-50 mt-1">
             ${formatMoney(amount)}
           </p>
         </motion.div>
@@ -434,14 +432,14 @@ function DashboardContent() {
                   animate={{ opacity: [1, 0.4, 1], boxShadow: ["0 0 6px rgba(255,255,255,0.6)", "0 0 2px rgba(255,255,255,0.2)", "0 0 6px rgba(255,255,255,0.6)"] }}
                   transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
                 />
-                <span className="text-sm text-white font-medium">에이전트 활성</span>
+                <span className="text-sm text-zinc-50 font-medium">에이전트 활성</span>
               </div>
 
-              <h1 className="text-3xl sm:text-4xl font-bold text-gradient-accent tracking-tight text-glow">
+              <h1 className="text-2xl font-semibold tracking-tight text-zinc-50">
                 오늘의 시장
               </h1>
               <motion.p
-                className="mt-3 text-base sm:text-lg text-neutral-500 max-w-xl leading-relaxed"
+                className="mt-3 text-sm text-zinc-400 max-w-xl leading-relaxed"
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3, duration: 0.5 }}
@@ -456,10 +454,10 @@ function DashboardContent() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.5, duration: 0.4 }}
                 >
-                  <span className="inline-flex items-center rounded-full bg-white/[0.08] text-white px-4 py-1.5 text-sm font-medium">
+                  <span className="text-xs font-medium text-zinc-400 bg-white/[0.05] border border-white/[0.06] rounded-md px-2 py-0.5">
                     시장 상태 : {friendlyRegime(topRec.regime)}
                   </span>
-                  <span className="inline-flex items-center rounded-full border border-white/[0.06] bg-white/[0.03] px-4 py-1.5 text-sm text-neutral-300">
+                  <span className="text-xs font-medium text-zinc-400 bg-white/[0.05] border border-white/[0.06] rounded-md px-2 py-0.5">
                     분석 방식 : {friendlyFormula(topRec.formula_name)}
                   </span>
                 </motion.div>
@@ -472,15 +470,15 @@ function DashboardContent() {
         <StaggerContainer className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <StaggerItem>
             <motion.div
-              className="rounded-2xl border border-white/[0.06] bg-white/[0.03] backdrop-blur-sm p-6 hover:border-white/[0.06] transition-all duration-300 card-accent-hover"
+              className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 hover:bg-white/[0.04] hover:border-white/[0.10] transition-all duration-150"
               whileHover={{ scale: 1.02, y: -4 }}
             >
-              <p className="text-sm text-neutral-400 font-medium">총 투자금</p>
-              <div className="mt-2 text-3xl font-bold text-white tabular-nums text-glow-strong">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">총 투자금</p>
+              <div className="mt-2 text-3xl font-bold tracking-tighter tabular-nums text-zinc-50">
                 $<AnimatedNumber value={portfolio?.total_exposure ?? 0} decimals={0} />
               </div>
               {portfolio?.positions && (
-                <p className="mt-2 text-xs text-neutral-400">
+                <p className="mt-2 text-xs font-medium text-zinc-500">
                   {Object.keys(portfolio.positions).length}개 자산 보유 중
                 </p>
               )}
@@ -489,16 +487,16 @@ function DashboardContent() {
 
           <StaggerItem>
             <motion.div
-              className="rounded-2xl border border-white/[0.06] bg-white/[0.03] backdrop-blur-sm p-6 hover:border-white/[0.06] transition-all duration-300 card-accent-hover"
+              className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 hover:bg-white/[0.04] hover:border-white/[0.10] transition-all duration-150"
               whileHover={{ scale: 1.02, y: -4 }}
             >
-              <p className="text-sm text-neutral-400 font-medium">평가 손익</p>
-              <div className={`mt-2 text-3xl font-bold tabular-nums ${
-                unrealizedPnl >= 0 ? "text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.4)] profit-glow" : "text-red-400 drop-shadow-[0_0_8px_rgba(239,68,68,0.4)] loss-glow"
+              <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">평가 손익</p>
+              <div className={`mt-2 text-3xl font-bold tracking-tighter tabular-nums ${
+                unrealizedPnl >= 0 ? "text-green-500" : "text-red-500"
               }`}>
                 {unrealizedPnl >= 0 ? "+" : ""}$<AnimatedNumber value={unrealizedPnl} decimals={0} />
               </div>
-              <p className="mt-2 text-xs text-neutral-400">
+              <p className="mt-2 text-xs font-medium text-zinc-500">
                 현재 보유 자산 기준
               </p>
             </motion.div>
@@ -506,17 +504,17 @@ function DashboardContent() {
 
           <StaggerItem>
             <motion.div
-              className="rounded-2xl border border-white/[0.06] bg-white/[0.03] backdrop-blur-sm p-6 hover:border-white/[0.06] transition-all duration-300 card-accent-hover"
+              className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 hover:bg-white/[0.04] hover:border-white/[0.10] transition-all duration-150"
               whileHover={{ scale: 1.02, y: -4 }}
             >
-              <p className="text-sm text-neutral-400 font-medium">실현 손익</p>
-              <div className={`mt-2 text-3xl font-bold tabular-nums ${
-                realizedPnl >= 0 ? "text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.4)] profit-glow" : "text-red-400 drop-shadow-[0_0_8px_rgba(239,68,68,0.4)] loss-glow"
+              <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">실현 손익</p>
+              <div className={`mt-2 text-3xl font-bold tracking-tighter tabular-nums ${
+                realizedPnl >= 0 ? "text-green-500" : "text-red-500"
               }`}>
                 {realizedPnl >= 0 ? "+" : ""}$<AnimatedNumber value={realizedPnl} decimals={0} />
               </div>
               {stats?.win_rate != null && (
-                <p className="mt-2 text-xs text-neutral-400">
+                <p className="mt-2 text-xs font-medium text-zinc-500">
                   승률 {(stats.win_rate * 100).toFixed(0)}% / {stats?.trade_count ?? 0}회 거래
                 </p>
               )}
@@ -531,27 +529,27 @@ function DashboardContent() {
 
         {/* ── Agent Accuracy Widget ────────────────────────── */}
         <FadeInView delay={0.12}>
-          <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6 animate-card-reveal">
-            <h3 className="text-lg font-semibold text-white text-glow">에이전트 성과</h3>
-            <p className="mt-0.5 text-xs text-zinc-500">최근 결정의 사후 검증 결과</p>
+          <section className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 animate-card-reveal">
+            <h3 className="text-base font-semibold tracking-tight text-zinc-50">에이전트 성과</h3>
+            <p className="mt-0.5 text-xs font-medium text-zinc-500">최근 결정의 사후 검증 결과</p>
 
             {hindsight ? (
               <div className="mt-4 grid grid-cols-3 gap-4">
-                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 text-center">
-                  <p className="text-2xl font-bold text-white text-glow-strong">
+                <div className="rounded-lg bg-white/[0.03] p-3 text-center">
+                  <p className="text-3xl font-bold tracking-tighter tabular-nums text-zinc-50">
                     {(hindsight.accuracy * 100).toFixed(0)}%
                   </p>
-                  <p className="mt-1 text-[10px] text-zinc-500">적중률</p>
+                  <p className="mt-1 text-xs font-medium text-zinc-500">적중률</p>
                 </div>
-                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 text-center">
-                  <p className="text-2xl font-bold text-white">{hindsight.total}</p>
-                  <p className="mt-1 text-[10px] text-zinc-500">총 결정</p>
+                <div className="rounded-lg bg-white/[0.03] p-3 text-center">
+                  <p className="font-mono text-3xl font-bold tracking-tighter tabular-nums text-zinc-50">{hindsight.total}</p>
+                  <p className="mt-1 text-xs font-medium text-zinc-500">총 결정</p>
                 </div>
-                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 text-center">
-                  <p className={`text-2xl font-bold ${hindsight.avg_score > 0 ? "text-emerald-400 profit-glow" : "text-red-400 loss-glow"}`}>
+                <div className="rounded-lg bg-white/[0.03] p-3 text-center">
+                  <p className={`font-mono text-3xl font-bold tracking-tighter tabular-nums ${hindsight.avg_score > 0 ? "text-green-500" : "text-red-500"}`}>
                     {(hindsight.avg_score * 100).toFixed(0)}%
                   </p>
-                  <p className="mt-1 text-[10px] text-zinc-500">평균 점수</p>
+                  <p className="mt-1 text-xs font-medium text-zinc-500">평균 점수</p>
                 </div>
               </div>
             ) : (
@@ -564,41 +562,41 @@ function DashboardContent() {
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Confidence & Signal */}
           <FadeInView>
-            <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] backdrop-blur-sm p-6 h-full hover-lift animate-card-reveal">
-              <h2 className="text-lg font-semibold text-white">에이전트 분석 현황</h2>
+            <section className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 h-full hover:bg-white/[0.04] hover:border-white/[0.10] transition-all duration-150 animate-card-reveal">
+              <h2 className="text-base font-semibold tracking-tight text-zinc-50">에이전트 분석 현황</h2>
 
               {topRec ? (
                 <div className="mt-5 space-y-5">
                   {/* Confidence */}
                   <div>
-                    <p className="text-sm text-neutral-500 mb-2">확신도</p>
+                    <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-2">확신도</p>
                     <ConfidenceBar value={topRec.confidence} />
                   </div>
 
                   {/* Strategy reasoning */}
                   <div>
-                    <p className="text-sm text-neutral-500 mb-1">분석 의견</p>
-                    <p className="text-sm text-neutral-300 leading-relaxed">{cleanReasoning(topRec.reasoning)}</p>
+                    <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-1">분석 의견</p>
+                    <p className="text-sm text-zinc-400 leading-relaxed">{cleanReasoning(topRec.reasoning)}</p>
                   </div>
 
                   {/* Other recommendations */}
                   {recs.length > 1 && (
                     <div>
-                      <p className="text-sm text-neutral-500 mb-2">대안 전략</p>
+                      <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-2">대안 전략</p>
                       <div className="space-y-2">
                         {recs.slice(1, 3).map((r, i) => (
                           <motion.div
                             key={i}
-                            className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 hover:bg-white/[0.03] transition-colors"
+                            className="rounded-lg bg-white/[0.03] p-3 hover:bg-white/[0.04] transition-colors"
                             whileHover={{ x: 4 }}
                           >
                             <div className="flex items-center justify-between">
-                              <span className="text-sm font-medium text-neutral-300">{r.name}</span>
-                              <span className="text-xs text-neutral-400 tabular-nums">
+                              <span className="text-sm font-medium text-zinc-200">{r.name}</span>
+                              <span className="font-mono text-xs font-medium tabular-nums text-zinc-50">
                                 확신도 {(r.confidence * 100).toFixed(0)}%
                               </span>
                             </div>
-                            <p className="mt-1 text-xs text-neutral-500 line-clamp-1">{cleanReasoning(r.reasoning)}</p>
+                            <p className="mt-1 text-xs text-zinc-500 line-clamp-1">{cleanReasoning(r.reasoning)}</p>
                           </motion.div>
                         ))}
                       </div>
@@ -620,20 +618,20 @@ function DashboardContent() {
 
           {/* Positions */}
           <FadeInView delay={0.1}>
-            <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] backdrop-blur-sm p-6 h-full hover-lift animate-card-reveal delay-100">
-              <h2 className="text-lg font-semibold text-white">보유 자산</h2>
+            <section className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 h-full hover:bg-white/[0.04] hover:border-white/[0.10] transition-all duration-150 animate-card-reveal delay-100">
+              <h2 className="text-base font-semibold tracking-tight text-zinc-50">보유 자산</h2>
 
               {portfolio?.positions && Object.keys(portfolio.positions).length > 0 ? (
                 <PositionCards positions={portfolio.positions} />
               ) : (
                 <div className="mt-5 flex flex-col items-center justify-center py-8">
-                  <div className="w-12 h-12 rounded-full bg-white/[0.02] flex items-center justify-center">
-                    <span className="text-neutral-300 text-xl">$</span>
+                  <div className="w-12 h-12 rounded-full bg-white/[0.03] flex items-center justify-center">
+                    <span className="text-zinc-400 text-xl">$</span>
                   </div>
-                  <p className="mt-3 text-sm text-neutral-400">
+                  <p className="mt-3 text-sm text-zinc-400">
                     아직 보유 자산이 없습니다
                   </p>
-                  <p className="text-xs text-neutral-300 mt-1">
+                  <p className="text-xs text-zinc-500 mt-1">
                     에이전트가 매수 신호를 감지하면 자동으로 투자합니다
                   </p>
                 </div>
@@ -645,11 +643,11 @@ function DashboardContent() {
         {/* ── Recent Decisions ────────────────────────────── */}
         <FadeInView delay={0.15}>
           <section>
-            <h2 className="text-xl font-bold text-white mb-4 drop-shadow-[0_0_8px_rgba(255,255,255,0.3)] text-glow">최근 매매 결정</h2>
+            <h2 className="text-base font-semibold tracking-tight text-zinc-50 mb-4">최근 매매 결정</h2>
 
             {decisions.length === 0 ? (
-              <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] backdrop-blur-sm p-8 text-center">
-                <p className="text-sm text-neutral-400">
+              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-8 text-center">
+                <p className="text-sm text-zinc-400 leading-relaxed">
                   아직 매매 이력이 없습니다. 에이전트가 시장 데이터를 수집하면 자동으로 매매를 결정합니다.
                 </p>
               </div>
@@ -660,20 +658,20 @@ function DashboardContent() {
                   return (
                     <StaggerItem key={d.decision_id ?? i}>
                       <motion.div
-                        className="rounded-2xl border border-white/[0.06] bg-white/[0.03] backdrop-blur-sm p-5 hover:border-white/[0.06] transition-all duration-300"
+                        className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 hover:bg-white/[0.04] hover:border-white/[0.10] transition-all duration-150"
                         whileHover={{ y: -2 }}
                       >
                         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                           {/* Asset + Action */}
                           <div className="flex items-center gap-3 flex-1">
-                            <span className="text-base font-semibold text-white">
+                            <span className="text-sm font-medium text-zinc-200">
                               {friendlyAsset(d.asset)}
                             </span>
-                            <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${act.bg} ${act.color}`}>
+                            <span className={`text-xs font-medium rounded-md px-2 py-0.5 border ${d.action === "BUY" ? "text-green-500 bg-green-500/10 border-green-500/15" : d.action === "SELL" ? "text-red-500 bg-red-500/10 border-red-500/15" : "text-zinc-400 bg-white/[0.05] border-white/[0.06]"}`}>
                               {act.label}
                             </span>
                             {d.threshold_crossed && (
-                              <span className="inline-flex items-center rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-400 px-2.5 py-0.5 text-xs font-medium">
+                              <span className="text-xs font-medium text-amber-500 bg-amber-500/10 border border-amber-500/15 rounded-md px-2 py-0.5">
                                 매매 신호 발생
                               </span>
                             )}
@@ -685,7 +683,7 @@ function DashboardContent() {
                               <SignalBar value={d.signal_score} label="시장 신호" />
                             </div>
                             {d.timestamp && (
-                              <span className="text-xs text-neutral-400 whitespace-nowrap">
+                              <span className="text-xs text-zinc-500 whitespace-nowrap">
                                 {timeAgo(d.timestamp)}
                               </span>
                             )}

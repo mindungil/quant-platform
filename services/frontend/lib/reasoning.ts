@@ -60,6 +60,38 @@ export function actionLabel(action: string): { text: string; color: string } {
   }
 }
 
+/** Format raw indicator names to human-readable labels */
+export function formatIndicatorName(raw: string): string {
+  const map: Record<string, string> = {
+    adx_filter: "ADX", adx_14: "ADX", adx_strength: "ADX",
+    stochastic: "Stochastic", stochastic_k: "Stoch K", stochastic_d: "Stoch D",
+    stochastic_level: "Stochastic", stoch_momentum: "Stoch Momentum",
+    sma_20: "SMA 20", sma_distance: "SMA",
+    vwap: "VWAP", vwap_distance: "VWAP", vwap_reversion: "VWAP Rev",
+    macd: "MACD", macd_histogram: "MACD Hist", macd_crossover: "MACD Cross",
+    rsi: "RSI", rsi_14: "RSI", rsi_level: "RSI", rsi_extreme: "RSI Extreme",
+    rsi_momentum: "RSI Mom",
+    bollinger: "Bollinger", bollinger_pctb: "BB %B", bb_contrarian: "BB Rev",
+    bb_width: "BB Width", bb_width_squeeze: "BB Squeeze",
+    ema_9: "EMA 9", ema_21: "EMA 21", ema_50: "EMA 50",
+    ema_alignment: "EMA Align", ema_cross_9_21: "EMA 9/21", ema_cross_21_50: "EMA 21/50",
+    ema_spread: "EMA Spread",
+    fear_greed: "Fear & Greed", fear_greed_index: "Fear & Greed",
+    funding_rate_signal: "Funding Rate", funding_rate_extreme: "FR Extreme",
+    open_interest_trend: "Open Interest", long_short_ratio: "Long/Short",
+    taker_buy_sell: "Taker Ratio", derivatives_sentiment: "Deriv Sent",
+    btc_dominance: "BTC Dom", news_sentiment: "News", onchain_score: "On-Chain",
+    macro_risk: "Macro Risk", macro_risk_score: "Macro Risk",
+    obv_momentum: "OBV", volume_volatility: "Vol/Vol",
+    atr_relative: "ATR Rel", atr_percentile: "ATR %",
+    range_expansion: "Range Exp", squeeze_indicator: "Squeeze",
+    trend_consistency: "Trend", price_momentum_short: "Mom Short",
+    price_momentum_medium: "Mom Med", price_vs_range: "Price Range",
+    formula_confidence: "Confidence",
+  };
+  return map[raw] || raw.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+}
+
 /** Clean reasoning for display — always returns human-readable text */
 export function cleanReasoning(raw: string): string {
   const { structured, text } = parseReasoning(raw);

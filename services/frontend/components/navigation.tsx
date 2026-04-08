@@ -24,17 +24,17 @@ export function Navigation() {
   }
 
   return (
-    <nav className="flex items-center gap-0.5 text-[13px]">
+    <nav className="flex items-center gap-0.5 text-sm">
       {links.map(([href, label]) => {
         const isActive = pathname === href || pathname?.startsWith(href + "/");
         return (
           <Link
             key={href}
             href={href}
-            className={`relative rounded-lg px-3 py-1.5 transition-colors ${
+            className={`relative rounded-lg px-3 py-1.5 transition-colors duration-150 ${
               isActive
-                ? "font-semibold text-white"
-                : "text-neutral-500 hover:text-white"
+                ? "font-medium text-zinc-50"
+                : "text-zinc-400 hover:text-zinc-50"
             }`}
           >
             {label}
@@ -50,7 +50,7 @@ export function Navigation() {
         );
       })}
       <button
-        className="ml-3 rounded-lg px-2.5 py-1 text-[13px] text-neutral-500 transition-colors hover:text-red-400"
+        className="ml-3 rounded-lg px-2.5 py-1 text-sm text-zinc-400 transition-colors duration-150 hover:text-red-400"
         onClick={() => {
           clearToken();
           window.location.href = "/";

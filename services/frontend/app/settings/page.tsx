@@ -81,8 +81,8 @@ function AiProviderCard({ provider, name, description, color, iconColor }: {
             {provider === "claude" ? "🤖" : "⚡"}
           </div>
           <div>
-            <p className="text-sm font-semibold text-white">{name}</p>
-            <p className="text-[11px] text-neutral-400">{description}</p>
+            <p className="text-sm font-medium text-zinc-200">{name}</p>
+            <p className="text-[11px] text-zinc-500">{description}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -238,8 +238,8 @@ function SettingsContent() {
       <main className="grid gap-6">
         {/* Header */}
         <div>
-          <h2 className="text-2xl font-semibold text-white">설정</h2>
-          <p className="mt-1 text-sm text-neutral-500">
+          <h2 className="text-2xl font-semibold tracking-tight text-zinc-50">설정</h2>
+          <p className="mt-1 text-sm text-zinc-400 leading-relaxed">
             거래소 연결, 리스크 관리, 계정 정보
           </p>
         </div>
@@ -257,8 +257,8 @@ function SettingsContent() {
                   <span className="text-sm">?</span>
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-white">시작 가이드</p>
-                  <p className="text-xs text-neutral-500">플랫폼 사용법과 거래소 연결 방법</p>
+                  <p className="text-sm font-medium text-zinc-200">시작 가이드</p>
+                  <p className="text-xs text-zinc-500">플랫폼 사용법과 거래소 연결 방법</p>
                 </div>
               </div>
               <motion.span
@@ -290,18 +290,18 @@ function SettingsContent() {
                           <div className="mb-2 flex h-6 w-6 items-center justify-center rounded-full bg-white text-xs font-bold text-black">
                             {item.step}
                           </div>
-                          <p className="text-sm font-medium text-white">{item.title}</p>
-                          <p className="mt-1 text-xs leading-relaxed text-neutral-500">{item.desc}</p>
+                          <p className="text-sm font-medium text-zinc-200">{item.title}</p>
+                          <p className="mt-1 text-sm text-zinc-400 leading-relaxed">{item.desc}</p>
                         </div>
                       ))}
                     </div>
 
                     <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-                      <p className="mb-2 text-xs font-medium text-neutral-400">거래소별 API 발급 방법</p>
+                      <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-zinc-500">거래소별 API 발급 방법</p>
                       {EXCHANGES.map((ex) => (
                         <div key={ex.id} className="flex items-start gap-2 py-1.5">
-                          <span className="mt-0.5 text-xs font-semibold text-white">{ex.name}</span>
-                          <span className="text-xs text-neutral-500">{ex.guide}</span>
+                          <span className="mt-0.5 text-xs font-semibold text-zinc-50">{ex.name}</span>
+                          <span className="text-xs text-zinc-500">{ex.guide}</span>
                         </div>
                       ))}
                     </div>
@@ -317,7 +317,7 @@ function SettingsContent() {
           <FadeInView delay={0.05}>
             <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6 space-y-5">
               <div>
-                <h3 className="text-lg font-semibold text-white">거래소 연결</h3>
+                <h3 className="text-base font-semibold tracking-tight text-zinc-50">거래소 연결</h3>
                 <p className="mt-0.5 text-xs text-neutral-500">거래소 API 키를 등록하면 자동 매매가 가능합니다</p>
               </div>
 
@@ -348,7 +348,7 @@ function SettingsContent() {
 
               <div className="space-y-3">
                 <div>
-                  <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-widest text-neutral-500">거래소</label>
+                  <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-zinc-500">거래소</label>
                   <select
                     className="input-field"
                     value={exchange}
@@ -365,7 +365,7 @@ function SettingsContent() {
                   )}
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-widest text-neutral-500">API 키</label>
+                  <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-zinc-500">API 키</label>
                   <input
                     className="input-field"
                     value={apiKey}
@@ -375,7 +375,7 @@ function SettingsContent() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-widest text-neutral-500">API 시크릿</label>
+                  <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-zinc-500">API 시크릿</label>
                   <input
                     className="input-field"
                     value={apiSecret}
@@ -396,7 +396,7 @@ function SettingsContent() {
 
               {/* Saved credentials */}
               <div className="border-t border-white/[0.06] pt-4">
-                <p className="mb-3 text-[11px] font-medium uppercase tracking-widest text-neutral-500">연결된 거래소</p>
+                <p className="mb-3 text-[11px] font-medium uppercase tracking-wider text-zinc-500">연결된 거래소</p>
                 {credLoading ? (
                   <div className="space-y-2">
                     {[0, 1].map((i) => (
@@ -411,7 +411,7 @@ function SettingsContent() {
                       <StaggerItem key={cred.credential_id}>
                         <div className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
                           <div>
-                            <span className="text-sm font-medium text-white">
+                            <span className="text-sm font-medium text-zinc-200">
                               {EXCHANGES.find((e) => e.id === cred.exchange)?.name || cred.exchange}
                             </span>
                             <p className="mt-0.5 font-mono text-[11px] text-neutral-500">{cred.api_key_masked}</p>
@@ -439,7 +439,7 @@ function SettingsContent() {
             {/* Risk Settings */}
             <FadeInView delay={0.1}>
               <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6 space-y-4">
-                <h3 className="text-lg font-semibold text-white">리스크 관리</h3>
+                <h3 className="text-base font-semibold tracking-tight text-zinc-50">리스크 관리</h3>
                 {riskLoading ? (
                   <div className="grid grid-cols-2 gap-3">
                     {[0, 1, 2, 3].map((i) => (
@@ -449,31 +449,31 @@ function SettingsContent() {
                 ) : risk ? (
                   <div className="grid grid-cols-2 gap-3">
                     <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-                      <p className="text-[11px] font-medium uppercase tracking-widest text-neutral-500">최대 주문금액</p>
-                      <p className="mt-2 font-mono text-xl font-semibold text-white">
+                      <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">최대 주문금액</p>
+                      <p className="mt-2 font-mono text-xl font-semibold tabular-nums text-zinc-50">
                         {risk.max_notional != null ? (
                           <><span className="text-sm text-neutral-500">$</span><AnimatedNumber value={risk.max_notional} decimals={0} /></>
                         ) : "--"}
                       </p>
                     </div>
                     <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-                      <p className="text-[11px] font-medium uppercase tracking-widest text-neutral-500">투자 한도</p>
-                      <p className="mt-2 font-mono text-xl font-semibold text-white">
+                      <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">투자 한도</p>
+                      <p className="mt-2 font-mono text-xl font-semibold tabular-nums text-zinc-50">
                         {risk.exposure_limit != null ? (
                           <><span className="text-sm text-neutral-500">$</span><AnimatedNumber value={risk.exposure_limit} decimals={0} /></>
                         ) : "--"}
                       </p>
                     </div>
                     <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-                      <p className="text-[11px] font-medium uppercase tracking-widest text-neutral-500">최대 하락 허용</p>
-                      <p className="mt-2 font-mono text-xl font-semibold text-white">
+                      <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">최대 하락 허용</p>
+                      <p className="mt-2 font-mono text-xl font-semibold tabular-nums text-zinc-50">
                         {risk.max_drawdown != null ? (
                           <><AnimatedNumber value={risk.max_drawdown * 100} decimals={1} /><span className="text-sm text-neutral-500">%</span></>
                         ) : "--"}
                       </p>
                     </div>
                     <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-                      <p className="text-[11px] font-medium uppercase tracking-widest text-neutral-500">자동 매매</p>
+                      <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">자동 매매</p>
                       <p className="mt-2 text-xl font-semibold">
                         <span className={risk.automation_enabled ? "text-emerald-400" : "text-red-400"}>
                           {risk.automation_enabled ? "활성" : "비활성"}
@@ -490,7 +490,7 @@ function SettingsContent() {
             {/* Execution Config */}
             <FadeInView delay={0.12}>
               <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6 space-y-4">
-                <h3 className="text-lg font-semibold text-white">실행 설정</h3>
+                <h3 className="text-base font-semibold tracking-tight text-zinc-50">실행 설정</h3>
                 {execLoading ? (
                   <div className="space-y-2">
                     {[0, 1, 2].map((i) => (
@@ -501,7 +501,7 @@ function SettingsContent() {
                   <div className="space-y-3">
                     <div className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
                       <div>
-                        <p className="text-[11px] font-medium uppercase tracking-widest text-neutral-500">실시간 트레이딩</p>
+                        <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">실시간 트레이딩</p>
                         <p className={`mt-1 text-sm font-semibold ${execConfig.live_trading_enabled ? "text-emerald-400" : "text-red-400"}`}>
                           {execConfig.live_trading_enabled ? "활성" : "비활성"}
                         </p>
@@ -517,8 +517,8 @@ function SettingsContent() {
                     </div>
                     <div className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
                       <div>
-                        <p className="text-[11px] font-medium uppercase tracking-widest text-neutral-500">섀도우 모드</p>
-                        <p className={`mt-1 text-sm font-semibold ${execConfig.default_shadow_mode ? "text-white" : "text-neutral-400"}`}>
+                        <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">섀도우 모드</p>
+                        <p className={`mt-1 text-sm font-semibold ${execConfig.default_shadow_mode ? "text-zinc-50" : "text-zinc-400"}`}>
                           {execConfig.default_shadow_mode ? "기본 활성" : "비활성"}
                         </p>
                       </div>
@@ -532,7 +532,7 @@ function SettingsContent() {
                       )}
                     </div>
                     <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-                      <p className="text-[11px] font-medium uppercase tracking-widest text-neutral-500">허용 거래소</p>
+                      <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">허용 거래소</p>
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {EXCHANGES.map((ex) => {
                           const enabled = execConfig.allowed_exchanges.map((e) => e.toLowerCase()).includes(ex.id);
@@ -575,7 +575,7 @@ function SettingsContent() {
             <FadeInView delay={0.12}>
               <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6 space-y-4">
                 <div>
-                  <h3 className="text-lg font-semibold text-white">구독 플랜</h3>
+                  <h3 className="text-base font-semibold tracking-tight text-zinc-50">구독 플랜</h3>
                   <p className="mt-0.5 text-xs text-zinc-500">현재 플랜과 사용량을 확인하세요</p>
                 </div>
 
@@ -584,7 +584,7 @@ function SettingsContent() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">현재 플랜</p>
-                      <p className="mt-1 text-lg font-bold text-white">{profile?.plan || "FREE"}</p>
+                      <p className="mt-1 text-lg font-bold text-zinc-50">{profile?.plan || "FREE"}</p>
                     </div>
                     <span className="rounded-full bg-white/[0.08] px-3 py-1 text-xs text-zinc-400">
                       {profile?.plan === "PREMIUM" ? "모든 기능" : profile?.plan === "PRO" ? "자동매매 1자산" : "시그널 조회"}
@@ -600,8 +600,8 @@ function SettingsContent() {
                     { name: "Premium", price: "89,000원/월", features: ["전체 자산", "무제한 자동매매", "커스텀 전략", "우선 실행"] },
                   ].map(tier => (
                     <div key={tier.name} className={`rounded-xl border p-4 ${profile?.plan === tier.name.toUpperCase() ? "border-white/[0.20] bg-white/[0.06]" : "border-white/[0.06] bg-white/[0.02]"}`}>
-                      <p className="text-sm font-semibold text-white">{tier.name}</p>
-                      <p className="mt-1 text-lg font-bold text-white">{tier.price}</p>
+                      <p className="text-sm font-medium text-zinc-200">{tier.name}</p>
+                      <p className="mt-1 text-lg font-bold text-zinc-50">{tier.price}</p>
                       <ul className="mt-3 space-y-1">
                         {tier.features.map(f => (
                           <li key={f} className="text-[11px] text-zinc-400">• {f}</li>
@@ -617,8 +617,8 @@ function SettingsContent() {
             <FadeInView delay={0.14}>
               <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6 space-y-4">
                 <div>
-                  <h3 className="text-lg font-semibold text-white">고급: 자체 LLM 연동 (선택사항)</h3>
-                  <p className="mt-0.5 text-xs text-neutral-500">자체 Claude/Codex 계정을 연동하면 프리미엄 모델을 사용할 수 있습니다. 연동하지 않아도 플랫폼 AI가 기본 제공됩니다.</p>
+                  <h3 className="text-base font-semibold tracking-tight text-zinc-50">고급: 자체 LLM 연동 (선택사항)</h3>
+                  <p className="mt-0.5 text-sm text-zinc-400 leading-relaxed">자체 Claude/Codex 계정을 연동하면 프리미엄 모델을 사용할 수 있습니다. 연동하지 않아도 플랫폼 AI가 기본 제공됩니다.</p>
                 </div>
                 <AiProviderCard
                   provider="claude"
@@ -643,16 +643,16 @@ function SettingsContent() {
             {/* Profile */}
             <FadeInView delay={0.15}>
               <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6 space-y-4">
-                <h3 className="text-lg font-semibold text-white">내 계정</h3>
+                <h3 className="text-base font-semibold tracking-tight text-zinc-50">내 계정</h3>
                 {profile ? (
                   <div className="space-y-3">
                     <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-                      <p className="text-[11px] font-medium uppercase tracking-widest text-neutral-500">이메일</p>
-                      <p className="mt-1 text-sm text-white">{profile.email}</p>
+                      <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">이메일</p>
+                      <p className="mt-1 text-sm text-zinc-50">{profile.email}</p>
                     </div>
                     {profile.roles && profile.roles.length > 0 && (
                       <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-                        <p className="text-[11px] font-medium uppercase tracking-widest text-neutral-500">권한</p>
+                        <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">권한</p>
                         <div className="mt-2 flex flex-wrap gap-1.5">
                           {profile.roles.map((role) => (
                             <span

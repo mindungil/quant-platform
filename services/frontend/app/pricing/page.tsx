@@ -56,7 +56,7 @@ export default function PricingPage() {
         <motion.h1
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-4xl font-bold text-white text-glow"
+          className="text-2xl font-semibold tracking-tight text-zinc-50"
         >
           플랜 선택
         </motion.h1>
@@ -64,7 +64,7 @@ export default function PricingPage() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.2 }}
-          className="mt-3 text-zinc-400"
+          className="mt-3 text-sm text-zinc-400 leading-relaxed"
         >
           AI 에이전트가 24시간 시장을 분석합니다. 당신은 구독만 하세요.
         </motion.p>
@@ -87,15 +87,15 @@ export default function PricingPage() {
                   추천
                 </span>
               )}
-              <p className="text-sm font-medium text-zinc-400">{tier.description}</p>
-              <p className="mt-2 text-3xl font-bold text-white">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">{tier.description}</p>
+              <p className="mt-2 text-3xl font-bold tracking-tighter tabular-nums text-zinc-50">
                 {tier.price}
                 <span className="text-sm font-normal text-zinc-500">{tier.unit}</span>
               </p>
               <ul className="mt-6 space-y-3">
                 {tier.features.map((f) => (
-                  <li key={f} className="flex items-center gap-2 text-sm text-zinc-300">
-                    <span className="text-emerald-400">&#10003;</span>
+                  <li key={f} className="flex items-center gap-2 text-sm text-zinc-400 leading-relaxed">
+                    <span className="text-green-500">&#10003;</span>
                     {f}
                   </li>
                 ))}
@@ -104,7 +104,7 @@ export default function PricingPage() {
                 className={`mt-8 w-full rounded-lg py-2.5 text-sm font-semibold transition-all ${
                   tier.highlight
                     ? "bg-white text-black hover:bg-zinc-200"
-                    : "border border-white/[0.10] text-white hover:bg-white/[0.06]"
+                    : "border border-white/[0.10] text-zinc-50 hover:bg-white/[0.06]"
                 }`}
               >
                 {tier.cta}

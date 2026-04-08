@@ -129,12 +129,12 @@ function ToolPill({
         onClick={() => setShowPopover((p) => !p)}
         onMouseLeave={() => setShowPopover(false)}
         className={`
-          inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium
-          transition-all duration-200
+          inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium
+          transition-all duration-150
           ${
             hasError
-              ? "bg-red-500/10 text-red-400 hover:bg-red-500/20"
-              : "bg-white/[0.08] text-zinc-300 hover:bg-white/[0.12] hover:text-white"
+              ? "text-red-500 bg-red-500/10 border-red-500/15 hover:bg-red-500/20"
+              : "text-zinc-400 bg-white/[0.05] border-white/[0.06] hover:bg-white/[0.08] hover:text-zinc-50"
           }
         `}
       >
@@ -407,7 +407,7 @@ export default function ChatPage() {
               <path d="M3 12h18M3 6h18M3 18h18" />
             </svg>
           </motion.button>
-          <h1 className="text-sm font-bold text-white tracking-tight text-glow">
+          <h1 className="text-sm font-medium text-zinc-50 tracking-tight">
             AI 트레이딩 에이전트
           </h1>
         </div>
@@ -430,7 +430,7 @@ export default function ChatPage() {
                   className="mb-8"
                 >
                   <span
-                    className="inline-block bg-clip-text text-6xl font-bold text-transparent text-glow-strong"
+                    className="inline-block bg-clip-text text-6xl font-bold text-transparent"
                     style={{
                       backgroundImage: "linear-gradient(135deg, #fafafa, #a1a1aa, #fafafa)",
                       backgroundSize: "200% 200%",
@@ -444,7 +444,7 @@ export default function ChatPage() {
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.25 }}
-                  className="mb-10 max-w-md text-base leading-relaxed text-neutral-400"
+                  className="mb-10 max-w-md text-sm text-zinc-400 leading-relaxed"
                 >
                   시장 분석, 매매 실행, 공식 평가를 자연어로 요청하세요.
                   <br />
@@ -475,7 +475,7 @@ export default function ChatPage() {
                         setInput(s.text);
                         inputRef.current?.focus();
                       }}
-                      className="rounded-xl border border-neutral-800/60 bg-neutral-900/50 px-4 py-3.5 text-left text-sm text-neutral-300 transition-colors hover:border-neutral-600 hover:text-white"
+                      className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3.5 text-left text-sm text-zinc-300 transition-all duration-150 hover:border-white/[0.10] hover:bg-white/[0.04] hover:text-zinc-50"
                     >
                       <span className="mr-2">{s.icon}</span>
                       {s.text}
@@ -498,7 +498,7 @@ export default function ChatPage() {
                 >
                   {msg.role === "user" ? (
                     /* ── User bubble ──────────────────── */
-                    <div className="max-w-[75%] rounded-2xl rounded-br-md bg-white/[0.10] px-5 py-3 text-[15px] leading-relaxed text-white shadow-[0_2px_12px_rgba(255,255,255,0.06)]">
+                    <div className="max-w-[75%] rounded-2xl rounded-br-md bg-white/[0.08] px-5 py-3 text-sm leading-relaxed text-zinc-50">
                       {msg.content}
                     </div>
                   ) : (
@@ -528,7 +528,7 @@ export default function ChatPage() {
 
                       {/* Text content */}
                       <div className="border-l-2 border-white/[0.15] pl-4">
-                        <div className="whitespace-pre-wrap text-[15px] leading-[1.75] text-neutral-200">
+                        <div className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-300">
                           {msg.content}
                         </div>
                         {/* Subtle elapsed time */}

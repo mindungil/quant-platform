@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { gatewayFetch } from "../../lib/api";
 import { AuthGuard } from "../../components/auth-guard";
 import { ErrorBoundary, EmptyState, LoadingSkeleton } from "../../components/error-boundary";
+import { formatIndicatorName } from "../../lib/reasoning";
 import {
   PageTransition,
   StaggerContainer,
@@ -117,7 +118,7 @@ function BaselineComparison({
 
   return (
     <div className="space-y-1.5">
-      <p className="text-[11px] font-medium uppercase tracking-widest text-neutral-500">
+      <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
         {label}
       </p>
       <div className="space-y-1">
@@ -190,8 +191,8 @@ function StrategiesContent() {
     return (
       <main className="grid gap-6">
         <div>
-          <h2 className="text-2xl font-semibold text-white">전략 분석</h2>
-          <p className="mt-1 text-sm text-neutral-500">전략 성과와 드리프트 상태</p>
+          <h2 className="text-2xl font-semibold tracking-tight text-zinc-50">전략 분석</h2>
+          <p className="mt-1 text-sm text-zinc-400 leading-relaxed">전략 성과와 드리프트 상태</p>
         </div>
         <LoadingSkeleton rows={4} />
       </main>
@@ -202,7 +203,7 @@ function StrategiesContent() {
     return (
       <main className="grid gap-6">
         <div>
-          <h2 className="text-2xl font-semibold text-white">전략 분석</h2>
+          <h2 className="text-2xl font-semibold tracking-tight text-zinc-50">전략 분석</h2>
         </div>
         <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-6 text-center">
           <p className="text-sm text-red-400">{error}</p>
@@ -225,8 +226,8 @@ function StrategiesContent() {
       <main className="grid gap-6">
         {/* Header */}
         <div>
-          <h2 className="text-2xl font-semibold text-white">전략 분석</h2>
-          <p className="mt-1 text-sm text-neutral-500">
+          <h2 className="text-2xl font-semibold tracking-tight text-zinc-50">전략 분석</h2>
+          <p className="mt-1 text-sm text-zinc-400 leading-relaxed">
             백테스트 기준 대비 실시간 성과를 비교하고 드리프트 상태를 확인하세요
           </p>
         </div>
@@ -236,10 +237,10 @@ function StrategiesContent() {
           <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[11px] font-medium uppercase tracking-widest text-neutral-500">
+                <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
                   DRIFT STATUS
                 </p>
-                <h3 className="mt-1 text-lg font-semibold text-white">
+                <h3 className="mt-1 text-base font-semibold tracking-tight text-zinc-50">
                   전략 드리프트
                 </h3>
               </div>
@@ -297,12 +298,12 @@ function StrategiesContent() {
             ].map((m, i) => (
               <StaggerItem key={i}>
                 <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-5">
-                  <p className="text-[11px] font-medium uppercase tracking-widest text-neutral-500">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
                     {m.label}
                   </p>
-                  <p className={`mt-2 font-mono text-2xl font-semibold ${m.color}`}>
+                  <p className={`mt-2 font-mono text-2xl font-semibold tracking-tighter tabular-nums ${m.color === "text-white" ? "text-zinc-50" : m.color}`}>
                     <AnimatedNumber value={m.value} decimals={m.suffix === "건" ? 0 : 1} />
-                    <span className="text-sm text-neutral-500">{m.suffix}</span>
+                    <span className="text-sm text-zinc-500">{m.suffix}</span>
                   </p>
                 </div>
               </StaggerItem>
@@ -313,10 +314,10 @@ function StrategiesContent() {
         {/* Active Strategies */}
         <FadeInView delay={0.1}>
           <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6">
-            <p className="text-[11px] font-medium uppercase tracking-widest text-neutral-500">
+            <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
               ACTIVE STRATEGIES
             </p>
-            <h3 className="mt-1 text-lg font-semibold text-white">활성 전략</h3>
+            <h3 className="mt-1 text-base font-semibold tracking-tight text-zinc-50">활성 전략</h3>
 
             {strategies.length === 0 ? (
               <EmptyState
@@ -330,8 +331,8 @@ function StrategiesContent() {
                     <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-medium text-white">{strat.name}</p>
-                          <p className="mt-0.5 text-xs text-neutral-500">
+                          <p className="text-sm font-medium text-zinc-200">{strat.name}</p>
+                          <p className="mt-0.5 text-xs text-zinc-500">
                             {strat.asset_type} / {strat.version ?? "v1"}
                           </p>
                         </div>
@@ -355,9 +356,9 @@ function StrategiesContent() {
                           {strat.indicators.map((ind) => (
                             <span
                               key={ind}
-                              className="rounded-md bg-white/[0.05] px-2 py-0.5 text-[10px] text-neutral-400"
+                              className="text-xs font-medium text-zinc-400 bg-white/[0.05] border border-white/[0.06] rounded-md px-2 py-0.5"
                             >
-                              {ind}
+                              {formatIndicatorName(ind)}
                             </span>
                           ))}
                         </div>
@@ -374,10 +375,10 @@ function StrategiesContent() {
         {stats && tradeCount > 0 && (
           <FadeInView delay={0.15}>
             <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6">
-              <p className="text-[11px] font-medium uppercase tracking-widest text-neutral-500">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
                 STRATEGY METRICS
               </p>
-              <h3 className="mt-1 text-lg font-semibold text-white">전략 지표</h3>
+              <h3 className="mt-1 text-base font-semibold tracking-tight text-zinc-50">전략 지표</h3>
               <StaggerContainer className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 {[
                   { label: "샤프 비율", value: stats.sharpe, fmt: 2 },
@@ -387,10 +388,10 @@ function StrategiesContent() {
                 ].map((m, i) => (
                   <StaggerItem key={i}>
                     <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-                      <p className="text-[10px] font-medium uppercase tracking-widest text-neutral-500">
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
                         {m.label}
                       </p>
-                      <p className="mt-2 font-mono text-xl font-semibold text-white">
+                      <p className="mt-2 font-mono text-xl font-semibold tabular-nums text-zinc-50">
                         {m.value != null ? m.value.toFixed(m.fmt) : "--"}
                       </p>
                     </div>
@@ -405,21 +406,21 @@ function StrategiesContent() {
         {recommendations.length > 0 && (
           <FadeInView delay={0.2}>
             <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6">
-              <p className="text-[11px] font-medium uppercase tracking-widest text-neutral-500">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
                 RECOMMENDATIONS
               </p>
-              <h3 className="mt-1 text-lg font-semibold text-white">전략 추천</h3>
+              <h3 className="mt-1 text-base font-semibold tracking-tight text-zinc-50">전략 추천</h3>
               <StaggerContainer className="mt-4 space-y-3">
                 {recommendations.map((rec, i) => (
                   <StaggerItem key={i}>
                     <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
                       <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium text-white">{rec.name}</p>
-                        <span className="badge bg-white/[0.06] text-neutral-400">
+                        <p className="text-sm font-medium text-zinc-200">{rec.name}</p>
+                        <span className="font-mono text-xs font-medium tabular-nums text-zinc-50 bg-white/[0.05] border border-white/[0.06] rounded-md px-2 py-0.5">
                           {(rec.confidence * 100).toFixed(0)}%
                         </span>
                       </div>
-                      <p className="mt-1 text-xs text-neutral-500">{rec.description}</p>
+                      <p className="mt-1 text-sm text-zinc-400 leading-relaxed">{rec.description}</p>
                       <div className="mt-2 flex gap-2">
                         <span className="rounded-md bg-white/[0.05] px-2 py-0.5 text-[10px] text-neutral-400">
                           {rec.formula_name}

@@ -12,7 +12,9 @@
 body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   background: #09090b;
-  color: #e5e5e5;
+  color: #e4e4e7;
+  font-size: 14px;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   letter-spacing: -0.011em;
@@ -21,16 +23,17 @@ body {
 /* Monospace for numbers */
 .font-mono {
   font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Cards — glass on dark gray */
 .card {
-  @apply rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6 backdrop-blur-sm;
-  transition: border-color 0.2s ease, background-color 0.2s ease;
+  @apply rounded-xl border border-white/[0.06] bg-white/[0.02] p-5;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 .card:hover {
   border-color: rgba(255, 255, 255, 0.10);
-  background-color: rgba(255, 255, 255, 0.06);
+  background-color: rgba(255, 255, 255, 0.04);
 }
 
 /* Buttons */
@@ -66,8 +69,8 @@ body {
   transition: border-color 0.15s ease;
 }
 .input-field:focus {
-  border-color: rgba(255, 255, 255, 0.30);
-  box-shadow: 0 0 12px rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.20);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.06);
 }
 .input-field::placeholder {
   color: #525252;
@@ -75,7 +78,16 @@ body {
 
 /* Badge */
 .badge {
-  @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+  @apply inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium border;
+}
+.badge-profit {
+  @apply text-green-500 bg-green-500/10 border-green-500/15;
+}
+.badge-loss {
+  @apply text-red-500 bg-red-500/10 border-red-500/15;
+}
+.badge-neutral {
+  @apply text-zinc-400 bg-white/[0.05] border-white/[0.06];
 }
 
 /* Stat animation */
@@ -256,9 +268,9 @@ body {
   pointer-events: none;
 }
 
-/* Text emphasis glow */
-.text-glow { text-shadow: 0 0 12px rgba(255,255,255,0.15); }
-.text-glow-strong { text-shadow: 0 0 20px rgba(255,255,255,0.25); }
+/* Text emphasis glow — removed for clarity */
+.text-glow { }
+.text-glow-strong { }
 
 /* Profit/Loss glow */
 .profit-glow { text-shadow: 0 0 10px rgba(16, 185, 129, 0.3); }
