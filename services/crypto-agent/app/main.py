@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -5,6 +6,7 @@ from fastapi import FastAPI
 from app.api.routes import router
 from app.core.config import settings
 from app.core.scheduler import scheduler
+from app.core.learning_scheduler import learning_scheduler
 from app.services.event_publisher import publisher
 from app.services.nats_consumer import consumer
 from app.services.outcome_consumer import outcome_consumer
@@ -26,9 +28,16 @@ async def lifespan(_: FastAPI):
     await consumer.start()
     await outcome_consumer.start()
     await scheduler.start()
+    _learning_task = asyncio.create_task(learning_scheduler.start())
     try:
         yield
     finally:
+        learning_scheduler.stop()
+        _learning_task.cancel()
+        try:
+            await _learning_task
+        except asyncio.CancelledError:
+            pass
         await scheduler.stop()
         await outcome_consumer.stop()
         await consumer.stop()

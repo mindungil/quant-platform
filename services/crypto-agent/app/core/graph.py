@@ -509,11 +509,31 @@ def score_node(state: AgentState) -> dict:
     threshold_crossed = state.get("threshold_crossed", False)
 
     if formula_confidence >= 0.3:
-        pos_threshold = abs(
+        # Base threshold from strategy config
+        strategy_threshold = abs(
             strategy_dict.get("thresholds", {}).get("entry", 0.6)
             if isinstance(strategy_dict.get("thresholds"), dict)
             else 0.6
         )
+
+        # Override with protocol-based dynamic threshold from learning system
+        try:
+            from shared.factors.dynamic_weights import get_active_protocol
+            from app.core.protocol_router import PROTOCOLS
+            protocol_name = get_active_protocol()
+            protocol = PROTOCOLS.get(protocol_name, PROTOCOLS["standard"])
+            dynamic_threshold = protocol["entry_threshold"]
+            # Use the more conservative of strategy vs protocol threshold
+            pos_threshold = max(strategy_threshold, dynamic_threshold)
+            logger.info("graph_score_protocol", extra={
+                "protocol": protocol_name,
+                "strategy_threshold": strategy_threshold,
+                "dynamic_threshold": dynamic_threshold,
+                "effective_threshold": pos_threshold,
+            })
+        except Exception:
+            pos_threshold = strategy_threshold
+
         if formula_score >= pos_threshold:
             action = "BUY"
             threshold_crossed = True
