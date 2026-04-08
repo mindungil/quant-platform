@@ -277,9 +277,13 @@ async def run_agent_loop(
 
     # 2. If no user OAuth → use platform keys (fallback chain)
     if not provider:
+        pollinations_key = os.environ.get("POLLINATIONS") or ""
         groq_key = os.environ.get("groq") or os.environ.get("GROQ_API_KEY") or ""
         github_key = os.environ.get("GITHUB_MODEL_TOKEN") or ""
-        if groq_key:
+        if pollinations_key:
+            provider = "pollinations"
+            token_str = pollinations_key
+        elif groq_key:
             provider = "groq"
             token_str = groq_key
         elif github_key:
@@ -320,6 +324,15 @@ async def run_agent_loop(
         tools = get_openai_tools()  # OpenRouter uses OpenAI-compatible format
         call_fn = lambda tok, msgs, mdl, mt, tls: _call_openai_compatible(
             tok, msgs, mdl, mt, tls, "https://openrouter.ai/api/v1/chat/completions"
+        )
+        parse_fn = _parse_openai_response
+        build_result_fn = _build_openai_tool_result
+        build_assistant_fn = _build_openai_assistant_msg
+    elif provider == "pollinations":
+        model = "nova-fast"
+        tools = get_openai_tools()
+        call_fn = lambda tok, msgs, mdl, mt, tls: _call_openai_compatible(
+            tok, msgs, mdl, mt, tls, "https://gen.pollinations.ai/v1/chat/completions"
         )
         parse_fn = _parse_openai_response
         build_result_fn = _build_openai_tool_result

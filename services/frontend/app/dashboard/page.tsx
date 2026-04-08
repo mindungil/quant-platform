@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo, useCallback } from "react";
 import { gatewayFetch } from "../../lib/api";
 import { AuthGuard } from "../../components/auth-guard";
 import { useToast } from "../../components/toast";
-import { parseReasoning, cleanReasoning, formatIndicatorName } from "../../lib/reasoning";
+import { parseReasoning, cleanReasoning, formatIndicatorName, formatStrategyDescription, formatRegime, formatConfidence } from "../../lib/reasoning";
 import {
   PageTransition,
   StaggerContainer,
@@ -141,11 +141,9 @@ function DecisionCard({ decision }: { decision: Decision }) {
       </div>
 
       {/* Subtitle: Regime + Strength */}
-      {(regime || strength) && (
-        <p className="mt-1.5 text-xs text-zinc-500">
-          {regime}{regime && strength ? " \u00B7 " : ""}{strength ? `\uC2DC\uADF8\uB110 ${strength}` : ""}
-        </p>
-      )}
+      <p className="mt-1.5 text-xs text-zinc-500">
+        {formatRegime(regime)}{strength ? ` · 시그널 ${strength}` : ""}
+      </p>
 
       {/* Indicators (inline chips) */}
       {indicators.length > 0 && (
@@ -368,7 +366,7 @@ function DashboardContent() {
 
   const agentMessage = useMemo(() => {
     if (!topRec) return "시장 데이터를 수집하고 있습니다. 잠시 후 분석이 시작됩니다.";
-    const regime = friendlyRegime(topRec.regime);
+    const regime = formatRegime(topRec.regime);
     const method = friendlyFormula(topRec.formula_name);
     return `현재 시장은 ${regime} 국면으로, ${method}을 통해 매매 전략을 운용 중입니다.`;
   }, [topRec]);
@@ -455,7 +453,7 @@ function DashboardContent() {
                   transition={{ delay: 0.5, duration: 0.4 }}
                 >
                   <span className="text-xs font-medium text-zinc-400 bg-white/[0.05] border border-white/[0.06] rounded-md px-2 py-0.5">
-                    시장 상태 : {friendlyRegime(topRec.regime)}
+                    시장 상태 : {formatRegime(topRec.regime)}
                   </span>
                   <span className="text-xs font-medium text-zinc-400 bg-white/[0.05] border border-white/[0.06] rounded-md px-2 py-0.5">
                     분석 방식 : {friendlyFormula(topRec.formula_name)}
@@ -573,32 +571,40 @@ function DashboardContent() {
                     <ConfidenceBar value={topRec.confidence} />
                   </div>
 
-                  {/* Strategy reasoning */}
+                  {/* Strategy reasoning — formatted */}
                   <div>
                     <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-1">분석 의견</p>
-                    <p className="text-sm text-zinc-400 leading-relaxed">{cleanReasoning(topRec.reasoning)}</p>
+                    <p className="text-sm text-zinc-400 leading-relaxed">{formatStrategyDescription(cleanReasoning(topRec.reasoning))}</p>
                   </div>
 
-                  {/* Other recommendations */}
+                  {/* Regime tag */}
+                  <div className="flex gap-2">
+                    <span className="rounded-md bg-white/[0.05] px-1.5 py-0.5 text-[10px] text-zinc-500">{formatRegime(topRec.regime)}</span>
+                  </div>
+
+                  {/* Other recommendations — formatted cards */}
                   {recs.length > 1 && (
                     <div>
                       <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-2">대안 전략</p>
                       <div className="space-y-2">
-                        {recs.slice(1, 3).map((r, i) => (
-                          <motion.div
-                            key={i}
-                            className="rounded-lg bg-white/[0.03] p-3 hover:bg-white/[0.04] transition-colors"
-                            whileHover={{ x: 4 }}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm font-medium text-zinc-200">{r.name}</span>
-                              <span className="font-mono text-xs font-medium tabular-nums text-zinc-50">
-                                확신도 {(r.confidence * 100).toFixed(0)}%
-                              </span>
+                        {recs.slice(1, 3).map((r, i) => {
+                          const conf = formatConfidence(r.confidence);
+                          return (
+                            <div key={i} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm font-medium text-zinc-200">{formatIndicatorName(r.name)}</span>
+                                <div className="flex items-center gap-1.5">
+                                  <div className={`h-1.5 w-1.5 rounded-full ${conf.level === 'high' ? 'bg-green-500' : conf.level === 'medium' ? 'bg-amber-500' : 'bg-zinc-500'}`} />
+                                  <span className="text-[11px] font-medium tabular-nums text-zinc-400">{Math.round(r.confidence * 100)}%</span>
+                                </div>
+                              </div>
+                              <p className="mt-1.5 text-xs text-zinc-500">{formatStrategyDescription(cleanReasoning(r.reasoning))}</p>
+                              <div className="mt-2 flex gap-2">
+                                <span className="rounded-md bg-white/[0.05] px-1.5 py-0.5 text-[10px] text-zinc-500">{formatRegime(r.regime)}</span>
+                              </div>
                             </div>
-                            <p className="mt-1 text-xs text-zinc-500 line-clamp-1">{cleanReasoning(r.reasoning)}</p>
-                          </motion.div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}

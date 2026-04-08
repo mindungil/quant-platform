@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { gatewayFetch } from "../../lib/api";
 import { AuthGuard } from "../../components/auth-guard";
 import { useToast } from "../../components/toast";
-import { parseReasoning, cleanReasoning, formatIndicatorName } from "../../lib/reasoning";
+import { parseReasoning, cleanReasoning, formatIndicatorName, formatStrategyDescription, formatRegime, formatConfidence } from "../../lib/reasoning";
 import { ConfirmDialog } from "../../components/confirm-dialog";
 import {
   PageTransition,
@@ -97,9 +97,9 @@ function relativeTime(iso: string): string {
   return `${day}일 전`;
 }
 
-/* ── Decision Card (compact, scannable) ──────────────────────── */
+/* ── Decision Card (compact, scannable, expandable) ──────────── */
 
-function DecisionCard({ decision }: { decision: Decision }) {
+function DecisionCard({ decision, expanded, onToggle }: { decision: Decision; expanded: boolean; onToggle: () => void }) {
   const { structured, text } = parseReasoning(decision.reasoning || "");
   const action = actionLabel(decision.action);
   const timeStr = decision.timestamp ? relativeTime(decision.timestamp) : "";
@@ -112,9 +112,13 @@ function DecisionCard({ decision }: { decision: Decision }) {
   const memRefs = structured?.memory_refs || 0;
 
   const assetShort = decision.asset?.replace("USDT", "") || decision.asset;
+  const regimeKo = formatRegime(regime);
 
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 hover:bg-white/[0.04] transition-all duration-150">
+    <div
+      onClick={onToggle}
+      className="cursor-pointer rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 hover:bg-white/[0.04] transition-all duration-150"
+    >
       {/* Header: Asset + Action + Time */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -123,15 +127,16 @@ function DecisionCard({ decision }: { decision: Decision }) {
             {action.text}
           </span>
         </div>
-        <span className="text-[11px] text-zinc-500">{timeStr}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-zinc-500">{timeStr}</span>
+          <span className={`text-[10px] text-zinc-500 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}>&#9660;</span>
+        </div>
       </div>
 
       {/* Subtitle: Regime + Strength */}
-      {(regime || strength) && (
-        <p className="mt-1.5 text-xs text-zinc-500">
-          {regime}{regime && strength ? " \u00B7 " : ""}{strength ? `\uC2DC\uADF8\uB110 ${strength}` : ""}
-        </p>
-      )}
+      <p className="mt-1.5 text-xs text-zinc-500">
+        {regimeKo}{strength ? ` · 시그널 ${strength}` : ""}
+      </p>
 
       {/* Indicators (inline chips) */}
       {indicators.length > 0 && (
@@ -152,8 +157,38 @@ function DecisionCard({ decision }: { decision: Decision }) {
       {/* Conflicts + Memory (compact footer) */}
       {(conflicts.length > 0 || memRefs > 0) && (
         <div className="mt-2 flex items-center gap-3 text-[10px] text-zinc-500">
-          {conflicts.length > 0 && <span>{conflicts.map((c: string) => formatIndicatorName(c)).join(", ")} \uBC18\uB300 \uC2E0\uD638</span>}
-          {memRefs > 0 && <span>\uC720\uC0AC {memRefs}\uAC74 \uCC38\uC870</span>}
+          {conflicts.length > 0 && <span>{conflicts.map((c: string) => formatIndicatorName(c)).join(", ")} 반대 신호</span>}
+          {memRefs > 0 && <span>유사 {memRefs}건 참조</span>}
+        </div>
+      )}
+
+      {/* Expanded detail (shown on click) */}
+      {expanded && (
+        <div className="mt-3 border-t border-white/[0.04] pt-3 space-y-2">
+          <div className="grid grid-cols-2 gap-2 text-[11px]">
+            <div>
+              <span className="text-zinc-500 uppercase tracking-wider">시그널 점수</span>
+              <span className="ml-2 font-mono tabular-nums text-zinc-300">{decision.signal_score?.toFixed(4)}</span>
+            </div>
+            <div>
+              <span className="text-zinc-500 uppercase tracking-wider">전략</span>
+              <span className="ml-2 text-zinc-300">{decision.strategy_name || decision.formula_name || "-"}</span>
+            </div>
+            {decision.confidence != null && (
+              <div>
+                <span className="text-zinc-500 uppercase tracking-wider">확신도</span>
+                <span className="ml-2 font-mono tabular-nums text-zinc-300">{Math.round(decision.confidence * 100)}%</span>
+              </div>
+            )}
+            {decision.decision_id && (
+              <div>
+                <span className="text-zinc-500 uppercase tracking-wider">결정 ID</span>
+                <span className="ml-2 text-zinc-500 font-mono text-[10px]">{decision.decision_id.slice(0, 8)}</span>
+              </div>
+            )}
+          </div>
+          {/* Full reasoning text — formatted */}
+          <p className="text-xs text-zinc-500 leading-relaxed">{formatStrategyDescription(cleanReasoning(decision.reasoning || ""))}</p>
         </div>
       )}
     </div>
@@ -212,6 +247,7 @@ function AgentContent() {
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [error, setError] = useState(false);
   const [showRunConfirm, setShowRunConfirm] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const toast = useToast();
 
   const meta = ASSET_META[selectedAsset];
@@ -382,10 +418,10 @@ function AgentContent() {
                           </span>
                         )}
 
-                        <p className="mt-1 text-sm font-medium text-zinc-200">{r.name}</p>
+                        <p className="mt-1 text-sm font-medium text-zinc-200">{formatIndicatorName(r.name)}</p>
 
                         <p className="mt-2.5 text-sm text-zinc-400 leading-relaxed">
-                          {cleanReasoning(r.reasoning)}
+                          {formatStrategyDescription(cleanReasoning(r.reasoning))}
                         </p>
 
                         {/* Confidence bar */}
@@ -402,9 +438,9 @@ function AgentContent() {
                           />
                         </div>
 
-                        <p className="mt-3 text-[11px] text-neutral-400">
-                          분석 방식: {r.formula_name}
-                        </p>
+                        <div className="mt-3 flex gap-2">
+                          <span className="rounded-md bg-white/[0.05] px-1.5 py-0.5 text-[10px] text-zinc-500">{formatRegime(r.regime)}</span>
+                        </div>
                       </motion.div>
                     </StaggerItem>
                   ))}
@@ -468,11 +504,18 @@ function AgentContent() {
                   </div>
                 ) : (
                   <StaggerContainer className="mt-6 space-y-3">
-                    {decisions.map((d, i) => (
-                      <StaggerItem key={d.decision_id ?? i}>
-                        <DecisionCard decision={d} />
-                      </StaggerItem>
-                    ))}
+                    {decisions.map((d, i) => {
+                      const cardId = d.decision_id ?? String(i);
+                      return (
+                        <StaggerItem key={cardId}>
+                          <DecisionCard
+                            decision={d}
+                            expanded={expandedId === cardId}
+                            onToggle={() => setExpandedId(expandedId === cardId ? null : cardId)}
+                          />
+                        </StaggerItem>
+                      );
+                    })}
                   </StaggerContainer>
                 )}
               </section>
