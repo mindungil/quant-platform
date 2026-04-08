@@ -101,14 +101,12 @@ export default function PricingPage() {
                 ))}
               </ul>
               <button
-                className={`mt-8 w-full rounded-lg py-2.5 text-sm font-semibold transition-all ${
-                  tier.highlight
-                    ? "bg-white text-black hover:bg-zinc-200"
-                    : "border border-white/[0.10] text-zinc-50 hover:bg-white/[0.06]"
-                }`}
+                disabled
+                className="mt-8 w-full rounded-lg py-2.5 text-sm font-semibold border border-white/[0.06] text-zinc-500 cursor-not-allowed"
               >
-                {tier.cta}
+                준비 중
               </button>
+              <p className="mt-2 text-[10px] text-zinc-600 text-center">결제 시스템 준비 중입니다</p>
             </motion.div>
           ))}
         </div>
