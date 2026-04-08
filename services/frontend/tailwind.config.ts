@@ -20,6 +20,9 @@ const config: Config = {
       },
       animation: {
         'white-glow': 'white-glow 3s ease-in-out infinite',
+        'fade-in-up': 'fadeInUp 0.4s ease-out',
+        'card-reveal': 'cardReveal 0.5s ease-out',
+        'breathe': 'breathe 3s ease-in-out infinite',
       },
     }
   },

@@ -225,7 +225,7 @@ export function MarketChart({ asset = "BTCUSDT" }: { asset?: string }) {
         <div className="absolute inset-0 top-[45px] flex items-center justify-center bg-zinc-950/80">
           <div className="text-center">
             <p className="text-sm text-neutral-500">{error}</p>
-            <p className="text-xs text-neutral-600 mt-1">
+            <p className="text-xs text-neutral-500 mt-1">
               시장 데이터 서비스에 연결할 수 없습니다
             </p>
           </div>

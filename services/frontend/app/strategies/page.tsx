@@ -259,7 +259,7 @@ function StrategiesContent() {
                 />
               </div>
             ) : (
-              <p className="mt-4 text-sm text-neutral-600">
+              <p className="mt-4 text-sm text-neutral-500">
                 아직 거래 데이터가 없습니다. 에이전트가 거래를 시작하면 여기에 성과가 표시됩니다.
               </p>
             )}

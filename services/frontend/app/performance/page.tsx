@@ -177,7 +177,7 @@ function PerformanceContent() {
             AI 에이전트의 트레이딩 성과를 한눈에 확인하세요
           </p>
           {lastUpdated && (
-            <span className="text-[10px] text-zinc-600">
+            <span className="text-[10px] text-zinc-500">
               마지막 업데이트: {new Date(lastUpdated).toLocaleTimeString("ko-KR")}
             </span>
           )}

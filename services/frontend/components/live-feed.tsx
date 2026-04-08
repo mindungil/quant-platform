@@ -56,7 +56,7 @@ export function LiveFeed() {
     return (
       <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-4">
         <h3 className="mb-2 text-sm font-medium text-neutral-400">실시간 활동</h3>
-        <p className="text-xs text-neutral-600">아직 이벤트가 없습니다</p>
+        <p className="text-xs text-neutral-500">아직 이벤트가 없습니다</p>
       </div>
     );
   }

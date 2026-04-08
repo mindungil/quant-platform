@@ -359,7 +359,7 @@ function SettingsContent() {
                     ))}
                   </select>
                   {currentExchange && (
-                    <p className="mt-1.5 text-[11px] leading-relaxed text-neutral-600">
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-neutral-500">
                       {currentExchange.guide}
                     </p>
                   )}
@@ -404,7 +404,7 @@ function SettingsContent() {
                     ))}
                   </div>
                 ) : credentials.length === 0 ? (
-                  <p className="text-sm text-neutral-600">아직 연결된 거래소가 없습니다</p>
+                  <p className="text-sm text-neutral-500">아직 연결된 거래소가 없습니다</p>
                 ) : (
                   <StaggerContainer className="space-y-2">
                     {credentials.map((cred) => (
@@ -414,9 +414,9 @@ function SettingsContent() {
                             <span className="text-sm font-medium text-white">
                               {EXCHANGES.find((e) => e.id === cred.exchange)?.name || cred.exchange}
                             </span>
-                            <p className="mt-0.5 font-mono text-[11px] text-neutral-600">{cred.api_key_masked}</p>
+                            <p className="mt-0.5 font-mono text-[11px] text-neutral-500">{cred.api_key_masked}</p>
                             {cred.sandbox && (
-                              <span className="text-[10px] text-neutral-600">테스트 모드</span>
+                              <span className="text-[10px] text-neutral-500">테스트 모드</span>
                             )}
                           </div>
                           <button
@@ -482,7 +482,7 @@ function SettingsContent() {
                     </div>
                   </div>
                 ) : (
-                  <p className="text-sm text-neutral-600">리스크 설정을 불러올 수 없습니다</p>
+                  <p className="text-sm text-neutral-500">리스크 설정을 불러올 수 없습니다</p>
                 )}
               </section>
             </FadeInView>
@@ -550,7 +550,7 @@ function SettingsContent() {
                               className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors ${
                                 enabled
                                   ? "bg-white/10 text-neutral-300"
-                                  : "bg-white/[0.03] text-neutral-600"
+                                  : "bg-white/[0.03] text-neutral-500"
                               } ${isAdmin ? "cursor-pointer hover:bg-white/20" : ""}`}
                             >
                               {ex.name}
@@ -560,13 +560,13 @@ function SettingsContent() {
                       </div>
                     </div>
                     {isAdmin && (
-                      <p className="text-[10px] text-neutral-600">
+                      <p className="text-[10px] text-neutral-500">
                         관리자 권한으로 위 설정을 직접 변경할 수 있습니다
                       </p>
                     )}
                   </div>
                 ) : (
-                  <p className="text-sm text-neutral-600">실행 설정을 불러올 수 없습니다</p>
+                  <p className="text-sm text-neutral-500">실행 설정을 불러올 수 없습니다</p>
                 )}
               </section>
             </FadeInView>
@@ -592,7 +592,7 @@ function SettingsContent() {
                   color="border-white/[0.08] bg-white/[0.03]"
                   iconColor="text-white"
                 />
-                <p className="text-[10px] text-neutral-600">
+                <p className="text-[10px] text-neutral-500">
                   OAuth PKCE로 안전하게 연동됩니다. API 키가 서버에 저장되지 않습니다.
                 </p>
               </section>
@@ -625,7 +625,7 @@ function SettingsContent() {
                     )}
                   </div>
                 ) : (
-                  <p className="text-sm text-neutral-600">계정 정보를 불러올 수 없습니다</p>
+                  <p className="text-sm text-neutral-500">계정 정보를 불러올 수 없습니다</p>
                 )}
               </section>
             </FadeInView>

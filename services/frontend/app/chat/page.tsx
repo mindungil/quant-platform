@@ -353,14 +353,14 @@ export default function ChatPage() {
                     {conv.title || "새 대화"}
                   </div>
                   {conv.updated_at && (
-                    <div className="mt-0.5 text-[10px] text-neutral-600">
+                    <div className="mt-0.5 text-[10px] text-neutral-500">
                       {new Date(conv.updated_at).toLocaleDateString("ko-KR")}
                     </div>
                   )}
                 </motion.button>
               ))}
               {conversations.length === 0 && (
-                <p className="px-3 py-8 text-center text-xs text-neutral-600">
+                <p className="px-3 py-8 text-center text-xs text-neutral-500">
                   대화 기록이 없습니다
                 </p>
               )}
@@ -383,7 +383,7 @@ export default function ChatPage() {
               <path d="M3 12h18M3 6h18M3 18h18" />
             </svg>
           </motion.button>
-          <h1 className="text-sm font-bold text-white tracking-tight">
+          <h1 className="text-sm font-bold text-white tracking-tight text-glow">
             AI 트레이딩 에이전트
           </h1>
         </div>
@@ -406,7 +406,7 @@ export default function ChatPage() {
                   className="mb-8"
                 >
                   <span
-                    className="inline-block bg-clip-text text-6xl font-bold text-transparent"
+                    className="inline-block bg-clip-text text-6xl font-bold text-transparent text-glow-strong"
                     style={{
                       backgroundImage: "linear-gradient(135deg, #fafafa, #a1a1aa, #fafafa)",
                       backgroundSize: "200% 200%",
@@ -509,7 +509,7 @@ export default function ChatPage() {
                         </div>
                         {/* Subtle elapsed time */}
                         {msg.elapsed_ms !== undefined && msg.elapsed_ms > 0 && (
-                          <div className="mt-2 text-[11px] text-neutral-600">
+                          <div className="mt-2 text-[11px] text-neutral-500">
                             {formatElapsed(msg.elapsed_ms)}
                           </div>
                         )}
@@ -588,7 +588,7 @@ export default function ChatPage() {
                 </svg>
               </motion.button>
             </motion.div>
-            <p className="mt-2 text-center text-[11px] text-neutral-600">
+            <p className="mt-2 text-center text-[11px] text-neutral-500">
               Shift+Enter로 줄바꿈
             </p>
           </div>

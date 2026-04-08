@@ -174,7 +174,7 @@ function ReasoningCard({ reasoning }: { reasoning: string }) {
       {/* Indicators */}
       {data.bullish_indicators?.length > 0 && (
         <div className="space-y-1">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">상승 지표</p>
+          <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-400">상승 지표</p>
           <div className="flex flex-wrap gap-1.5">
             {data.bullish_indicators.map((ind: any) => (
               <span key={ind.name} className="rounded bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-400">
@@ -187,7 +187,7 @@ function ReasoningCard({ reasoning }: { reasoning: string }) {
 
       {data.bearish_indicators?.length > 0 && (
         <div className="space-y-1">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">하락 지표</p>
+          <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-400">하락 지표</p>
           <div className="flex flex-wrap gap-1.5">
             {data.bearish_indicators.map((ind: any) => (
               <span key={ind.name} className="rounded bg-red-500/10 px-2 py-0.5 text-[11px] text-red-400">
@@ -207,7 +207,7 @@ function ReasoningCard({ reasoning }: { reasoning: string }) {
 
       {/* Memory refs */}
       {data.memory_refs > 0 && (
-        <p className="text-[10px] text-zinc-600">
+        <p className="text-[10px] text-zinc-500">
           과거 유사 상황 {data.memory_refs}건 참조
         </p>
       )}
@@ -440,7 +440,7 @@ function DashboardContent() {
         <FadeInView>
           <section className="relative overflow-hidden rounded-3xl border border-white/[0.06] bg-gradient-to-br from-white/[0.03] via-white/[0.02] to-white/[0.01] p-8 sm:p-12">
             {lastUpdated && (
-              <span className="absolute top-4 right-4 text-[10px] text-zinc-600">
+              <span className="absolute top-4 right-4 text-[10px] text-zinc-500">
                 마지막 업데이트: {new Date(lastUpdated).toLocaleTimeString("ko-KR")}
               </span>
             )}
@@ -476,7 +476,7 @@ function DashboardContent() {
                 <span className="text-sm text-white font-medium">에이전트 활성</span>
               </div>
 
-              <h1 className="text-3xl sm:text-4xl font-bold text-gradient-accent tracking-tight">
+              <h1 className="text-3xl sm:text-4xl font-bold text-gradient-accent tracking-tight text-glow">
                 오늘의 시장
               </h1>
               <motion.p
@@ -515,7 +515,7 @@ function DashboardContent() {
               whileHover={{ scale: 1.02, y: -4 }}
             >
               <p className="text-sm text-neutral-400 font-medium">총 투자금</p>
-              <div className="mt-2 text-3xl font-bold text-white tabular-nums">
+              <div className="mt-2 text-3xl font-bold text-white tabular-nums text-glow-strong">
                 $<AnimatedNumber value={portfolio?.total_exposure ?? 0} decimals={0} />
               </div>
               {portfolio?.positions && (
@@ -533,7 +533,7 @@ function DashboardContent() {
             >
               <p className="text-sm text-neutral-400 font-medium">평가 손익</p>
               <div className={`mt-2 text-3xl font-bold tabular-nums ${
-                unrealizedPnl >= 0 ? "text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.4)]" : "text-red-400 drop-shadow-[0_0_8px_rgba(239,68,68,0.4)]"
+                unrealizedPnl >= 0 ? "text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.4)] profit-glow" : "text-red-400 drop-shadow-[0_0_8px_rgba(239,68,68,0.4)] loss-glow"
               }`}>
                 {unrealizedPnl >= 0 ? "+" : ""}$<AnimatedNumber value={unrealizedPnl} decimals={0} />
               </div>
@@ -550,7 +550,7 @@ function DashboardContent() {
             >
               <p className="text-sm text-neutral-400 font-medium">실현 손익</p>
               <div className={`mt-2 text-3xl font-bold tabular-nums ${
-                realizedPnl >= 0 ? "text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.4)]" : "text-red-400 drop-shadow-[0_0_8px_rgba(239,68,68,0.4)]"
+                realizedPnl >= 0 ? "text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.4)] profit-glow" : "text-red-400 drop-shadow-[0_0_8px_rgba(239,68,68,0.4)] loss-glow"
               }`}>
                 {realizedPnl >= 0 ? "+" : ""}$<AnimatedNumber value={realizedPnl} decimals={0} />
               </div>
@@ -572,7 +572,7 @@ function DashboardContent() {
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Confidence & Signal */}
           <FadeInView>
-            <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] backdrop-blur-sm p-6 h-full">
+            <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] backdrop-blur-sm p-6 h-full hover-lift animate-card-reveal">
               <h2 className="text-lg font-semibold text-white">에이전트 분석 현황</h2>
 
               {topRec ? (
@@ -628,7 +628,7 @@ function DashboardContent() {
 
           {/* Positions */}
           <FadeInView delay={0.1}>
-            <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] backdrop-blur-sm p-6 h-full">
+            <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] backdrop-blur-sm p-6 h-full hover-lift animate-card-reveal delay-100">
               <h2 className="text-lg font-semibold text-white">보유 자산</h2>
 
               {portfolio?.positions && Object.keys(portfolio.positions).length > 0 ? (
@@ -653,7 +653,7 @@ function DashboardContent() {
         {/* ── Recent Decisions ────────────────────────────── */}
         <FadeInView delay={0.15}>
           <section>
-            <h2 className="text-xl font-bold text-white mb-4 drop-shadow-[0_0_8px_rgba(255,255,255,0.3)]">최근 매매 결정</h2>
+            <h2 className="text-xl font-bold text-white mb-4 drop-shadow-[0_0_8px_rgba(255,255,255,0.3)] text-glow">최근 매매 결정</h2>
 
             {decisions.length === 0 ? (
               <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] backdrop-blur-sm p-8 text-center">

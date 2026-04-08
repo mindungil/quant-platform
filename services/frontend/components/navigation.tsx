@@ -49,7 +49,7 @@ export function Navigation() {
         );
       })}
       <button
-        className="ml-3 rounded-lg px-2.5 py-1 text-[13px] text-neutral-600 transition-colors hover:text-red-400"
+        className="ml-3 rounded-lg px-2.5 py-1 text-[13px] text-neutral-500 transition-colors hover:text-red-400"
         onClick={() => {
           clearToken();
           window.location.href = "/";

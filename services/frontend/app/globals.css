@@ -189,3 +189,77 @@ body {
   filter: blur(60px);
   pointer-events: none;
 }
+
+/* Page entrance */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Smooth number change */
+@keyframes numberPop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+/* Card entrance with depth */
+@keyframes cardReveal {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Breathing glow for live elements */
+@keyframes breathe {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* Gradient border animation */
+@keyframes borderFlow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Utility classes */
+.animate-fade-in-up { animation: fadeInUp 0.4s ease-out; }
+.animate-card-reveal { animation: cardReveal 0.5s ease-out; }
+.animate-number-pop { animation: numberPop 0.3s ease-in-out; }
+.animate-breathe { animation: breathe 3s ease-in-out infinite; }
+
+/* Stagger delay utilities */
+.delay-100 { animation-delay: 100ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-300 { animation-delay: 300ms; }
+.delay-400 { animation-delay: 400ms; }
+
+/* Hover effects */
+.hover-lift { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+.hover-lift:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.3); }
+
+/* Active/interactive card glow */
+.active-glow {
+  position: relative;
+  overflow: hidden;
+}
+.active-glow::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.1), transparent, rgba(255,255,255,0.05));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Text emphasis glow */
+.text-glow { text-shadow: 0 0 12px rgba(255,255,255,0.15); }
+.text-glow-strong { text-shadow: 0 0 20px rgba(255,255,255,0.25); }
+
+/* Profit/Loss glow */
+.profit-glow { text-shadow: 0 0 10px rgba(16, 185, 129, 0.3); }
+.loss-glow { text-shadow: 0 0 10px rgba(239, 68, 68, 0.3); }

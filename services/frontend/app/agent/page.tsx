@@ -159,7 +159,7 @@ function ReasoningCard({ reasoning }: { reasoning: string }) {
       {/* Indicators */}
       {data.bullish_indicators?.length > 0 && (
         <div className="space-y-1">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">상승 지표</p>
+          <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-400">상승 지표</p>
           <div className="flex flex-wrap gap-1.5">
             {data.bullish_indicators.map((ind: any) => (
               <span key={ind.name} className="rounded bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-400">
@@ -172,7 +172,7 @@ function ReasoningCard({ reasoning }: { reasoning: string }) {
 
       {data.bearish_indicators?.length > 0 && (
         <div className="space-y-1">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">하락 지표</p>
+          <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-400">하락 지표</p>
           <div className="flex flex-wrap gap-1.5">
             {data.bearish_indicators.map((ind: any) => (
               <span key={ind.name} className="rounded bg-red-500/10 px-2 py-0.5 text-[11px] text-red-400">
@@ -192,7 +192,7 @@ function ReasoningCard({ reasoning }: { reasoning: string }) {
 
       {/* Memory refs */}
       {data.memory_refs > 0 && (
-        <p className="text-[10px] text-zinc-600">
+        <p className="text-[10px] text-zinc-500">
           과거 유사 상황 {data.memory_refs}건 참조
         </p>
       )}
@@ -330,12 +330,12 @@ function AgentContent() {
         <section className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-6">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-2xl font-bold text-white">AI 에이전트</h2>
+              <h2 className="text-2xl font-bold text-white text-glow">AI 에이전트</h2>
               <p className="mt-1 text-sm text-neutral-500">
                 실시간 시장 분석과 AI 추천을 확인하세요
               </p>
               {lastUpdated && (
-                <span className="text-[10px] text-zinc-600">
+                <span className="text-[10px] text-zinc-500">
                   마지막 업데이트: {new Date(lastUpdated).toLocaleTimeString("ko-KR")}
                 </span>
               )}
@@ -408,7 +408,7 @@ function AgentContent() {
                   {recs.map((r, i) => (
                     <StaggerItem key={i}>
                       <motion.div
-                        className={`group relative rounded-xl border bg-white/[0.03] p-5 transition-all duration-200 ${
+                        className={`group relative rounded-xl border bg-white/[0.03] p-5 transition-all duration-200 hover-lift ${
                           i === 0
                             ? "border-white/[0.20] ring-1 ring-white/[0.06]"
                             : "border-white/[0.06] hover:border-white/[0.10]"
@@ -432,7 +432,7 @@ function AgentContent() {
                         <div className="mt-4">
                           <div className="mb-1.5 flex items-center justify-between">
                             <span className="text-xs font-medium text-neutral-500">신뢰도</span>
-                            <span className="text-xs font-bold text-neutral-300">
+                            <span className="text-xs font-bold text-neutral-300 text-glow">
                               {(r.confidence * 100).toFixed(0)}%
                             </span>
                           </div>

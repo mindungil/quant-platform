@@ -164,7 +164,7 @@ function OrderItem({
   const isBuy = order.side === "BUY";
 
   return (
-    <article className="relative rounded-xl border border-white/[0.06] bg-white/[0.03] transition-all hover:border-white/[0.10]">
+    <article className="relative rounded-xl border border-white/[0.06] bg-white/[0.03] transition-all hover:border-white/[0.10] hover-lift">
       {/* main row — clickable */}
       <button
         onClick={onToggle}
@@ -404,7 +404,7 @@ function OrdersContent() {
                 주문 내역
               </h2>
               {lastUpdated && (
-                <span className="text-[10px] text-zinc-600">
+                <span className="text-[10px] text-zinc-500">
                   마지막 업데이트: {new Date(lastUpdated).toLocaleTimeString("ko-KR")}
                 </span>
               )}
@@ -511,7 +511,7 @@ function OrdersContent() {
         ) : error ? (
           <div className="flex flex-col items-center gap-3 py-12 text-center">
             <p className="text-sm text-zinc-500">데이터를 불러오는 중 오류가 발생했습니다</p>
-            <p className="text-xs text-zinc-600">{error}</p>
+            <p className="text-xs text-zinc-500">{error}</p>
             <button onClick={() => { setError(null); fetchOrders(); }} className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black">
               다시 시도
             </button>
