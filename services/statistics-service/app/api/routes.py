@@ -152,3 +152,30 @@ def get_hindsight_report(asset: str):
     report["analyses"] = analyses[:20]  # latest 20 for detail view
 
     return report
+
+
+@router.get("/statistics/paper-portfolio/{asset}")
+def get_paper_portfolio(asset: str):
+    """Get virtual paper trading performance from agent decisions."""
+    from app.core.paper_portfolio import compute_paper_portfolio
+
+    # Fetch all decisions for this asset
+    agent_url = os.environ.get("CRYPTO_AGENT_BASE_URL", "http://crypto-agent:8006")
+    try:
+        resp = httpx.get(f"{agent_url}/decisions/history/{asset}?limit=500", timeout=10.0)
+        decisions = resp.json() if resp.status_code == 200 else []
+    except Exception:
+        decisions = []
+
+    # Fetch current price
+    market_url = os.environ.get("MARKET_DATA_BASE_URL", "http://market-data:8001")
+    try:
+        resp = httpx.get(f"{market_url}/candles/{asset}/latest", timeout=5.0)
+        current_price = resp.json().get("close", 0) if resp.status_code == 200 else 0
+    except Exception:
+        current_price = 0
+
+    portfolio = compute_paper_portfolio(decisions, current_price)
+    portfolio["asset"] = asset
+    portfolio["current_price"] = current_price
+    return portfolio

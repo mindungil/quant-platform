@@ -145,7 +145,9 @@ def build_signal_response(
             pos = sum(1 for s in signs if s > 0)
             neg = sum(1 for s in signs if s < 0)
             agreement = max(pos, neg) / max(len(signs), 1)
-            if agreement >= 0.8:
+            # A3: Only apply agreement bonus to SELL direction (negative scores).
+            # Removing the symmetric bonus avoids amplifying the existing BUY bias.
+            if agreement >= 0.8 and technical_score < 0:
                 technical_score *= 1.15
 
         if external_components:

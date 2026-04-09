@@ -11,8 +11,13 @@ export default function HomePage() {
   const [message, setMessage] = useState("");
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [agreeTerms, setAgreeTerms] = useState(false);
 
   async function register() {
+    if (!agreeTerms) {
+      setMessage("회원가입 실패: 이용약관에 동의해주세요");
+      return;
+    }
     try {
       setMessage("");
       setLoading(true);
@@ -140,10 +145,25 @@ export default function HomePage() {
               />
             </div>
 
+            {!isLogin && (
+              <div className="flex items-start gap-2">
+                <input
+                  type="checkbox"
+                  id="agree-terms"
+                  checked={agreeTerms}
+                  onChange={(e) => setAgreeTerms(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 cursor-pointer accent-white"
+                />
+                <label htmlFor="agree-terms" className="text-xs text-zinc-400 cursor-pointer">
+                  <a href="/terms" target="_blank" className="text-white underline hover:text-zinc-200">이용약관</a>에 동의합니다 (투자 위험 고지 포함)
+                </label>
+              </div>
+            )}
+
             <motion.button
               className="w-full rounded-lg bg-white py-2.5 text-sm font-semibold text-black disabled:opacity-40 hover:shadow-[0_0_20px_rgba(255,255,255,0.15)]"
               onClick={isLogin ? login : register}
-              disabled={loading || !email || !password}
+              disabled={loading || !email || !password || (!isLogin && !agreeTerms)}
               whileTap={{ scale: 0.98 }}
             >
               {loading ? (

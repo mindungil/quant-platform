@@ -430,6 +430,21 @@ def get_hindsight(asset: str, principal: GatewayPrincipal = Depends(require_prin
     return _proxy_json(response)
 
 
+@router.get("/track-record/{asset}")
+async def get_track_record_public(asset: str) -> JSONResponse:
+    """Public agent performance — no authentication required."""
+    stats_url = settings.statistics_service_base_url
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{stats_url.rstrip('/')}/statistics/paper-portfolio/{asset}",
+                timeout=10.0,
+            )
+            return JSONResponse(resp.json(), status_code=resp.status_code)
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=502)
+
+
 # ── Agent Decisions (proxy to crypto-agent) ─────────────────────────────
 
 
@@ -770,3 +785,84 @@ async def gateway_ws(websocket: WebSocket) -> None:
 @router.websocket("/ws")
 async def public_gateway_ws(websocket: WebSocket) -> None:
     await gateway_ws(websocket)
+
+
+# ── Notification Webhooks ──────────────────────────────────────────────
+
+# In-memory webhook subscribers (later move to DB)
+_webhook_subscribers: dict[str, list[str]] = {}  # user_id → [webhook_urls]
+
+
+@router.post("/notifications/subscribe")
+async def subscribe_webhook(
+    payload: dict,
+    principal: GatewayPrincipal = Depends(require_principal),
+) -> dict:
+    """Subscribe to BUY/SELL notification webhooks."""
+    webhook_url = payload.get("webhook_url")
+    if not webhook_url:
+        raise HTTPException(status_code=400, detail="webhook_url required")
+
+    user_id = principal.user_id
+    if user_id not in _webhook_subscribers:
+        _webhook_subscribers[user_id] = []
+
+    if webhook_url not in _webhook_subscribers[user_id]:
+        _webhook_subscribers[user_id].append(webhook_url)
+
+    return {"status": "subscribed", "webhook_url": webhook_url}
+
+
+@router.delete("/notifications/subscribe")
+async def unsubscribe_webhook(
+    payload: dict,
+    principal: GatewayPrincipal = Depends(require_principal),
+) -> dict:
+    """Unsubscribe from notification webhooks."""
+    webhook_url = payload.get("webhook_url")
+    user_id = principal.user_id
+
+    if user_id in _webhook_subscribers and webhook_url in _webhook_subscribers[user_id]:
+        _webhook_subscribers[user_id].remove(webhook_url)
+
+    return {"status": "unsubscribed"}
+
+
+@router.get("/notifications/subscriptions")
+async def list_subscriptions(principal: GatewayPrincipal = Depends(require_principal)) -> dict:
+    """List active webhook subscriptions."""
+    return {"webhooks": _webhook_subscribers.get(principal.user_id, [])}
+
+
+async def trigger_decision_notification(decision: dict) -> None:
+    """Send webhook notifications when an agent makes a BUY/SELL decision.
+
+    Called from the agent decision pipeline. Currently broadcasts to all
+    subscribers (later: filter by user/asset).
+    """
+    action = decision.get("action", "HOLD")
+    if action == "HOLD":
+        return  # only notify on actionable decisions
+
+    asset = decision.get("asset", "")
+    price = decision.get("reference_price", 0)
+    score = decision.get("signal_score", 0)
+
+    payload = {
+        "type": "agent_decision",
+        "asset": asset,
+        "action": action,
+        "price": price,
+        "signal_score": score,
+        "timestamp": decision.get("timestamp"),
+        "message_ko": f"{asset} {action} 시그널 발생 (점수 {score:.2f}, 가격 ${price:,.0f})",
+    }
+
+    # Broadcast to all subscribers
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        for user_id, webhooks in _webhook_subscribers.items():
+            for webhook_url in webhooks:
+                try:
+                    await client.post(webhook_url, json=payload)
+                except Exception:
+                    pass  # silent fail, don't block agent

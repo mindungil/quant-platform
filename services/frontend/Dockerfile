@@ -17,5 +17,8 @@ COPY --from=builder /app/.next/standalone ./
 # Copy static assets (CSS, JS chunks) — required for standalone mode
 COPY --from=builder /app/.next/static ./.next/static
 
+# Copy public folder (manifest.json, icons, etc.)
+COPY --from=builder /app/public ./public
+
 EXPOSE 3000
 CMD ["node", "server.js"]

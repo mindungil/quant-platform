@@ -6,6 +6,7 @@ Each node accepts AgentState and returns a partial dict merged into state.
 from __future__ import annotations
 
 import math
+import os
 import time
 from datetime import datetime, timezone
 from uuid import uuid4
@@ -534,15 +535,97 @@ def score_node(state: AgentState) -> dict:
         except Exception:
             pos_threshold = strategy_threshold
 
-        if formula_score >= pos_threshold:
+        # A2: Asymmetric thresholds — make SELL much easier to trigger than BUY
+        # so we exit losing positions quickly. BUY uses the full threshold while
+        # SELL fires at ~58% of it (e.g. 0.6 BUY vs -0.35 SELL).
+        buy_threshold = pos_threshold
+        sell_threshold = pos_threshold * 0.58
+
+        if formula_score >= buy_threshold:
             action = "BUY"
             threshold_crossed = True
-        elif formula_score <= -pos_threshold:
+        elif formula_score <= -sell_threshold:
             action = "SELL"
             threshold_crossed = True
         else:
             action = "HOLD"
             threshold_crossed = False
+
+    # ------------------------------------------------------------------
+    # A4: Time-based forced exit
+    # Override the action if we've been holding a BUY for too long. This runs
+    # AFTER the initial action determination so it can flip HOLD/BUY -> SELL.
+    # ------------------------------------------------------------------
+    try:
+        memory_url = os.environ.get(
+            "MEMORY_SERVICE_BASE_URL",
+            getattr(settings, "memory_service_base_url", "http://localhost:8004"),
+        )
+        asset_for_exit = state.get("asset")
+        resp = httpx.post(
+            f"{memory_url}/memory/search/formula-outcomes",
+            json={"asset": asset_for_exit, "action": "BUY", "top_k": 1},
+            timeout=3.0,
+        )
+        if resp.status_code == 200:
+            items = resp.json().get("items", [])
+            if items:
+                last_buy = items[0]
+                ts_str = last_buy.get("timestamp", "") or ""
+                # Some memory backends nest the record one level deeper.
+                if not ts_str and isinstance(last_buy.get("record"), dict):
+                    ts_str = last_buy["record"].get("timestamp", "") or ""
+                try:
+                    last_buy_ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                    hours_held = (datetime.now(timezone.utc) - last_buy_ts).total_seconds() / 3600
+                    # 24h+ held with weak signal -> force SELL
+                    if hours_held > 24 and abs(formula_score) < 0.3:
+                        action = "SELL"
+                        threshold_crossed = True
+                        logger.info("forced_exit_24h_weak", extra={
+                            "asset": asset_for_exit,
+                            "hours": round(hours_held, 2),
+                            "formula_score": round(formula_score, 4),
+                        })
+                    # 48h+ held -> unconditional SELL
+                    elif hours_held > 48:
+                        action = "SELL"
+                        threshold_crossed = True
+                        logger.info("forced_exit_48h_max", extra={
+                            "asset": asset_for_exit,
+                            "hours": round(hours_held, 2),
+                        })
+                except Exception:
+                    pass
+    except Exception as exc:
+        logger.debug("time_exit_check_failed", extra={"error": str(exc)[:100]})
+
+    # ------------------------------------------------------------------
+    # A5: Crisis detection emergency SELL
+    # Use external context already gathered in detect phase. Overrides any
+    # action above when fear/greed is extreme or 24h price drop is severe.
+    # ------------------------------------------------------------------
+    try:
+        # NOTE: features["fear_greed_index"] is normalized to [-1, 1] via
+        # (raw - 50) / 50 in detect_node. Raw FG < 15 -> normalized < -0.7.
+        fear_greed = features.get("fear_greed_index")
+        price_change_24h = features.get("price_change_24h")
+        if fear_greed is not None and fear_greed < -0.7:
+            action = "SELL"
+            threshold_crossed = True
+            logger.warning("crisis_sell_extreme_fear", extra={
+                "asset": state.get("asset"),
+                "fear_greed_normalized": fear_greed,
+            })
+        elif price_change_24h is not None and price_change_24h < -5:
+            action = "SELL"
+            threshold_crossed = True
+            logger.warning("crisis_sell_price_drop", extra={
+                "asset": state.get("asset"),
+                "change_pct": price_change_24h,
+            })
+    except Exception as exc:
+        logger.debug("crisis_check_failed", extra={"error": str(exc)[:100]})
 
     duration = round((time.monotonic() - t0) * 1000, 2)
     timings = dict(state.get("phase_timings") or {})
