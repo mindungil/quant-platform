@@ -104,6 +104,60 @@ def test_alpha_gate_disabled_passthrough():
     assert (sums.between(0.99, 1.01)).all()
 
 
+def test_hysteresis_reduces_turnover():
+    """Hysteresis should cut turnover materially when many moves are small."""
+    # Slowly drifting position with high-freq jitter — exactly the case
+    # hysteresis is built for.
+    n = 1000
+    base = np.sin(np.linspace(0, 4 * np.pi, n)) * 0.5
+    rng = np.random.default_rng(7)
+    jitter = rng.normal(0, 0.05, n)
+    pos = _ts(base + jitter)
+    underlying = _ts(rng.normal(0, 0.01, n))
+    alphas = {"slow": pos}
+
+    common = dict(
+        combine_mode="equal",
+        periods_per_year=24 * 365,
+        enable_alpha_gate=False,
+        enable_self_sharpe_gate=False,
+        kill_drawdown=0.99,
+        min_history=10,
+        target_vol_annual=10.0,  # effectively disable vol targeting
+        vol_lookback=20,
+    )
+    p_off = EnsembleAllocator(EnsembleConfig(**common, turnover_deadzone=0.0)).combine(alphas, underlying).target_position
+    p_on = EnsembleAllocator(EnsembleConfig(**common, turnover_deadzone=0.15)).combine(alphas, underlying).target_position
+
+    tov_off = float(np.abs(np.diff(p_off.values, prepend=0.0)).sum())
+    tov_on = float(np.abs(np.diff(p_on.values, prepend=0.0)).sum())
+    assert tov_on < tov_off * 0.5, f"hysteresis only cut turnover {tov_off:.2f}→{tov_on:.2f}"
+
+
+def test_hysteresis_is_causal():
+    """Mutating future returns must not change past hysteresis output."""
+    rng = np.random.default_rng(11)
+    n = 500
+    underlying = _ts(rng.normal(0, 0.01, n))
+    pos = _ts(rng.normal(0, 0.5, n))
+    alphas = {"a": pos}
+    cfg = EnsembleConfig(
+        combine_mode="equal",
+        periods_per_year=24 * 365,
+        enable_alpha_gate=False,
+        enable_self_sharpe_gate=False,
+        kill_drawdown=0.99,
+        turnover_deadzone=0.05,
+        min_history=10,
+    )
+    base = EnsembleAllocator(cfg).combine(alphas, underlying).target_position
+    # Perturb a FUTURE bar (400). Bars [0..399] must be identical.
+    underlying2 = underlying.copy()
+    underlying2.iloc[400] = 99.0
+    pert = EnsembleAllocator(cfg).combine(alphas, underlying2).target_position
+    pd.testing.assert_series_equal(base.iloc[:400], pert.iloc[:400], check_names=False)
+
+
 def test_alpha_gate_recovers_when_alpha_recovers():
     """If a bad alpha turns good mid-sample, the gate should re-open."""
     n = 1500
