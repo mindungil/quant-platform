@@ -195,6 +195,9 @@ def detect_node(state: AgentState) -> dict:
                 features["taker_buy_sell_score"] = ext["taker_buy_sell_score"]
             if ext.get("derivatives_sentiment") is not None:
                 features["derivatives_sentiment"] = ext["derivatives_sentiment"]
+            # Price change 24h (used by A5 crisis SELL)
+            if ext.get("price_change_24h") is not None:
+                features["price_change_24h"] = ext["price_change_24h"]
             external_used = True
             available_fields = [
                 k for k in ("fear_greed_index", "news_sentiment", "onchain_score",
