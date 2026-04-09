@@ -5,14 +5,18 @@ Daily (every 24h):  Optimize factor weights from verified data
 Weekly (every 7d):  Meta-learning: factor culling, protocol adjustment
 """
 import asyncio
-import logging
 import time
 import os
 from datetime import datetime, timezone, timedelta
 
 import httpx
 
-logger = logging.getLogger("learning-scheduler")
+from shared.logging import get_logger
+
+# Use the shared "crypto-agent" logger so structured JSON logs are visible
+# (the previous logging.getLogger("learning-scheduler") had no handler attached
+# to the JSON pipeline and silently dropped every record).
+logger = get_logger("crypto-agent")
 
 MARKET_DATA_URL = os.getenv("MARKET_DATA_BASE_URL", "http://localhost:8001")
 AGENT_URL = os.getenv("CRYPTO_AGENT_BASE_URL", "http://localhost:8006")
@@ -144,6 +148,11 @@ class LearningScheduler:
 
             if verified_count > 0:
                 logger.info("fast_loop_complete", extra={"verified": verified_count, "current_price": current_price})
+                # Persist MAB state after each batch — ensures restart-survival
+                try:
+                    formula_mab.force_save()
+                except Exception as exc:
+                    logger.warning("fast_loop_mab_save_failed", extra={"error": str(exc)[:120]})
 
             # Update accuracy metric and select protocol based on conditions
             if total_evaluated > 0:

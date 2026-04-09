@@ -26,6 +26,39 @@ def metrics() -> Response:
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
+@router.get("/agent/mab-stats")
+def get_mab_stats() -> dict:
+    """Inspect live MAB state — proves whether the bandit is actually learning."""
+    from app.core.mab_state import formula_mab
+    return formula_mab.get_stats()
+
+
+@router.get("/agent/learning-status")
+def get_learning_status() -> dict:
+    """High-level learning health snapshot for ops/dashboard."""
+    from app.core.mab_state import formula_mab
+    from shared.factors.dynamic_weights import (
+        get_recent_accuracy, get_active_protocol,
+        load_factor_weights, load_category_weights,
+    )
+    stats = formula_mab.get_stats()
+    global_arms = stats.get("global", {})
+    total_obs = sum(a.get("n", 0) for a in global_arms.values())
+    learning_arms = sum(1 for a in global_arms.values() if a.get("n", 0) > 0)
+    return {
+        "recent_accuracy": get_recent_accuracy(),
+        "active_protocol": get_active_protocol(),
+        "mab": {
+            "total_observations": total_obs,
+            "active_arms": learning_arms,
+            "total_arms": len(global_arms),
+            "regimes_seen": len(stats.get("regimes", {})),
+        },
+        "factor_weights_persisted": len(load_factor_weights() or {}),
+        "category_weights_persisted": len(load_category_weights() or {}),
+    }
+
+
 @router.post("/decisions/run/{asset}")
 def run_decision(asset: str, x_user_id: str | None = Header(default=None)):
     return run_decision_loop(asset, user_id=x_user_id)

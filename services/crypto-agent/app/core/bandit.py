@@ -15,7 +15,9 @@ This naturally balances exploration vs exploitation:
 """
 from __future__ import annotations
 
+import json
 import math
+import os
 import random
 import threading
 from dataclasses import dataclass, field
@@ -26,6 +28,24 @@ UTC = timezone.utc
 from shared.logging import get_logger
 
 logger = get_logger("crypto-agent")
+
+# Redis persistence keys
+_REDIS_KEY_GLOBAL = "mab:formula:global"
+_REDIS_KEY_REGIMES = "mab:formula:regimes"
+_REDIS_SAVE_EVERY_N = 10  # save after every N updates to avoid hot writes
+
+
+def _get_redis_client():
+    """Lazy redis import — never raise on missing module/connection."""
+    try:
+        import redis
+        return redis.Redis.from_url(
+            os.getenv("REDIS_URL", "redis://redis:6379/0"),
+            decode_responses=True,
+            socket_timeout=2,
+        )
+    except Exception:
+        return None
 
 
 @dataclass
@@ -110,6 +130,85 @@ class FormulaMAB:
         }
         # Per-regime arm states for contextual bandits
         self._regime_arms: dict[str, dict[str, ArmState]] = {}
+        # Persistence: try to load from Redis at construction time
+        self._update_counter = 0
+        try:
+            self._load_from_redis()
+        except Exception as exc:
+            logger.warning("mab_redis_load_failed", extra={"error": str(exc)[:120]})
+
+    def _serialize_arm(self, arm: "ArmState") -> dict:
+        return {
+            "n": arm.n,
+            "mean": arm.mean,
+            "m2": arm.m2,
+            "total_reward": arm.total_reward,
+            "last_updated": arm.last_updated.isoformat() if arm.last_updated else None,
+        }
+
+    def _deserialize_arm(self, name: str, data: dict) -> "ArmState":
+        a = ArmState(name=name)
+        a.n = int(data.get("n", 0))
+        a.mean = float(data.get("mean", 0.0))
+        a.m2 = float(data.get("m2", 0.0))
+        a.total_reward = float(data.get("total_reward", 0.0))
+        last = data.get("last_updated")
+        if last:
+            try:
+                a.last_updated = datetime.fromisoformat(last)
+            except Exception:
+                pass
+        return a
+
+    def _save_to_redis(self) -> None:
+        """Persist current arm state to Redis (atomic with pipeline)."""
+        r = _get_redis_client()
+        if r is None:
+            return
+        try:
+            global_payload = {n: self._serialize_arm(a) for n, a in self._arms.items()}
+            regimes_payload = {
+                regime: {n: self._serialize_arm(a) for n, a in arms.items()}
+                for regime, arms in self._regime_arms.items()
+            }
+            pipe = r.pipeline()
+            pipe.set(_REDIS_KEY_GLOBAL, json.dumps(global_payload))
+            pipe.set(_REDIS_KEY_REGIMES, json.dumps(regimes_payload))
+            pipe.execute()
+        except Exception as exc:
+            logger.warning("mab_redis_save_failed", extra={"error": str(exc)[:120]})
+
+    def _load_from_redis(self) -> int:
+        """Restore arm state from Redis. Returns total observations loaded."""
+        r = _get_redis_client()
+        if r is None:
+            return 0
+        loaded = 0
+        try:
+            raw_global = r.get(_REDIS_KEY_GLOBAL)
+            if raw_global:
+                payload = json.loads(raw_global)
+                for name, data in payload.items():
+                    arm = self._deserialize_arm(name, data)
+                    self._arms[name] = arm
+                    loaded += arm.n
+            raw_regimes = r.get(_REDIS_KEY_REGIMES)
+            if raw_regimes:
+                payload = json.loads(raw_regimes)
+                for regime, arms in payload.items():
+                    self._regime_arms[regime] = {
+                        n: self._deserialize_arm(n, d) for n, d in arms.items()
+                    }
+        except Exception as exc:
+            logger.warning("mab_redis_load_inner_failed", extra={"error": str(exc)[:120]})
+        if loaded > 0:
+            logger.info("mab_redis_loaded", extra={"observations": loaded})
+        return loaded
+
+    def force_save(self) -> None:
+        """Public method to force a Redis save (used by hindsight loops)."""
+        with self._lock:
+            self._save_to_redis()
 
     def _get_regime_arms(self, regime: str) -> dict[str, ArmState]:
         """Get or create per-regime arm states."""
@@ -181,6 +280,12 @@ class FormulaMAB:
                 regime_arms = self._get_regime_arms(regime)
                 if formula_name in regime_arms:
                     regime_arms[formula_name].update(reward)
+
+            # Periodic Redis persistence — every Nth update
+            self._update_counter += 1
+            if self._update_counter >= _REDIS_SAVE_EVERY_N:
+                self._update_counter = 0
+                self._save_to_redis()
 
     def update_from_hindsight(self, formula_name: str, price_change_pct: float, regime: str = "") -> None:
         """Update MAB arm from hindsight analysis (no actual trade needed).
