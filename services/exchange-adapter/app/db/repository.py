@@ -11,6 +11,7 @@ import httpx
 from app.adapters.base import ExchangeAdapter
 from app.adapters.binance import BinanceAdapter
 from app.adapters.upbit import UpbitAdapter
+from app.adapters.bithumb import BithumbAdapter
 from app.adapters.alpaca import AlpacaAdapter
 from app.core.config import settings
 from app.models.exchange import (
@@ -29,7 +30,12 @@ logger = logging.getLogger(__name__)
 
 
 def _build_adapter_registry() -> dict[str, ExchangeAdapter]:
-    adapters: list[ExchangeAdapter] = [BinanceAdapter(), UpbitAdapter(), AlpacaAdapter()]
+    adapters: list[ExchangeAdapter] = [
+        BinanceAdapter(),
+        UpbitAdapter(),
+        BithumbAdapter(),
+        AlpacaAdapter(),
+    ]
     return {a.name: a for a in adapters}
 
 

@@ -178,6 +178,34 @@ def list_strategies(request: Request, principal: GatewayPrincipal = Depends(requ
     return JSONResponse(result)
 
 
+# Public templates listing — no auth required (marketing/discovery surface).
+# Declared before /strategies/{strategy_id} so the literal path matches first.
+@router.get("/strategies/templates")
+def list_strategy_templates(request: Request) -> JSONResponse:
+    params = dict(request.query_params)
+    result = strategy_client.get("/strategies/templates", params=params)
+    return JSONResponse(result)
+
+
+@router.get("/strategies/templates/{template_id}")
+def get_strategy_template(template_id: str) -> JSONResponse:
+    result = strategy_client.get(f"/strategies/templates/{template_id}")
+    return JSONResponse(result)
+
+
+@router.post("/strategies/templates/{template_id}/activate")
+def activate_strategy_template(
+    template_id: str,
+    principal: GatewayPrincipal = Depends(require_principal),
+) -> JSONResponse:
+    result = strategy_client.post(
+        f"/strategies/templates/{template_id}/activate",
+        headers=principal.forwarded_headers,
+        json={},
+    )
+    return JSONResponse(result)
+
+
 @router.get("/strategies/{strategy_id}")
 def get_strategy(strategy_id: str, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
     result = strategy_client.get(f"/strategies/{strategy_id}", headers=principal.forwarded_headers)
@@ -428,6 +456,20 @@ def get_hindsight(asset: str, principal: GatewayPrincipal = Depends(require_prin
         "GET", f"/statistics/hindsight/{asset}", headers=principal.forwarded_headers
     )
     return _proxy_json(response)
+
+
+@router.get("/external/kimchi-premium/{asset}")
+async def get_kimchi_premium_public(asset: str = "BTC") -> JSONResponse:
+    """Public kimchi premium — no authentication required."""
+    ext_url = settings.external_data_service_base_url.rstrip("/")
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{ext_url}/external/kimchi-premium/{asset}", timeout=5.0
+            )
+            return JSONResponse(resp.json(), status_code=resp.status_code)
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)[:100]}, status_code=502)
 
 
 @router.get("/track-record/{asset}")
@@ -866,3 +908,129 @@ async def trigger_decision_notification(decision: dict) -> None:
                     await client.post(webhook_url, json=payload)
                 except Exception:
                     pass  # silent fail, don't block agent
+
+    # Fan out to Telegram subscribers (Freqtrade-style bot integration)
+    try:
+        message_html = (
+            f"<b>{asset} {action} 시그널</b>\n"
+            f"점수: {score:.2f}\n"
+            f"가격: ${price:,.0f}\n"
+            f"시간: {str(decision.get('timestamp', ''))[:19]}"
+        )
+        await _broadcast_telegram(message_html)
+    except Exception:
+        pass
+
+
+# ── Telegram Bot Integration (Freqtrade pattern) ───────────────────────
+
+
+def _get_redis_client():
+    """Build a best-effort sync Redis client for telegram chat bookkeeping."""
+    import os
+
+    import redis  # local import: redis may be optional in some deployments
+
+    return redis.Redis.from_url(
+        os.getenv("REDIS_URL", "redis://redis:6379/0"),
+        decode_responses=True,
+    )
+
+
+@router.post("/notifications/telegram/subscribe")
+async def subscribe_telegram(
+    payload: dict,
+    principal: GatewayPrincipal = Depends(require_principal),
+) -> dict:
+    """Subscribe to Telegram bot notifications.
+
+    User provides their telegram chat_id (obtained after starting our bot).
+    Bot token is configured on the server via TELEGRAM_BOT_TOKEN env var.
+    """
+    chat_id = payload.get("chat_id")
+    if not chat_id:
+        raise HTTPException(status_code=400, detail="chat_id required")
+
+    try:
+        client = _get_redis_client()
+        client.set(f"telegram_chat:{principal.user_id}", str(chat_id))
+        return {"status": "subscribed", "chat_id": chat_id}
+    except Exception as exc:  # pragma: no cover - defensive
+        return {"status": "failed", "error": str(exc)}
+
+
+@router.delete("/notifications/telegram")
+async def unsubscribe_telegram(
+    principal: GatewayPrincipal = Depends(require_principal),
+) -> dict:
+    """Unsubscribe from Telegram notifications."""
+    try:
+        client = _get_redis_client()
+        client.delete(f"telegram_chat:{principal.user_id}")
+        return {"status": "unsubscribed"}
+    except Exception:
+        return {"status": "failed"}
+
+
+@router.get("/notifications/telegram")
+async def get_telegram_subscription(
+    principal: GatewayPrincipal = Depends(require_principal),
+) -> dict:
+    """Return the user's current Telegram chat_id (if any)."""
+    try:
+        client = _get_redis_client()
+        chat_id = client.get(f"telegram_chat:{principal.user_id}")
+        return {"subscribed": bool(chat_id), "chat_id": chat_id}
+    except Exception:
+        return {"subscribed": False, "chat_id": None}
+
+
+async def send_telegram_message(user_id: str, message: str) -> None:
+    """Send an HTML message to a user's Telegram via our bot."""
+    import os
+
+    bot_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    if not bot_token:
+        return  # bot not configured
+
+    try:
+        client = _get_redis_client()
+        chat_id = client.get(f"telegram_chat:{user_id}")
+        if not chat_id:
+            return
+
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        async with httpx.AsyncClient(timeout=5.0) as http_client:
+            await http_client.post(
+                url,
+                json={
+                    "chat_id": chat_id,
+                    "text": message,
+                    "parse_mode": "HTML",
+                },
+            )
+    except Exception:
+        pass  # silent fail, don't block agent
+
+
+async def _broadcast_telegram(message: str) -> None:
+    """Broadcast a message to every subscribed Telegram chat."""
+    import os
+
+    bot_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    if not bot_token:
+        return
+
+    try:
+        client = _get_redis_client()
+    except Exception:
+        return
+
+    try:
+        keys = list(client.scan_iter("telegram_chat:*"))
+    except Exception:
+        return
+
+    for key in keys:
+        user_id = key.replace("telegram_chat:", "", 1)
+        await send_telegram_message(user_id, message)

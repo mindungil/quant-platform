@@ -62,6 +62,62 @@ def list_shadow_strategies() -> list[Strategy]:
     return strategy_repository.get_shadow_strategies()
 
 
+# Templates routes MUST be declared before /strategies/{strategy_id} so the
+# literal "templates" path segment is not captured as a strategy_id.
+@router.get("/strategies/templates")
+def list_templates(category: str | None = Query(default=None)) -> list[dict]:
+    """List Korean strategy templates, optionally filtered by category."""
+    from shared.strategy_templates import get_all_templates, get_by_category
+
+    if category:
+        return get_by_category(category)
+    return get_all_templates()
+
+
+@router.get("/strategies/templates/{template_id}")
+def get_template_detail(template_id: str) -> dict:
+    """Fetch a single Korean strategy template."""
+    from shared.strategy_templates import get_template
+
+    template = get_template(template_id)
+    if template is None:
+        raise HTTPException(status_code=404, detail="template_not_found")
+    return template
+
+
+@router.post("/strategies/templates/{template_id}/activate", response_model=Strategy)
+def activate_template(
+    template_id: str,
+    x_user_id: str | None = Header(default=None),
+) -> Strategy:
+    """One-click activate a template as a user strategy (created in DRAFT)."""
+    from shared.strategy_templates import get_template
+
+    template = get_template(template_id)
+    if template is None:
+        raise HTTPException(status_code=404, detail="template_not_found")
+
+    payload = StrategyCreate(
+        user_id=x_user_id or "anonymous",
+        name=template["name"],
+        asset_type=template["asset_type"],
+        indicators=list(template.get("factors", [])),
+        weights=dict(template.get("weights", {})),
+        thresholds={"entry": 0.6, "exit": -0.35},
+    )
+    strategy = strategy_repository.create(payload)
+    strategy.backtest_results = {
+        "source": "template",
+        "template_id": template_id,
+        "category": template["category"],
+        "risk_level": template["risk_level"],
+        "description": template["description"],
+        "expected_monthly_return": template.get("expected_monthly_return"),
+    }
+    strategy_repository._persist(strategy)
+    return strategy
+
+
 @router.get("/strategies/{strategy_id}", response_model=Strategy)
 def get_strategy(strategy_id: str, x_user_id: str | None = Header(default=None)) -> Strategy:
     strategy = strategy_repository.get(strategy_id)

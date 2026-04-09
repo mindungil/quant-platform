@@ -329,6 +329,7 @@ function DashboardContent() {
   const [recs, setRecs] = useState<Recommendation[]>([]);
   const [decisions, setDecisions] = useState<Decision[]>([]);
   const [hindsight, setHindsight] = useState<any>(null);
+  const [kimchi, setKimchi] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
@@ -360,6 +361,18 @@ function DashboardContent() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    const load = () => {
+      fetch("/api/gateway/external/kimchi-premium/BTC")
+        .then((r) => r.json())
+        .then(setKimchi)
+        .catch(() => {});
+    };
+    load();
+    const interval = setInterval(load, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const portfolio = data?.portfolio;
   const stats = data?.statistics;
@@ -504,6 +517,50 @@ function DashboardContent() {
             </motion.div>
           </StaggerItem>
         </StaggerContainer>
+
+        {/* ── Kimchi Premium Widget ───────────────────────── */}
+        <FadeInView delay={0.08}>
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 hover:bg-white/[0.04] hover:border-white/[0.10] transition-all duration-150"
+          >
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">김치 프리미엄</p>
+              <span className="text-[10px] text-zinc-500">Upbit vs Binance</span>
+            </div>
+            {kimchi && typeof kimchi.premium_pct === "number" && !kimchi.error ? (
+              <>
+                <p
+                  className={`mt-2 text-3xl font-bold tracking-tighter tabular-nums ${
+                    kimchi.premium_pct > 2
+                      ? "text-zinc-50"
+                      : kimchi.premium_pct < -1
+                      ? "text-zinc-50"
+                      : "text-zinc-300"
+                  }`}
+                >
+                  {kimchi.premium_pct >= 0 ? "+" : ""}
+                  {Number(kimchi.premium_pct).toFixed(2)}%
+                </p>
+                <p className="mt-2 text-[11px] font-medium text-zinc-500">
+                  {kimchi.krw_price ? `Upbit ₩${Number(kimchi.krw_price).toLocaleString("ko-KR", { maximumFractionDigits: 0 })}` : "Upbit --"}
+                  {" · "}
+                  {kimchi.usdt_price ? `Binance $${Number(kimchi.usdt_price).toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "Binance --"}
+                </p>
+                <p className="mt-1 text-[10px] text-zinc-600">
+                  {kimchi.premium_pct > 2
+                    ? "한국 프리미엄 — 역발상 매도 신호"
+                    : kimchi.premium_pct < -1
+                    ? "한국 디스카운트 — 역발상 매수 기회"
+                    : "정상 범위"}
+                </p>
+              </>
+            ) : (
+              <p className="mt-2 text-sm text-zinc-500">로딩 중...</p>
+            )}
+          </motion.div>
+        </FadeInView>
 
         {/* ── Market Chart ────────────────────────────────── */}
         <FadeInView delay={0.1}>

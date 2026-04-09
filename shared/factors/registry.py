@@ -8,6 +8,7 @@ from shared.factors.mean_reversion import MEAN_REVERSION_FACTORS
 from shared.factors.volatility import VOLATILITY_FACTORS
 from shared.factors.derivatives import DERIVATIVES_FACTORS
 from shared.factors.sentiment import SENTIMENT_FACTORS
+from shared.factors.kimchi_premium import KIMCHI_PREMIUM_FACTORS
 
 ALL_FACTORS: list[Factor] = (
     TECHNICAL_FACTORS
@@ -16,6 +17,7 @@ ALL_FACTORS: list[Factor] = (
     + VOLATILITY_FACTORS
     + DERIVATIVES_FACTORS
     + SENTIMENT_FACTORS
+    + KIMCHI_PREMIUM_FACTORS
 )
 
 

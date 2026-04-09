@@ -10,6 +10,7 @@ const baseLinks = [
   ["/chat", "AI 에이전트"],
   ["/agent", "자동매매"],
   ["/strategies", "전략"],
+  ["/templates", "템플릿"],
   ["/performance", "성과"],
   ["/orders", "주문"],
   ["/pricing", "플랜"],
