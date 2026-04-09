@@ -56,11 +56,15 @@ class EnsembleConfig:
     # alphas auto-decay; recovering alphas auto-revive. This is the "self-improving"
     # layer — no human needs to drop a stale alpha.
     enable_alpha_gate: bool = True
-    alpha_gate_window: int = 720           # rolling lookback for per-alpha sharpe
-    alpha_gate_min_history: int = 240      # bars before gate activates (warmup)
-    alpha_gate_floor: float = 0.0          # min multiplier (0 = full kill allowed)
-    alpha_gate_full: float = 0.5           # sharpe at which multiplier = 1
-    alpha_gate_kill_below: float = -0.5    # sharpe below this → multiplier = floor
+    # v3.4: tighter defaults — react faster (360 bars ≈ 15d hourly), kill more
+    # aggressively (-0.2 instead of -0.5), and require positive Sharpe (+0.3)
+    # to fully open the gate. This actually fires on real data; the v3.3
+    # defaults barely activated.
+    alpha_gate_window: int = 360
+    alpha_gate_min_history: int = 120
+    alpha_gate_floor: float = 0.0
+    alpha_gate_full: float = 0.3
+    alpha_gate_kill_below: float = -0.2
     # v3.3: turnover hysteresis. After all gating/scaling, if the new target
     # differs from the previous applied target by less than `turnover_deadzone`
     # (in absolute notional units), keep the previous target — no trade.

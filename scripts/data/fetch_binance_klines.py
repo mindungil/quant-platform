@@ -134,6 +134,9 @@ def main() -> int:
     ap.add_argument("--symbols", default="BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT")
     ap.add_argument("--interval", default="1h", choices=sorted(INTERVAL_MS.keys()))
     ap.add_argument("--years", type=float, default=3.0)
+    ap.add_argument("--start", default=None, help="ISO date YYYY-MM-DD (overrides --years)")
+    ap.add_argument("--end", default=None, help="ISO date YYYY-MM-DD")
+    ap.add_argument("--suffix", default=None, help="extra filename suffix, e.g. '_2018_2021'")
     ap.add_argument("--out-dir", default=str(REPO_ROOT / "data" / "ohlcv"))
     ap.add_argument("--sleep", type=float, default=0.20)
     args = ap.parse_args()
@@ -141,8 +144,14 @@ def main() -> int:
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    end = datetime.now(UTC)
-    start = end - timedelta(days=int(365 * args.years))
+    if args.start:
+        start = datetime.fromisoformat(args.start).replace(tzinfo=UTC)
+    else:
+        start = datetime.now(UTC) - timedelta(days=int(365 * args.years))
+    if args.end:
+        end = datetime.fromisoformat(args.end).replace(tzinfo=UTC)
+    else:
+        end = datetime.now(UTC)
     start_ms = int(start.timestamp() * 1000)
     end_ms = int(end.timestamp() * 1000)
 
@@ -152,7 +161,8 @@ def main() -> int:
 
     summary = []
     for symbol in symbols:
-        out_path = out_dir / f"{symbol}_{args.interval}.parquet"
+        suffix = args.suffix or ""
+        out_path = out_dir / f"{symbol}_{args.interval}{suffix}.parquet"
         print(f"\n→ {symbol}")
         df = fetch_full_history(symbol, args.interval, start_ms, end_ms, args.sleep)
         if df.empty:
@@ -163,7 +173,7 @@ def main() -> int:
             df.to_parquet(out_path)
         except Exception:
             # Fall back to CSV if parquet engine missing
-            out_path = out_dir / f"{symbol}_{args.interval}.csv"
+            out_path = out_dir / f"{symbol}_{args.interval}{suffix}.csv"
             df.to_csv(out_path)
         first = df.index[0]
         last = df.index[-1]
