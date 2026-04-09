@@ -127,10 +127,10 @@ class LearningScheduler:
 
                 reward = max(-1.0, min(1.0, reward))
 
-                # Get formula name from components
-                components = d.get("components", {})
+                # Get formula name + regime from components (now embedded by graph.py)
+                components = d.get("components") or {}
                 formula_name = components.get("style_formula", "composite_adaptive")
-                regime = d.get("regime", "")
+                regime = components.get("regime") or d.get("regime") or ""
 
                 # Update MAB
                 try:
@@ -139,12 +139,23 @@ class LearningScheduler:
                 except Exception:
                     pass
 
-                # Track accuracy
-                total_evaluated += 1
-                if ((action == "BUY" and current_price > ref_price)
-                        or (action == "SELL" and current_price < ref_price)
-                        or (action == "HOLD" and abs(current_price - ref_price) / ref_price < 0.02)):
-                    correct += 1
+                # Track accuracy with asymmetric HOLD scoring (matches hindsight.py).
+                # HOLD only counts (correct OR incorrect) when the market was actually
+                # quiet; otherwise it's neutral and excluded from the denominator.
+                if action == "BUY":
+                    total_evaluated += 1
+                    if current_price > ref_price:
+                        correct += 1
+                elif action == "SELL":
+                    total_evaluated += 1
+                    if current_price < ref_price:
+                        correct += 1
+                else:  # HOLD
+                    quiet = abs(current_price - ref_price) / ref_price < 0.015
+                    if quiet:
+                        total_evaluated += 1
+                        correct += 1
+                    # Non-quiet HOLDs: neither correct nor incorrect — skipped
 
             if verified_count > 0:
                 logger.info("fast_loop_complete", extra={"verified": verified_count, "current_price": current_price})
@@ -185,7 +196,12 @@ class LearningScheduler:
             logger.warning("fast_loop_failed", extra={"error": str(e)[:200]})
 
     async def _daily_loop(self):
-        """Every 24h: optimize factor weights."""
+        """Every 24h: optimize factor weights from real verified decisions.
+
+        Pulls the last 7 days of decisions across the monitored asset universe,
+        anchors each one against current price (>= 1h elapsed), enriches with
+        the actual price_change_pct, then runs the factor + category optimizer.
+        """
         try:
             from shared.factors.dynamic_weights import (
                 load_factor_weights, save_factor_weights,
@@ -194,42 +210,73 @@ class LearningScheduler:
             from shared.factors.optimizer import optimize_factor_weights, optimize_category_weights
             from shared.factors.registry import ALL_FACTORS
 
-            # Build factor->category mapping
             f2c = {f.name: f.category for f in ALL_FACTORS}
 
-            # Get verified decisions (hindsight data)
-            async with httpx.AsyncClient(timeout=10) as client:
-                resp = await client.get(f"{STATISTICS_URL}/statistics/hindsight/BTCUSDT")
-                if resp.status_code != 200:
-                    logger.info("daily_loop_skip: hindsight unavailable", extra={"status": resp.status_code})
-                    return
-                hindsight = resp.json()
+            assets = ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
+            verified: list[dict] = []
 
-            analyses = hindsight.get("analyses", [])
-            if len(analyses) < 10:
-                logger.info("daily_loop_skip: insufficient data", extra={"count": len(analyses)})
+            async with httpx.AsyncClient(timeout=15) as client:
+                for asset in assets:
+                    # Pull recent decisions (with components)
+                    try:
+                        d_resp = await client.get(
+                            f"{AGENT_URL}/decisions/history/{asset}?limit=500"
+                        )
+                        if d_resp.status_code != 200:
+                            continue
+                        decisions = d_resp.json() or []
+                    except Exception:
+                        continue
+
+                    # Pull current price as the truth anchor
+                    try:
+                        p_resp = await client.get(f"{MARKET_DATA_URL}/candles/{asset}/latest")
+                        if p_resp.status_code != 200:
+                            continue
+                        cur_price = p_resp.json().get("close", 0)
+                    except Exception:
+                        continue
+                    if not cur_price or cur_price <= 0:
+                        continue
+
+                    # Enrich decisions with realized price_change_pct
+                    for d in decisions:
+                        ref = d.get("reference_price")
+                        if not ref or ref <= 0:
+                            continue
+                        ts_raw = d.get("timestamp", "")
+                        try:
+                            ts = datetime.fromisoformat(ts_raw.replace("Z", "+00:00"))
+                            age_h = (datetime.now(timezone.utc) - ts).total_seconds() / 3600
+                        except Exception:
+                            continue
+                        if age_h < 1 or age_h > 168:  # 1h .. 7d window
+                            continue
+                        d_enriched = dict(d)
+                        d_enriched["price_change_pct"] = ((cur_price - ref) / ref) * 100
+                        verified.append(d_enriched)
+
+            if len(verified) < 10:
+                logger.info("daily_loop_skip_insufficient_data", extra={"verified": len(verified)})
                 return
 
-            # Optimize factor weights
             current_fw = load_factor_weights()
-            new_fw = optimize_factor_weights(analyses, current_fw)
+            new_fw = optimize_factor_weights(verified, current_fw)
             save_factor_weights(new_fw)
 
-            # Optimize category weights
             current_cw = load_category_weights()
-            new_cw = optimize_category_weights(analyses, current_cw, f2c)
+            new_cw = optimize_category_weights(verified, current_cw, f2c)
             save_category_weights(new_cw)
 
             logger.info("daily_loop_complete", extra={
-                "factor_weights_updated": len(new_fw),
-                "category_weights_updated": len(new_cw),
+                "verified_decisions": len(verified),
+                "factor_weights_count": len(new_fw),
+                "category_weights_count": len(new_cw),
             })
 
-            # Auto memory consolidation
             try:
                 async with httpx.AsyncClient(timeout=30) as client:
                     await client.post(f"{MEMORY_URL}/memory/consolidate")
-                logger.info("memory_consolidation_triggered")
             except Exception:
                 pass
 

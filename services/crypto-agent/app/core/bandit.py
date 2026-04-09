@@ -219,7 +219,7 @@ class FormulaMAB:
         return self._regime_arms[regime]
 
     def select(self, regime: str | None = None, eligible: list[str] | None = None) -> str:
-        """Select a formula using Thompson Sampling.
+        """Select a formula using Thompson Sampling + ε-greedy exploration.
 
         Args:
             regime: Current market regime label (for contextual bandits).
@@ -228,7 +228,14 @@ class FormulaMAB:
 
         Returns:
             Name of the selected formula.
+
+        Exploration: ε=15% of selections are forced uniformly random across
+        all eligible arms. This guarantees that less-explored formulas keep
+        accumulating data even when one arm dominates Thompson sampling.
+        Without this, the system collapses to a single formula and never
+        learns about the others.
         """
+        EPSILON = float(os.getenv("MAB_EPSILON", "0.15"))
         with self._lock:
             if regime:
                 arms = self._get_regime_arms(regime)
@@ -240,6 +247,15 @@ class FormulaMAB:
                 candidates = {k: v for k, v in arms.items() if k in eligible}
             if not candidates:
                 candidates = arms
+
+            # ε-greedy: with prob EPSILON, force uniform random exploration
+            if random.random() < EPSILON and len(candidates) > 1:
+                selected = random.choice(list(candidates.keys()))
+                logger.info(
+                    "mab_epsilon_explore",
+                    extra={"selected": selected, "epsilon": EPSILON, "regime": regime or "global"},
+                )
+                return selected
 
             # Thompson sample from each arm
             samples = {name: arm.sample() for name, arm in candidates.items()}

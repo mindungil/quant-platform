@@ -33,6 +33,30 @@ def get_mab_stats() -> dict:
     return formula_mab.get_stats()
 
 
+@router.post("/agent/learning/run-fast")
+async def force_fast_loop() -> dict:
+    """Trigger the 5-minute hindsight loop immediately (admin/debug)."""
+    from app.core.learning_scheduler import learning_scheduler
+    await learning_scheduler._fast_loop()
+    return {"ok": True, "loop": "fast"}
+
+
+@router.post("/agent/learning/run-daily")
+async def force_daily_loop() -> dict:
+    """Trigger the daily factor-weight optimizer immediately (admin/debug)."""
+    from app.core.learning_scheduler import learning_scheduler
+    await learning_scheduler._daily_loop()
+    return {"ok": True, "loop": "daily"}
+
+
+@router.post("/agent/learning/run-weekly")
+async def force_weekly_loop() -> dict:
+    """Trigger the weekly meta-learning loop immediately (admin/debug)."""
+    from app.core.learning_scheduler import learning_scheduler
+    await learning_scheduler._weekly_loop()
+    return {"ok": True, "loop": "weekly"}
+
+
 @router.get("/agent/learning-status")
 def get_learning_status() -> dict:
     """High-level learning health snapshot for ops/dashboard."""

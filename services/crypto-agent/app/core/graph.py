@@ -478,8 +478,13 @@ def score_node(state: AgentState) -> dict:
         except Exception as exc:
             logger.warning("graph_ml_failed", extra={"error": str(exc)[:100]})
 
-    # Priority 2: Thompson Sampling MAB
-    if style_formula is None and formula_scores:
+    # Priority 2: Thompson Sampling MAB — runs UNCONDITIONALLY now.
+    # Previously this only fired when memory-service returned formula_scores,
+    # which left the persistent MAB state untouched in production. We now use
+    # the MAB on every decision so its accumulated learning + ε-greedy
+    # exploration actually drives formula selection.
+    if style_formula is None:
+        # Best-effort memory bootstrap (non-fatal)
         try:
             resp = httpx.post(
                 f"{settings.memory_service_base_url}/memory/search/formula-outcomes",
@@ -493,15 +498,18 @@ def score_node(state: AgentState) -> dict:
         except Exception:
             pass
 
+        # Eligible = all registered formulas if we have no scores yet,
+        # else the subset that memory has data for.
+        eligible = list(formula_scores.keys()) if formula_scores else formula_registry.list_names()
         mab_choice = formula_mab.select(
             regime=suggested_type,
-            eligible=list(formula_scores.keys()),
+            eligible=eligible,
         )
         candidate = formula_registry.get(mab_choice)
         if candidate:
             style_formula = candidate
             selection_method = "mab"
-            logger.info("graph_formula_mab", extra={"formula": mab_choice})
+            logger.info("graph_formula_mab", extra={"formula": mab_choice, "regime": suggested_type})
 
     # Priority 3: Memory heuristic
     if style_formula is None and formula_scores:
@@ -798,9 +806,17 @@ def execute_node(state: AgentState) -> dict:
             escalated = True
             logger.info("graph_escalated_reasoning", extra={"asset": asset})
 
-    # Build decision record
-    components = dict(signal.components)
+    # Build decision record. Use the score_node's full factor breakdown
+    # (formula_components) so the daily optimizer can attribute price moves
+    # to individual factors. signal.components is too sparse on its own.
+    score_components = state.get("formula_components") or {}
+    components = dict(signal.components or {})
+    components.update(score_components)
     components["formula_confidence"] = round(formula_confidence, 4)
+    # Embed regime + formula name so the hindsight/MAB loop can do
+    # contextual updates instead of treating every decision as global.
+    components["regime"] = regime_label
+    components["style_formula"] = formula_name
 
     decision_id = str(uuid4())
     decision = DecisionRecord(

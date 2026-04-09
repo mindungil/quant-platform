@@ -1032,7 +1032,19 @@ def run_decision_loop(asset: str, *, user_id: str | None = None, correlation_id:
         components = dict(formula_components)
     else:
         components = dict(signal_dict.get("components") or {})
+    # Always merge in the score-node components if present so the daily
+    # optimizer can attribute price moves back to factors. Without this the
+    # optimizer sees only formula_confidence and never updates weights.
+    if formula_components:
+        for k, v in formula_components.items():
+            if k not in components:
+                components[k] = v
     components["formula_confidence"] = round(final_state.get("formula_confidence") or 0.0, 4)
+    # Embed regime + style formula so hindsight + MAB can do contextual updates.
+    if final_state.get("regime"):
+        components["regime"] = final_state.get("regime")
+    if final_state.get("selected_formula"):
+        components["style_formula"] = final_state.get("selected_formula")
 
     decision_id = final_state.get("decision_id") or str(__import__("uuid").uuid4())
     decision = DecisionRecord(

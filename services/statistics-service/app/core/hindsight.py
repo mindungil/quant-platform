@@ -33,15 +33,28 @@ def analyze_decision_hindsight(
     price_change_pct = ((current_price - decision_price) / decision_price) * 100 if decision_price > 0 else 0
 
     # Determine correctness
+    # Asymmetric scoring: BUY/SELL judged on direction with magnitude reward,
+    # HOLD judged on whether the market actually stayed quiet. The previous
+    # version penalized HOLDs for any large move (even though HOLD avoids loss
+    # in a downturn), unfairly tanking the accuracy metric.
+    HOLD_QUIET_THRESHOLD = 1.5  # ±1.5% defines a "quiet" market
     if action == "BUY":
-        correct = price_change_pct > 0  # price went up
-        score = min(price_change_pct / 5, 1.0)  # normalize: 5% = perfect score
+        correct = price_change_pct > 0
+        score = max(-1.0, min(1.0, price_change_pct / 5.0))  # signed reward, ±5% saturates
     elif action == "SELL":
-        correct = price_change_pct < 0  # price went down
-        score = min(-price_change_pct / 5, 1.0)
+        correct = price_change_pct < 0
+        score = max(-1.0, min(1.0, -price_change_pct / 5.0))
     else:  # HOLD
-        correct = abs(price_change_pct) < 2  # price didn't move much
-        score = max(0, 1 - abs(price_change_pct) / 5)
+        if abs(price_change_pct) < HOLD_QUIET_THRESHOLD:
+            # Quiet market: HOLD was the right call
+            correct = True
+            score = 1.0 - abs(price_change_pct) / HOLD_QUIET_THRESHOLD
+        else:
+            # Market moved meaningfully: HOLD missed an opportunity, but is
+            # NOT "wrong" the way a wrong-direction trade is wrong. Treat it
+            # as neutral (score 0, not counted as correct).
+            correct = False
+            score = 0.0
 
     return {
         "decision_id": decision.get("decision_id"),
