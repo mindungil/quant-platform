@@ -180,16 +180,16 @@ function PerformanceContent() {
 
         {/* ── Hero: 총 수익률 ──────────────────────────────────── */}
         <FadeInView>
-          <section className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-8 text-center">
+          <section className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-5 sm:p-8 text-center">
             <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">총 수익률</p>
             <div
-              className={`mt-2 font-mono text-5xl font-bold tracking-tighter tabular-nums ${
+              className={`mt-2 font-mono text-3xl sm:text-4xl md:text-5xl font-bold tracking-tighter tabular-nums break-all ${
                 totalReturn >= 0 ? "text-emerald-400" : "text-red-400"
               }`}
             >
               {totalReturn >= 0 ? "+" : ""}
               <AnimatedNumber value={totalReturnPct} decimals={2} />
-              <span className="text-3xl">%</span>
+              <span className="text-xl sm:text-2xl md:text-3xl">%</span>
             </div>
             <p className="mt-2 text-xs font-medium text-zinc-500">
               총 {tradeCount}건 거래 기준

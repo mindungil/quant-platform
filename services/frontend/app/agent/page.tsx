@@ -173,7 +173,7 @@ function DecisionCard({ decision, expanded, onToggle }: { decision: Decision; ex
       {/* Expanded detail (shown on click — beginner-friendly) */}
       {expanded && (
         <div className="mt-3 border-t border-white/[0.04] pt-3 space-y-2">
-          <div className="grid grid-cols-2 gap-2 text-[11px]">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] min-w-0">
             <div>
               <span className="text-zinc-500">신호 강도</span>
               <span className="ml-2 text-zinc-300">{explainScore(decision.signal_score ?? 0)}</span>

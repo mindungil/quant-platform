@@ -97,15 +97,16 @@ export default function AdminUsersPage() {
           </StaggerContainer>
 
           {/* User Table */}
-          <section className="rounded border border-white/[0.06] bg-white/[0.03] p-6 overflow-x-auto">
-            <table className="w-full text-left text-sm">
+          <section className="rounded border border-white/[0.06] bg-white/[0.03] p-3 sm:p-6">
+            <div className="-mx-3 sm:mx-0 overflow-x-auto">
+            <table className="w-full min-w-[640px] text-left text-sm">
               <thead>
                 <tr className="border-b border-white/[0.06] text-xs font-medium uppercase tracking-wider text-neutral-400">
-                  <th className="pb-3 pr-4">사용자</th>
+                  <th className="pb-3 pr-4 pl-3 sm:pl-0">사용자</th>
                   <th className="pb-3 pr-4">플랜</th>
                   <th className="pb-3 pr-4">역할</th>
-                  <th className="pb-3 pr-4">생성일</th>
-                  <th className="pb-3">작업</th>
+                  <th className="pb-3 pr-4 hidden sm:table-cell">생성일</th>
+                  <th className="pb-3 pr-3 sm:pr-0">작업</th>
                 </tr>
               </thead>
               <tbody>
@@ -118,9 +119,9 @@ export default function AdminUsersPage() {
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.25, delay: index * 0.04, ease: "easeOut" }}
                     >
-                      <td className="py-3 pr-4">
-                        <p className="font-semibold text-white">{user.display_name}</p>
-                        <p className="text-xs text-neutral-400">{user.email}</p>
+                      <td className="py-3 pr-4 pl-3 sm:pl-0 max-w-[200px]">
+                        <p className="font-semibold text-white truncate">{user.display_name}</p>
+                        <p className="text-xs text-neutral-400 truncate">{user.email}</p>
                       </td>
                       <td className="py-3 pr-4">
                         <span className="inline-flex items-center rounded-full bg-white/[0.06] px-2 py-0.5 text-xs font-medium text-neutral-400">
@@ -137,7 +138,7 @@ export default function AdminUsersPage() {
                           <option value="admin">admin</option>
                         </select>
                       </td>
-                      <td className="py-3 pr-4 text-xs text-neutral-400">
+                      <td className="py-3 pr-4 text-xs text-neutral-400 hidden sm:table-cell">
                         {user.created_at ? new Date(user.created_at).toLocaleDateString() : "--"}
                       </td>
                       <td className="py-3">
@@ -156,6 +157,7 @@ export default function AdminUsersPage() {
                 )}
               </tbody>
             </table>
+            </div>
           </section>
         </main>
       </PageTransition>

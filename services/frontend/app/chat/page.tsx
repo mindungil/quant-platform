@@ -166,7 +166,7 @@ function ToolPill({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 4, scale: 0.95 }}
             transition={{ duration: 0.15 }}
-            className="absolute left-0 top-full z-50 mt-2 w-72 rounded-lg border border-neutral-700/50 bg-neutral-900/95 p-3 shadow-xl backdrop-blur-sm"
+            className="absolute left-0 top-full z-50 mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-neutral-700/50 bg-neutral-900/95 p-3 shadow-xl backdrop-blur-sm"
           >
             <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
               {tc.tool_name}
@@ -431,7 +431,7 @@ export default function ChatPage() {
                   className="mb-8"
                 >
                   <span
-                    className="inline-block bg-clip-text text-6xl font-bold text-transparent"
+                    className="inline-block bg-clip-text text-4xl sm:text-5xl md:text-6xl font-bold text-transparent break-keep"
                     style={{
                       backgroundImage: "linear-gradient(135deg, #fafafa, #a1a1aa, #fafafa)",
                       backgroundSize: "200% 200%",
@@ -456,7 +456,7 @@ export default function ChatPage() {
                     hidden: {},
                     visible: { transition: { staggerChildren: 0.08 } },
                   }}
-                  className="grid w-full max-w-lg grid-cols-2 gap-3"
+                  className="grid w-full max-w-lg grid-cols-1 sm:grid-cols-2 gap-3"
                 >
                   {suggestions.map((s) => (
                     <motion.button
@@ -496,12 +496,12 @@ export default function ChatPage() {
                 >
                   {msg.role === "user" ? (
                     /* ── User bubble ──────────────────── */
-                    <div className="max-w-[75%] rounded-2xl rounded-br-md bg-white/[0.08] px-5 py-3 text-sm leading-relaxed text-zinc-50">
+                    <div className="max-w-[88%] sm:max-w-[75%] rounded-2xl rounded-br-md bg-white/[0.08] px-4 py-3 sm:px-5 text-sm leading-relaxed text-zinc-50 break-words">
                       {msg.content}
                     </div>
                   ) : (
                     /* ── Assistant message ────────────── */
-                    <div className="max-w-[90%]">
+                    <div className="max-w-full sm:max-w-[90%] min-w-0 break-words">
                       {/* Tool call pills */}
                       {msg.tool_calls && msg.tool_calls.length > 0 && (
                         <motion.div

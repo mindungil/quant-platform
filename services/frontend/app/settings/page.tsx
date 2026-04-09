@@ -438,13 +438,13 @@ function SettingsContent() {
               <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6 space-y-4">
                 <h3 className="text-base font-semibold tracking-tight text-zinc-50">리스크 관리</h3>
                 {riskLoading ? (
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {[0, 1, 2, 3].map((i) => (
                       <div key={i} className="skeleton h-20 rounded-xl" />
                     ))}
                   </div>
                 ) : risk ? (
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
                       <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">최대 주문금액</p>
                       <p className="mt-2 font-mono text-xl font-semibold tabular-nums text-zinc-50">
@@ -590,7 +590,7 @@ function SettingsContent() {
                 </div>
 
                 {/* Tier comparison */}
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {[
                     { name: "Free", price: "0원", features: ["시그널 조회 (지연)", "대시보드", "AI 채팅 5회/일"] },
                     { name: "Pro", price: "29,000원/월", features: ["실시간 시그널", "자동매매 (1자산)", "AI 채팅 50회/일"] },
