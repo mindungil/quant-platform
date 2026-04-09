@@ -16,6 +16,50 @@ def _to_array(returns) -> np.ndarray:
     return arr[np.isfinite(arr)]
 
 
+def apply_transaction_costs(
+    position,
+    returns,
+    cost_bps: float = 0.0,
+    slippage_bps: float = 0.0,
+) -> np.ndarray:
+    """Compute net per-bar PnL after costs from a (position, return) pair.
+
+    Cost model: round-trip = (cost_bps + slippage_bps) bps charged on the
+    *change in position* between bars (turnover). For a leverage move from
+    0.3→0.5 we pay |0.2| × bps. Two-sided trades (e.g. -0.4 → +0.4) pay 0.8.
+    This is the standard linear-impact cost model used in CTA backtests.
+
+    Args:
+        position: target position series (in units of underlying notional, [-1,1])
+        returns:  underlying bar returns
+        cost_bps: round-trip taker fee, e.g. 4 for Binance taker
+        slippage_bps: extra slippage assumption, e.g. 1-3 bps
+
+    Returns:
+        net per-bar return series after costs
+    """
+    pos = np.asarray(position, dtype=float)
+    ret = np.asarray(returns, dtype=float)
+    if len(pos) == 0:
+        return np.zeros(0)
+    gross_pnl = pos * ret
+    delta_pos = np.abs(np.diff(pos, prepend=0.0))
+    bps_total = (float(cost_bps) + float(slippage_bps)) * 1e-4
+    cost = delta_pos * bps_total
+    return gross_pnl - cost
+
+
+def turnover_stats(position, periods_per_year: int = 252) -> dict[str, float]:
+    """Annualized turnover (Σ|Δpos|) and per-bar mean turnover."""
+    pos = np.asarray(position, dtype=float)
+    if len(pos) < 2:
+        return {"per_bar_turnover": 0.0, "annual_turnover": 0.0}
+    delta = np.abs(np.diff(pos, prepend=0.0))
+    per_bar = float(delta.mean())
+    annual = float(per_bar * periods_per_year)
+    return {"per_bar_turnover": per_bar, "annual_turnover": annual}
+
+
 def annualization_factor(periods_per_year: int) -> float:
     return float(math.sqrt(periods_per_year))
 

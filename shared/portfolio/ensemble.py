@@ -51,6 +51,16 @@ class EnsembleConfig:
     self_sharpe_floor: float = 0.3         # minimum scale when self-sharpe is bad
     self_sharpe_full: float = 0.5          # sharpe at which scale = 1
     enable_self_sharpe_gate: bool = True
+    # v3.3: per-alpha online performance gate. Each alpha gets a multiplicative
+    # weight in [alpha_floor, 1] based on its *own* rolling Sharpe. Dead/negative
+    # alphas auto-decay; recovering alphas auto-revive. This is the "self-improving"
+    # layer — no human needs to drop a stale alpha.
+    enable_alpha_gate: bool = True
+    alpha_gate_window: int = 720           # rolling lookback for per-alpha sharpe
+    alpha_gate_min_history: int = 240      # bars before gate activates (warmup)
+    alpha_gate_floor: float = 0.0          # min multiplier (0 = full kill allowed)
+    alpha_gate_full: float = 0.5           # sharpe at which multiplier = 1
+    alpha_gate_kill_below: float = -0.5    # sharpe below this → multiplier = floor
 
 
 @dataclass
@@ -97,6 +107,19 @@ class EnsembleAllocator:
         alpha_returns = positions_df.multiply(ret, axis=0)
 
         weights = self._compute_weights(alpha_returns)
+
+        # v3.3: per-alpha online performance gate (auto-decay dead alphas)
+        if self.config.enable_alpha_gate:
+            alpha_gate = self._compute_alpha_gate(alpha_returns)
+            weights = weights * alpha_gate
+            # Renormalize after gating; if everything is killed, fall back uniform
+            row_sums = weights.sum(axis=1)
+            zero_rows = row_sums <= 1e-12
+            if zero_rows.any():
+                n = weights.shape[1]
+                weights.loc[zero_rows] = 1.0 / n
+                row_sums = weights.sum(axis=1)
+            weights = weights.div(row_sums.replace(0, 1.0), axis=0)
 
         # Regime-aware reweighting: multiply each alpha's weight by its
         # affinity to the current regime, then renormalize. Affinity is
@@ -274,6 +297,44 @@ class EnsembleAllocator:
         mask = vol_z > thr
         out[mask] = out[mask] * scale
         return out
+
+    # ---- per-alpha online gate (v3.3) ----
+
+    def _compute_alpha_gate(self, alpha_returns: pd.DataFrame) -> pd.DataFrame:
+        """Per-alpha multiplicative gate from causal rolling Sharpe.
+
+        For each alpha, compute the rolling annualized Sharpe of its OWN
+        per-bar pnl over `alpha_gate_window` bars, SHIFTED BY 1 to enforce
+        causality (gate at bar t uses info up to bar t-1). Map through
+        a piecewise-linear ramp:
+            sh ≤ kill_below → floor
+            kill_below < sh < full → linear ramp floor..1
+            sh ≥ full → 1.0
+        Before warmup, gate = 1 (no-op).
+        """
+        win = int(self.config.alpha_gate_window)
+        min_hist = int(self.config.alpha_gate_min_history)
+        floor = float(self.config.alpha_gate_floor)
+        full = float(self.config.alpha_gate_full)
+        kill = float(self.config.alpha_gate_kill_below)
+        annualizer = float(np.sqrt(self.config.periods_per_year))
+
+        gate = pd.DataFrame(1.0, index=alpha_returns.index, columns=alpha_returns.columns)
+        denom = max(full - kill, 1e-6)
+        for col in alpha_returns.columns:
+            r = alpha_returns[col]
+            mean = r.rolling(win, min_periods=min_hist).mean()
+            std = r.rolling(win, min_periods=min_hist).std(ddof=0).replace(0, np.nan)
+            sharpe = (mean / std).fillna(0.0) * annualizer
+            # Causal: at bar t, use sharpe computed through t-1
+            sharpe = sharpe.shift(1).fillna(0.0)
+            # Linear ramp
+            ramp = floor + (sharpe - kill) * (1.0 - floor) / denom
+            ramp = ramp.clip(floor, 1.0)
+            # Before warmup, leave the gate at 1.0 (don't punish cold start)
+            warm = mean.shift(1).notna()
+            gate[col] = ramp.where(warm, 1.0)
+        return gate
 
     # ---- self-sharpe gate ----
 
