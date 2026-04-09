@@ -44,6 +44,13 @@ class EnsembleConfig:
     tail_vol_z_threshold: float = 3.0
     tail_vol_window: int = 168
     tail_position_scale: float = 0.3       # multiply position by this when triggered
+    # v3.1: self-Sharpe confidence gate. When the rolling Sharpe of the
+    # combined signal turns negative, scale positions down. Acts as a
+    # "trend-follow your own equity curve" guard against dead markets.
+    self_sharpe_window: int = 720          # ~30d hourly
+    self_sharpe_floor: float = 0.3         # minimum scale when self-sharpe is bad
+    self_sharpe_full: float = 0.5          # sharpe at which scale = 1
+    enable_self_sharpe_gate: bool = True
 
 
 @dataclass
@@ -159,6 +166,10 @@ class EnsembleAllocator:
         # Tail hedge: check rolling vol z-score and scale down if extreme
         target = self._apply_tail_hedge(target, ret)
 
+        # v3.1: self-Sharpe gate (adaptive confidence)
+        if self.config.enable_self_sharpe_gate:
+            target = self._apply_self_sharpe_gate(target, ret)
+
         # Kill switch
         target = self._apply_kill_switch(target, target * ret)
 
@@ -263,6 +274,30 @@ class EnsembleAllocator:
         mask = vol_z > thr
         out[mask] = out[mask] * scale
         return out
+
+    # ---- self-sharpe gate ----
+
+    def _apply_self_sharpe_gate(self, position: pd.Series, returns: pd.Series) -> pd.Series:
+        """Scale position by rolling Sharpe of own PnL.
+
+        Estimates rolling annualized Sharpe of position*ret over `self_sharpe_window`
+        bars. Maps it through a piecewise linear ramp:
+            sharpe ≤ -1 → scale = self_sharpe_floor
+            -1 < sharpe < self_sharpe_full → linear
+            sharpe ≥ self_sharpe_full → scale = 1
+        """
+        win = int(self.config.self_sharpe_window)
+        floor = float(self.config.self_sharpe_floor)
+        full = float(self.config.self_sharpe_full)
+        annualizer = float(np.sqrt(self.config.periods_per_year))
+        pnl = position * returns
+        mean = pnl.rolling(win, min_periods=max(50, win // 4)).mean()
+        std = pnl.rolling(win, min_periods=max(50, win // 4)).std(ddof=0).replace(0, np.nan)
+        rolling_sharpe = (mean / std).fillna(0.0) * annualizer
+        # Linear ramp from -1.0 to full → floor..1
+        scale = floor + (rolling_sharpe + 1.0) * (1.0 - floor) / max(full + 1.0, 1e-6)
+        scale = scale.clip(floor, 1.0)
+        return position * scale
 
     # ---- kill switch ----
 

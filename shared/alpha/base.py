@@ -148,6 +148,28 @@ def bollinger_pctb(close: pd.Series, period: int = 20, n_std: float = 2.0) -> pd
     return ((close - lower) / width).fillna(0.5)
 
 
+def vol_target_scale(
+    close: pd.Series,
+    target_vol_annual: float = 0.40,
+    lookback: int = 168,
+    periods_per_year: int = 24 * 365,
+    cap: float = 1.5,
+    floor: float = 0.0,
+) -> pd.Series:
+    """Per-bar vol-target multiplier in [floor, cap].
+
+    multiplier_t = clip(target / realized_t, floor, cap)
+    Realized vol = stdev of log returns over `lookback` bars × √periods_per_year.
+
+    Used by individual alphas to dampen position when realized vol spikes,
+    keeping per-alpha PnL contribution roughly proportional across regimes.
+    """
+    log_ret = np.log(close.astype(float) / close.astype(float).shift(1))
+    rv = (log_ret.rolling(lookback, min_periods=24).std(ddof=0) * np.sqrt(periods_per_year))
+    rv = rv.ffill().fillna(target_vol_annual).clip(lower=1e-6)
+    return (target_vol_annual / rv).clip(lower=floor, upper=cap)
+
+
 def adx(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series:
     """Wilder's ADX. Returns a Series in [0, 100]."""
     up = high.diff()

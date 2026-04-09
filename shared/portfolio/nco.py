@@ -116,6 +116,12 @@ class NCOConfig:
     max_clusters: int = 6
     denoise: bool = True
     n_obs_for_denoise: int | None = None  # if None, use cov.shape[0] * 4 as proxy
+    # Skip Marchenko-Pastur denoising when N is small. With ~8 alphas, MP
+    # truncation is too aggressive (drops most eigenvalues as 'noise') and
+    # collapses NCO to roughly equal weights — NCO underperforms HRP in that
+    # regime. The default min_assets_for_denoise threshold disables denoising
+    # below it; set to 0 to always denoise.
+    min_assets_for_denoise: int = 12
 
 
 def nco_weights(cov: np.ndarray, config: NCOConfig | None = None) -> np.ndarray:
@@ -132,7 +138,7 @@ def nco_weights(cov: np.ndarray, config: NCOConfig | None = None) -> np.ndarray:
         return np.ones(1)
 
     corr, std = cov_to_corr(cov)
-    if cfg.denoise:
+    if cfg.denoise and n >= cfg.min_assets_for_denoise:
         n_obs = cfg.n_obs_for_denoise or max(n * 4, 200)
         corr = denoise_corr(corr, n_obs=n_obs)
         cov = corr * np.outer(std, std)
