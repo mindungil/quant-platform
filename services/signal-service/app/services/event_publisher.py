@@ -1,48 +1,64 @@
-import asyncio
-import json
-
-from nats.aio.client import Client as NATS
-
 from app.core.config import settings
 from app.models.signal import SignalEvaluationResponse, SignalThresholdEvent
+from shared.asyncio_utils import run_coro
+from shared.events import EventEnvelope, JetStreamBus
+from shared.persistence import RedisStore
+from shared.realtime import RealtimeBus
 
 
 class EventPublisher:
     def __init__(self) -> None:
-        self._client: NATS | None = None
+        self._bus = JetStreamBus(
+            nats_url=settings.nats_url,
+            redis_store=RedisStore(settings.redis_url),
+            enabled=settings.enable_nats,
+        )
+        self._realtime = RealtimeBus(RedisStore(settings.redis_url))
 
     async def connect(self) -> None:
-        if not settings.enable_nats:
-            return
-        self._client = NATS()
-        await self._client.connect(settings.nats_url)
+        await self._bus.connect()
+        await self._bus.ensure_stream(settings.jetstream_stream_name, ["signal.threshold.crossed.*", "signal.threshold.crossed.*.dlq"])
 
     async def close(self) -> None:
-        if self._client is not None and self._client.is_connected:
-            await self._client.drain()
+        await self._bus.close()
 
     async def publish_threshold_async(
         self, asset: str, asset_type: str, evaluation: SignalEvaluationResponse
     ) -> None:
-        if self._client is None or not self._client.is_connected:
-            return
         event = SignalThresholdEvent(
             asset=asset,
             asset_type=asset_type,
             subject=f"signal.threshold.crossed.{asset_type}",
             evaluation=evaluation,
         )
-        await self._client.publish(
+        await self._bus.publish(
             event.subject,
-            json.dumps(event.model_dump(mode="json")).encode("utf-8"),
+            EventEnvelope(
+                event_type="signal.threshold.crossed",
+                source="signal-service",
+                user_id=evaluation.strategy_user_id,
+                data=event.model_dump(mode="json"),
+            ),
+        )
+        self._realtime.publish(
+            event_type="signal.threshold",
+            source="signal-service",
+            data={
+                "asset": asset,
+                "asset_type": asset_type,
+                "strategy_user_id": evaluation.strategy_user_id,
+                "signal_score": evaluation.signal_score,
+                "threshold": evaluation.threshold,
+                "threshold_crossed": evaluation.threshold_crossed,
+                "direction": evaluation.direction,
+                "strategy_id": evaluation.strategy_id,
+                "feature_timestamp": evaluation.feature_timestamp.isoformat(),
+                "reference_price": evaluation.reference_price,
+            },
         )
 
     def publish_threshold(self, asset: str, asset_type: str, evaluation: SignalEvaluationResponse) -> None:
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            return
-        loop.create_task(self.publish_threshold_async(asset=asset, asset_type=asset_type, evaluation=evaluation))
+        run_coro(self.publish_threshold_async(asset=asset, asset_type=asset_type, evaluation=evaluation))
 
 
 publisher = EventPublisher()

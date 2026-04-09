@@ -1,0 +1,53 @@
+FROM python:3.11-slim
+
+WORKDIR /code
+
+# Install build tools for native extensions (ecos, scipy, etc.)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential cmake gfortran libopenblas-dev liblapack-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy all requirements first for layer caching
+COPY services/market-data/requirements.txt        /tmp/reqs/market-data.txt
+COPY services/feature-store/requirements.txt      /tmp/reqs/feature-store.txt
+COPY services/signal-service/requirements.txt     /tmp/reqs/signal-service.txt
+COPY services/memory-service/requirements.txt     /tmp/reqs/memory-service.txt
+COPY services/strategy-registry/requirements.txt  /tmp/reqs/strategy-registry.txt
+COPY services/crypto-agent/requirements.txt       /tmp/reqs/crypto-agent.txt
+COPY services/order-service/requirements.txt      /tmp/reqs/order-service.txt
+COPY services/risk-service/requirements.txt       /tmp/reqs/risk-service.txt
+COPY services/exchange-adapter/requirements.txt   /tmp/reqs/exchange-adapter.txt
+COPY services/credential-store/requirements.txt   /tmp/reqs/credential-store.txt
+COPY services/portfolio-service/requirements.txt  /tmp/reqs/portfolio-service.txt
+COPY services/statistics-service/requirements.txt /tmp/reqs/statistics-service.txt
+COPY services/auth-service/requirements.txt       /tmp/reqs/auth-service.txt
+COPY services/api-gateway/requirements.txt        /tmp/reqs/api-gateway.txt
+COPY services/backtest-service/requirements.txt   /tmp/reqs/backtest-service.txt
+COPY services/etf-agent/requirements.txt          /tmp/reqs/etf-agent.txt
+COPY services/external-data-service/requirements.txt /tmp/reqs/external-data-service.txt
+COPY services/llm-gateway/requirements.txt        /tmp/reqs/llm-gateway.txt
+COPY services/orchestrator-agent/requirements.txt /tmp/reqs/orchestrator-agent.txt
+COPY services/stock-agent/requirements.txt        /tmp/reqs/stock-agent.txt
+
+# Merge, deduplicate, and install all deps
+# v3: backtrader, pyportfolioopt, empyrical, scipy, scikit-learn
+RUN cat /tmp/reqs/*.txt \
+    | sed 's/_/-/g' \
+    | sort -t= -k1,1 -u \
+    > /tmp/all-reqs.txt \
+    && pip install --no-cache-dir -r /tmp/all-reqs.txt \
+    && rm -rf /tmp/reqs /tmp/all-reqs.txt
+
+# Copy shared modules
+COPY shared/ /code/shared/
+
+# Copy all service directories
+COPY services/ /code/services/
+
+# Copy startup script
+COPY scripts/start_all.sh /code/start_all.sh
+RUN chmod +x /code/start_all.sh
+
+EXPOSE 8001-8021
+
+CMD ["/code/start_all.sh"]

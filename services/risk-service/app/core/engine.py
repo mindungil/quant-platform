@@ -1,11 +1,304 @@
+import math
+import time
+
+from prometheus_client import Counter, Histogram
+
 from app.models.risk import RiskApprovalRequest, RiskApprovalResponse
+from app.db.repository import risk_repository
+
+risk_approvals_total = Counter(
+    "risk_approvals_total",
+    "Total risk approval decisions",
+    ["result", "level"],
+)
+risk_approval_latency_seconds = Histogram(
+    "risk_approval_latency_seconds",
+    "Latency of risk approval evaluation",
+    buckets=(0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0),
+)
+risk_denials_total = Counter(
+    "risk_denials_total",
+    "Total risk denial events by reason",
+    ["reason"],
+)
+risk_drawdown_breaches_total = Counter(
+    "risk_drawdown_breaches_total",
+    "Drawdown threshold breach events",
+    ["level"],
+)
+risk_halt_publications_total = Counter(
+    "risk_halt_publications_total",
+    "Risk halt publication events",
+)
+
+# Normal distribution quantiles
+Z_95 = 1.6449
+Z_99 = 2.3263
+
+# Long-term baseline volatility (annualized)
+LONG_TERM_VOL = 0.20
+
+# Base drawdown thresholds
+BASE_WARNING_DD = 0.05
+BASE_LIQUIDATE_DD = 0.10
+
+
+def _record_metrics(result: RiskApprovalResponse, start: float) -> None:
+    label_result = "approved" if result.approved else "rejected"
+    risk_approvals_total.labels(result=label_result, level=result.level).inc()
+    risk_approval_latency_seconds.observe(time.monotonic() - start)
+
+
+def _calculate_var_cvar(
+    daily_returns: list[float], portfolio_value: float
+) -> tuple[float, float, float]:
+    """Calculate VaR(95%), CVaR(95%), and realized volatility using scipy.
+
+    Uses t-distribution fitting for heavy tails (more realistic than normal).
+    """
+    if len(daily_returns) < 5:
+        return 0.0, 0.0, LONG_TERM_VOL
+
+    import numpy as np
+    from scipy import stats
+
+    returns = np.array(daily_returns)
+    n = len(returns)
+    mu = float(np.mean(returns))
+    sigma = float(np.std(returns, ddof=1))
+
+    # Fit Student-t distribution (captures heavy tails better than normal)
+    try:
+        df_t, loc_t, scale_t = stats.t.fit(returns)
+        # VaR at 95%: 5th percentile of fitted distribution
+        var_95_pct = -stats.t.ppf(0.05, df_t, loc=loc_t, scale=scale_t)
+        # CVaR: expected loss beyond VaR (conditional expectation)
+        # For t-distribution: E[X | X < -VaR]
+        tail_samples = returns[returns < -var_95_pct]
+        if len(tail_samples) > 0:
+            cvar_95_pct = -float(np.mean(tail_samples))
+        else:
+            cvar_95_pct = var_95_pct * 1.4  # fallback approximation
+    except Exception:
+        # Fallback to parametric normal
+        var_95_pct = -(mu - Z_95 * sigma)
+        phi_z95 = math.exp(-0.5 * Z_95 ** 2) / math.sqrt(2 * math.pi)
+        cvar_95_pct = -(mu - sigma * phi_z95 / 0.05)
+
+    var_95 = abs(portfolio_value * var_95_pct)
+    cvar_95 = abs(portfolio_value * max(cvar_95_pct, var_95_pct))
+
+    # Annualized realized volatility
+    realized_vol = sigma * math.sqrt(252)
+
+    return round(var_95, 2), round(cvar_95, 2), realized_vol
+
+
+def _classify_volatility(realized_vol: float) -> str:
+    """Classify current volatility regime."""
+    if realized_vol < LONG_TERM_VOL * 0.7:
+        return "low"
+    elif realized_vol > LONG_TERM_VOL * 1.5:
+        return "high"
+    return "normal"
+
+
+def _resolve_safe_defaults(payload: RiskApprovalRequest) -> None:
+    """Mutate the payload to enforce non-zero, sane risk limits.
+
+    The order-service was historically able to send `max_notional=0` and
+    `exposure_limit=0` (or 1.0 default) and have the gate evaluate them as
+    written. That meant a sloppy caller effectively bypassed the limit
+    (because requested_notional < 0 is impossible) — but more importantly,
+    a missing field meant "no limit", which is unsafe.
+
+    With this resolver, missing/zero fields collapse to env-driven defaults.
+    Set RISK_DEFAULT_MAX_NOTIONAL / RISK_DEFAULT_EXPOSURE_LIMIT to override.
+    """
+    import os
+    default_max_notional = float(os.getenv("RISK_DEFAULT_MAX_NOTIONAL", "1000.0"))
+    default_exposure_limit = float(os.getenv("RISK_DEFAULT_EXPOSURE_LIMIT", "5000.0"))
+
+    if payload.max_notional is None or payload.max_notional <= 0:
+        payload.max_notional = default_max_notional
+    if payload.exposure_limit is None or payload.exposure_limit <= 0:
+        payload.exposure_limit = default_exposure_limit
+
+
+# Hard ceiling: any single order exceeding this notional in USD is rejected
+# regardless of per-strategy max_notional. Provides a tail-safety bound when
+# misconfigured strategies bypass per-request limits.
+HARD_NOTIONAL_CEILING = float(__import__("os").getenv("RISK_HARD_NOTIONAL_CEILING", "100000.0"))
+
+# Hard ceiling: portfolio realized vol above this triggers rejection
+HARD_VOL_CEILING = float(__import__("os").getenv("RISK_HARD_VOL_CEILING", "1.0"))  # 100% annualized
+
+# Daily-loss limit (fraction of portfolio)
+DAILY_LOSS_LIMIT = float(__import__("os").getenv("RISK_DAILY_LOSS_LIMIT", "0.05"))
 
 
 def approve_order(payload: RiskApprovalRequest) -> RiskApprovalResponse:
-    if payload.current_drawdown >= 0.10:
-        return RiskApprovalResponse(approved=False, reason="liquidate_threshold_reached", level="LIQUIDATE")
-    if payload.current_drawdown >= 0.05:
-        return RiskApprovalResponse(approved=False, reason="warning_threshold_reached", level="HALT")
+    _start = time.monotonic()
+    _resolve_safe_defaults(payload)
+    exposure_ratio = 0.0 if payload.exposure_limit == 0 else payload.current_exposure / payload.exposure_limit
+
+    # Calculate VaR/CVaR from recent returns
+    var_95, cvar_95, realized_vol = _calculate_var_cvar(
+        payload.recent_daily_returns, payload.portfolio_value
+    )
+    vol_regime = _classify_volatility(realized_vol)
+
+    # Volatility-adjusted drawdown thresholds
+    vol_ratio = max(realized_vol / LONG_TERM_VOL, 0.5) if LONG_TERM_VOL > 0 else 1.0
+    vol_ratio = min(vol_ratio, 2.0)  # cap adjustment
+    warning_dd = BASE_WARNING_DD / vol_ratio    # tighter in high vol
+    liquidate_dd = BASE_LIQUIDATE_DD / vol_ratio
+
+    def _make_response(approved: bool, reason: str, level: str) -> RiskApprovalResponse:
+        result = RiskApprovalResponse(
+            approved=approved,
+            reason=reason,
+            level=level,
+            exposure_ratio=round(exposure_ratio, 4),
+            var_95=var_95,
+            cvar_95=cvar_95,
+            volatility_regime=vol_regime,
+        )
+        risk_repository.record(payload, result)
+        _record_metrics(result, _start)
+        if not approved:
+            risk_denials_total.labels(reason=reason).inc()
+            if "threshold_reached" in reason:
+                risk_drawdown_breaches_total.labels(level=level).inc()
+            if level == "HALT":
+                risk_halt_publications_total.inc()
+        return result
+
+    if not payload.automation_enabled:
+        return _make_response(False, "automation_disabled", "HALT")
+
+    if payload.current_drawdown >= liquidate_dd:
+        return _make_response(
+            False,
+            f"liquidate_threshold_reached (dd={payload.current_drawdown:.3f} >= {liquidate_dd:.3f})",
+            "LIQUIDATE",
+        )
+
+    if payload.current_drawdown >= warning_dd:
+        return _make_response(
+            False,
+            f"warning_threshold_reached (dd={payload.current_drawdown:.3f} >= {warning_dd:.3f})",
+            "HALT",
+        )
+
+    # Hard ceiling — independent of per-strategy max_notional. This is the
+    # backstop for misconfigured callers.
+    if payload.requested_notional > HARD_NOTIONAL_CEILING:
+        return _make_response(
+            False,
+            f"hard_notional_ceiling_exceeded ({payload.requested_notional:.0f} > {HARD_NOTIONAL_CEILING:.0f})",
+            "HALT",
+        )
+
     if payload.requested_notional > payload.max_notional:
-        return RiskApprovalResponse(approved=False, reason="notional_limit_exceeded", level="HALT")
-    return RiskApprovalResponse(approved=True, reason="approved", level="OK")
+        return _make_response(False, "notional_limit_exceeded", "HALT")
+
+    if payload.current_exposure + payload.requested_notional > payload.exposure_limit:
+        return _make_response(False, "exposure_limit_exceeded", "HALT")
+
+    # Realized-vol ceiling: if recent vol is extreme, halt new entries
+    if realized_vol > HARD_VOL_CEILING:
+        return _make_response(
+            False,
+            f"realized_vol_ceiling_exceeded ({realized_vol:.2f} > {HARD_VOL_CEILING:.2f})",
+            "HALT",
+        )
+
+    # Daily loss limit: if today's PnL is below -DAILY_LOSS_LIMIT * portfolio_value, halt
+    if payload.recent_daily_returns and payload.portfolio_value > 0:
+        # Latest "daily" return is the last element. We treat it as today's bar.
+        today_ret = payload.recent_daily_returns[-1] if payload.recent_daily_returns else 0.0
+        if today_ret < -DAILY_LOSS_LIMIT:
+            return _make_response(
+                False,
+                f"daily_loss_limit_breached ({today_ret:.3f} < -{DAILY_LOSS_LIMIT})",
+                "HALT",
+            )
+
+    # VaR-based check: reject if single order > 50% of daily VaR
+    if var_95 > 0 and payload.requested_notional > var_95 * 0.5:
+        return _make_response(
+            False,
+            f"var_limit_exceeded (notional={payload.requested_notional:.0f} > 50% VaR={var_95 * 0.5:.0f})",
+            "HALT",
+        )
+
+    return _make_response(True, "approved", "OK")
+
+
+# ---------------------------------------------------------------------------
+# Portfolio-Level Circuit Breaker
+# ---------------------------------------------------------------------------
+
+PORTFOLIO_MAX_DRAWDOWN = 0.15
+CONSEC_LOSS_THRESHOLD = 3
+CONSEC_LOSS_POSITION_REDUCTION = 0.5
+
+_redis_store = None
+
+
+def _get_redis():
+    global _redis_store
+    if _redis_store is None:
+        from shared.persistence import RedisStore
+        import os
+        _redis_store = RedisStore(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
+    return _redis_store
+
+
+def _get_consecutive_losses(user_id: str) -> int:
+    redis = _get_redis()
+    val = redis.get(f"consec_losses:{user_id}")
+    if val is None:
+        return 0
+    return int(val)
+
+
+def _set_consecutive_losses(user_id: str, count: int) -> None:
+    redis = _get_redis()
+    redis.set(f"consec_losses:{user_id}", str(count))
+
+
+def record_trade_outcome(user_id: str, pnl: float) -> None:
+    """Track consecutive losses in Redis. Reset on win."""
+    if pnl >= 0:
+        _set_consecutive_losses(user_id, 0)
+    else:
+        current = _get_consecutive_losses(user_id)
+        _set_consecutive_losses(user_id, current + 1)
+
+
+def check_portfolio_risk(user_id: str, total_drawdown: float = 0.0) -> dict:
+    """Portfolio-level risk check. Returns {approved, reason, restrictions}."""
+    restrictions: list[str] = []
+    approved = True
+    reason = "portfolio_ok"
+
+    # Check 1: Total drawdown halt
+    if total_drawdown > PORTFOLIO_MAX_DRAWDOWN:
+        approved = False
+        reason = f"portfolio_drawdown_halt (dd={total_drawdown:.3f} > {PORTFOLIO_MAX_DRAWDOWN})"
+        restrictions.append("ALL_TRADING_HALTED")
+
+        # Publish halt event (best effort)
+        risk_halt_publications_total.inc()
+
+        return {"approved": approved, "reason": reason, "restrictions": restrictions}
+
+    # Check 2: Consecutive losses → reduce position size
+    consec_losses = _get_consecutive_losses(user_id)
+    if consec_losses >= CONSEC_LOSS_THRESHOLD:
+        restrictions.append(f"max_position_reduced_by_{int(CONSEC_LOSS_POSITION_REDUCTION * 100)}pct")
+        reason = f"consecutive_losses ({consec_losses} >= {CONSEC_LOSS_THRESHOLD})"
+
+    return {"approved": approved, "reason": reason, "restrictions": restrictions}

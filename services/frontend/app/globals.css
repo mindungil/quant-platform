@@ -1,0 +1,277 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --black: #000000;
+  --white: #ffffff;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: #09090b;
+  color: #e4e4e7;
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.011em;
+}
+
+/* Monospace for numbers */
+.font-mono {
+  font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Cards — glass on dark gray */
+.card {
+  @apply rounded-xl border border-white/[0.06] bg-white/[0.02] p-5;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.card:hover {
+  border-color: rgba(255, 255, 255, 0.10);
+  background-color: rgba(255, 255, 255, 0.04);
+}
+
+/* Buttons */
+.btn-primary {
+  @apply rounded-lg bg-white px-4 py-2.5 text-sm font-semibold text-black;
+  transition: all 0.15s ease;
+}
+.btn-primary:hover { background-color: #e4e4e7; box-shadow: 0 0 20px rgba(255,255,255,0.15); }
+.btn-primary:active { transform: scale(0.98); }
+.btn-primary:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.btn-secondary {
+  @apply rounded-lg border border-neutral-700 bg-neutral-800/50 px-4 py-2.5 text-sm font-medium text-neutral-200;
+  transition: all 0.15s ease;
+}
+.btn-secondary:hover { border-color: #525252; background-color: rgba(64, 64, 64, 0.5); }
+
+.btn-danger {
+  @apply rounded-lg bg-red-500/15 px-4 py-2.5 text-sm font-medium text-red-400;
+  transition: all 0.15s ease;
+}
+.btn-danger:hover { background-color: rgba(239, 68, 68, 0.25); }
+
+.btn-ghost {
+  @apply rounded-lg px-3 py-1.5 text-sm text-neutral-500;
+  transition: color 0.15s ease;
+}
+.btn-ghost:hover { color: #fff; }
+
+/* Input */
+.input-field {
+  @apply w-full rounded-lg border border-neutral-700 bg-neutral-800/50 px-3.5 py-2.5 text-sm text-neutral-100 outline-none;
+  transition: border-color 0.15s ease;
+}
+.input-field:focus {
+  border-color: rgba(255, 255, 255, 0.20);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.06);
+}
+.input-field::placeholder {
+  color: #525252;
+}
+
+/* Badge */
+.badge {
+  @apply inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium border;
+}
+.badge-profit {
+  @apply text-green-500 bg-green-500/10 border-green-500/15;
+}
+.badge-loss {
+  @apply text-red-500 bg-red-500/10 border-red-500/15;
+}
+.badge-neutral {
+  @apply text-zinc-400 bg-white/[0.05] border-white/[0.06];
+}
+
+/* Stat animation */
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.stat-value {
+  animation: countUp 0.3s ease-out;
+}
+
+/* Skeleton */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  @apply rounded-lg;
+  background: linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.03) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Live indicator */
+@keyframes livePulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.5); }
+}
+.live-dot {
+  @apply inline-block h-1.5 w-1.5 rounded-full bg-white;
+  animation: livePulse 2s ease-in-out infinite;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.5);
+}
+
+/* Glow effects */
+@keyframes subtleGlow {
+  0%, 100% { box-shadow: 0 0 20px rgba(255, 255, 255, 0.03); }
+  50% { box-shadow: 0 0 40px rgba(255, 255, 255, 0.06); }
+}
+.glow-card {
+  animation: subtleGlow 4s ease-in-out infinite;
+}
+
+/* Gradient text — white to gray */
+.gradient-text {
+  background: linear-gradient(135deg, #fafafa 0%, #a1a1aa 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Scrollbar — minimal */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
+
+/* Selection */
+::selection {
+  background: rgba(255, 255, 255, 0.20);
+  color: #fff;
+}
+
+/* Accent gradient text — bold white */
+.text-gradient-accent {
+  color: #fafafa;
+  font-weight: 700;
+}
+
+/* Accent card glow on hover */
+.card-accent-hover:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 0 30px rgba(255, 255, 255, 0.04);
+}
+
+/* Gradient button — white bg, black text */
+.btn-gradient {
+  background: #ffffff;
+  color: #000000;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+.btn-gradient:hover {
+  box-shadow: 0 4px 20px rgba(255, 255, 255, 0.15);
+  transform: translateY(-1px);
+}
+
+/* Accent border glow */
+.border-glow {
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.02);
+}
+
+/* Floating orb background decoration — white/gray */
+.bg-orb-light {
+  position: absolute;
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.04), transparent 70%);
+  filter: blur(60px);
+  pointer-events: none;
+}
+
+.bg-orb-dim {
+  position: absolute;
+  width: 250px;
+  height: 250px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.03), transparent 70%);
+  filter: blur(60px);
+  pointer-events: none;
+}
+
+/* Page entrance */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Smooth number change */
+@keyframes numberPop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+/* Card entrance with depth */
+@keyframes cardReveal {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Breathing glow for live elements */
+@keyframes breathe {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* Gradient border animation */
+@keyframes borderFlow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Utility classes */
+.animate-fade-in-up { animation: fadeInUp 0.4s ease-out; }
+.animate-card-reveal { animation: cardReveal 0.5s ease-out; }
+.animate-number-pop { animation: numberPop 0.3s ease-in-out; }
+.animate-breathe { animation: breathe 3s ease-in-out infinite; }
+
+/* Stagger delay utilities */
+.delay-100 { animation-delay: 100ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-300 { animation-delay: 300ms; }
+.delay-400 { animation-delay: 400ms; }
+
+/* Hover effects */
+.hover-lift { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+.hover-lift:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.3); }
+
+/* Active/interactive card glow */
+.active-glow {
+  position: relative;
+  overflow: hidden;
+}
+.active-glow::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.1), transparent, rgba(255,255,255,0.05));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Text emphasis glow — removed for clarity */
+.text-glow { }
+.text-glow-strong { }
+
+/* Profit/Loss glow */
+.profit-glow { text-shadow: 0 0 10px rgba(16, 185, 129, 0.3); }
+.loss-glow { text-shadow: 0 0 10px rgba(239, 68, 68, 0.3); }

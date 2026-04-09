@@ -1,3 +1,7 @@
+from datetime import datetime, timezone
+
+UTC = timezone.utc
+
 from pydantic import BaseModel, Field
 
 
@@ -6,8 +10,23 @@ class PositionUpdate(BaseModel):
     asset: str
     side: str
     quantity: float
+    price: float = 0.0
+    notional: float = 0.0
+    order_id: str | None = None
+    correlation_id: str | None = None
 
 
 class PortfolioSnapshot(BaseModel):
     user_id: str
     positions: dict[str, float] = Field(default_factory=dict)
+    average_entry_prices: dict[str, float] = Field(default_factory=dict)
+    recent_fills: list[PositionUpdate] = Field(default_factory=list)
+    total_exposure: float = 0.0
+    unrealized_pnl: float = 0.0
+    realized_pnl: float = 0.0
+    total_pnl: float = 0.0
+    concentration: dict[str, float] = Field(default_factory=dict)
+    largest_position: str = ""
+    daily_return_pct: float = 0.0
+    rebalance_needed: bool = False
+    updated_at: datetime | None = Field(default_factory=lambda: datetime.now(UTC))

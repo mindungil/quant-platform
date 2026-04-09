@@ -1,6 +1,24 @@
-FROM python:3.11-slim
+FROM node:20-alpine AS builder
 WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY app ./app
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+COPY package.json package-lock.json* ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV HOSTNAME=0.0.0.0
+ENV PORT=3000
+ENV NODE_ENV=production
+
+# Copy standalone server
+COPY --from=builder /app/.next/standalone ./
+
+# Copy static assets (CSS, JS chunks) — required for standalone mode
+COPY --from=builder /app/.next/static ./.next/static
+
+# Copy public folder (manifest.json, icons, etc.)
+COPY --from=builder /app/public ./public
+
+EXPOSE 3000
+CMD ["node", "server.js"]

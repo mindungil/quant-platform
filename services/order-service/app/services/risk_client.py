@@ -1,6 +1,7 @@
 import httpx
 
 from app.models.order import OrderRequest
+from shared.request_context import current_request_headers
 
 
 class RiskClient:
@@ -10,11 +11,17 @@ class RiskClient:
     def approve(self, payload: OrderRequest) -> dict:
         response = httpx.post(
             f"{self._base_url}/risk/approve",
+            headers=current_request_headers(),
             json={
+                "user_id": payload.user_id,
                 "asset": payload.asset,
                 "requested_notional": payload.requested_notional,
                 "max_notional": payload.max_notional,
                 "current_drawdown": payload.current_drawdown,
+                "current_exposure": payload.current_exposure,
+                "exposure_limit": payload.exposure_limit,
+                "automation_enabled": payload.automation_enabled,
+                "correlation_id": payload.correlation_id,
             },
             timeout=5.0,
         )

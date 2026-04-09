@@ -7,3 +7,5 @@ def test_exchange_repository_handles_shadow_mode() -> None:
         ExchangeOrderRequest(exchange="binance", asset="BTCUSDT", side="BUY", quantity=1.0, shadow_mode=True)
     )
     assert result.status == "SIMULATED_FILLED"
+    assert result.mode == "shadow"
+    assert result.exchange_payload_signature

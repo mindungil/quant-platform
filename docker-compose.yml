@@ -1,186 +1,146 @@
+# =============================================================
+# Quant Platform — Simplified Compose (5 containers)
+#
+#   backend   — all Python microservices (20 uvicorn processes)
+#   frontend  — Next.js product UI
+#   db        — TimescaleDB + pgvector (single database server)
+#   redis     — cache + realtime pub/sub
+#   nats      — JetStream event bus
+#
+# Optional: prometheus + grafana via --profile observability
+# =============================================================
+
 services:
-  market-data:
-    build:
-      context: ./services/market-data
-    env_file:
-      - .env.example
-    ports:
-      - "8001:8000"
-    depends_on:
-      - nats
 
-  feature-store:
-    build:
-      context: ./services/feature-store
-    env_file:
-      - .env.example
-    ports:
-      - "8002:8000"
-    depends_on:
-      - nats
+  # ---- Infrastructure ----
 
-  signal-service:
+  db:
     build:
-      context: ./services/signal-service
-    env_file:
-      - .env.example
-    ports:
-      - "8003:8000"
-    depends_on:
-      - feature-store
-      - nats
-
-  memory-service:
-    build:
-      context: ./services/memory-service
-    env_file:
-      - .env.example
-    ports:
-      - "8004:8000"
-
-  strategy-registry:
-    build:
-      context: ./services/strategy-registry
-    env_file:
-      - .env.example
-    ports:
-      - "8005:8000"
-
-  crypto-agent:
-    build:
-      context: ./services/crypto-agent
-    env_file:
-      - .env.example
-    ports:
-      - "8006:8000"
-    depends_on:
-      - signal-service
-      - memory-service
-      - strategy-registry
-      - nats
-  backtest-service:
-    build:
-      context: ./services/backtest-service
-    env_file:
-      - .env.example
-    ports:
-      - "8007:8000"
-  exchange-adapter:
-    build:
-      context: ./services/exchange-adapter
-    env_file:
-      - .env.example
-    ports:
-      - "8008:8000"
-  risk-service:
-    build:
-      context: ./services/risk-service
-    env_file:
-      - .env.example
-    ports:
-      - "8009:8000"
-  credential-store:
-    build:
-      context: ./services/credential-store
-    env_file:
-      - .env.example
-    ports:
-      - "8010:8000"
-  order-service:
-    build:
-      context: ./services/order-service
-    env_file:
-      - .env.example
-    ports:
-      - "8011:8000"
-    depends_on:
-      - risk-service
-      - exchange-adapter
-      - credential-store
-  portfolio-service:
-    build:
-      context: ./services/portfolio-service
-    env_file:
-      - .env.example
-    ports:
-      - "8012:8000"
-  statistics-service:
-    build:
-      context: ./services/statistics-service
-    env_file:
-      - .env.example
-    ports:
-      - "8013:8000"
-  orchestrator-agent:
-    build:
-      context: ./services/orchestrator-agent
-    env_file:
-      - .env.example
-    ports:
-      - "8014:8000"
-    depends_on:
-      - portfolio-service
-      - statistics-service
-      - risk-service
-  etf-agent:
-    build:
-      context: ./services/etf-agent
-    env_file:
-      - .env.example
-    ports:
-      - "8015:8000"
-  stock-agent:
-    build:
-      context: ./services/stock-agent
-    env_file:
-      - .env.example
-    ports:
-      - "8016:8000"
-  api-gateway:
-    build:
-      context: ./services/api-gateway
-    env_file:
-      - .env.example
-    ports:
-      - "8017:8000"
-    depends_on:
-      - signal-service
-      - portfolio-service
-      - statistics-service
-  frontend:
-    build:
-      context: ./services/frontend
-    env_file:
-      - .env.example
-    ports:
-      - "8018:8000"
-    depends_on:
-      - api-gateway
-
-  nats:
-    image: nats:2.11-alpine
-    ports:
-      - "4222:4222"
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-
-  postgres:
-    image: pgvector/pgvector:pg16
+      context: ./infra/db
     environment:
       POSTGRES_DB: platform
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d platform && pg_isready -U postgres -d market"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
-  timescaledb:
-    image: timescale/timescaledb:latest-pg16
-    environment:
-      POSTGRES_DB: market
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+  redis:
+    image: redis:7-alpine
     ports:
-      - "5433:5432"
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  nats:
+    image: nats:2.11-alpine
+    command: ["-js", "-m", "8222"]
+    ports:
+      - "127.0.0.1:4222:4222"
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 4222"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ---- Application ----
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    env_file:
+      - .env.example
+      - .env
+    ports:
+      - "127.0.0.1:8001:8001"   # market-data (internal only)
+      - "127.0.0.1:8002:8002"   # feature-store (internal only)
+      - "127.0.0.1:8003:8003"   # signal-service (internal only)
+      - "127.0.0.1:8004:8004"   # memory-service (internal only)
+      - "127.0.0.1:8005:8005"   # strategy-registry (internal only)
+      - "127.0.0.1:8006:8006"   # crypto-agent (internal only)
+      - "127.0.0.1:8007:8007"   # backtest-service (internal only)
+      - "127.0.0.1:8008:8008"   # exchange-adapter (internal only)
+      - "127.0.0.1:8009:8009"   # risk-service (internal only)
+      - "127.0.0.1:8010:8010"   # credential-store (internal only)
+      - "127.0.0.1:8011:8011"   # order-service (internal only)
+      - "127.0.0.1:8012:8012"   # portfolio-service (internal only)
+      - "127.0.0.1:8013:8013"   # statistics-service (internal only)
+      - "127.0.0.1:8014:8014"   # orchestrator-agent (internal only)
+      - "127.0.0.1:8015:8015"   # etf-agent (internal only)
+      - "127.0.0.1:8016:8016"   # stock-agent (internal only)
+      - "8017:8017"              # api-gateway (public)
+      - "127.0.0.1:8019:8019"   # auth-service (internal only)
+      - "127.0.0.1:8020:8020"   # external-data-service (internal only)
+      - "127.0.0.1:8021:8021"   # llm-gateway (internal only)
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8017/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  frontend:
+    build:
+      context: ./services/frontend
+      dockerfile: Dockerfile
+    env_file:
+      - .env.example
+      - .env
+    environment:
+      - API_GATEWAY_BASE_URL=http://backend:8017
+    ports:
+      - "8018:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3000', (res) => process.exit(res.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ---- Observability (optional) ----
+
+  prometheus:
+    image: prom/prometheus:v3.4.1
+    profiles: ["observability"]
+    command: ["--config.file=/etc/prometheus/prometheus.yml"]
+    volumes:
+      - ./infra/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  grafana:
+    image: grafana/grafana:11.6.0
+    profiles: ["observability"]
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3001:3000"
+    depends_on:
+      prometheus:
+        condition: service_started
+
+volumes:
+  db-data:

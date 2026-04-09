@@ -1,4 +1,6 @@
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+UTC = timezone.utc
 
 from app.core.indicators import calculate_features
 from app.models.feature import CandlePayload

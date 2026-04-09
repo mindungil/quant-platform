@@ -1,32 +1,39 @@
-import json
-
-from nats.aio.client import Client as NATS
-
 from app.core.config import settings
 from app.core.engine import run_decision_loop
+from shared.events import JetStreamBus
+from shared.persistence import RedisStore
 
 
 class CryptoAgentConsumer:
     def __init__(self) -> None:
-        self._client: NATS | None = None
+        self._bus = JetStreamBus(
+            nats_url=settings.nats_url,
+            redis_store=RedisStore(settings.redis_url),
+            enabled=settings.enable_nats,
+        )
         self._subscription = None
 
     async def start(self) -> None:
-        if not settings.enable_nats:
-            return
-        self._client = NATS()
-        await self._client.connect(settings.nats_url)
-        self._subscription = await self._client.subscribe("signal.threshold.crossed.crypto", cb=self._handle)
+        await self._bus.connect()
+        await self._bus.ensure_stream(settings.jetstream_stream_name, ["signal.threshold.crossed.*"])
+        self._subscription = await self._bus.subscribe(
+            stream=settings.jetstream_stream_name,
+            subject="signal.threshold.crossed.crypto",
+            durable="crypto-agent-consumer",
+            callback=self._handle,
+            dlq_subject="signal.threshold.crossed.crypto.dlq",
+        )
 
     async def stop(self) -> None:
-        if self._subscription is not None:
-            await self._subscription.unsubscribe()
-        if self._client is not None and self._client.is_connected:
-            await self._client.drain()
+        await self._bus.close()
 
-    async def _handle(self, message) -> None:
-        payload = json.loads(message.data.decode("utf-8"))
-        run_decision_loop(payload["asset"])
+    async def _handle(self, payload: dict) -> None:
+        event_data = payload["data"]
+        run_decision_loop(
+            event_data["asset"],
+            user_id=event_data.get("strategy_user_id"),
+            correlation_id=payload.get("correlation_id"),
+        )
 
 
 consumer = CryptoAgentConsumer()

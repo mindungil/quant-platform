@@ -1,0 +1,506 @@
+{
+  "uid": "quant-business-metrics",
+  "title": "Quant Business Metrics",
+  "description": "Trading activity, risk approvals, signals, portfolio fills, and agent/order latency",
+  "tags": ["quant", "business", "trading"],
+  "editable": true,
+  "graphTooltip": 1,
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": ["5s", "10s", "30s", "1m", "5m"]
+  },
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "templating": {
+    "list": [
+      {
+        "type": "interval",
+        "name": "interval",
+        "label": "Interval",
+        "current": { "selected": true, "text": "1m", "value": "1m" },
+        "options": [
+          { "selected": false, "text": "10s", "value": "10s" },
+          { "selected": true, "text": "1m", "value": "1m" },
+          { "selected": false, "text": "5m", "value": "5m" },
+          { "selected": false, "text": "15m", "value": "15m" }
+        ],
+        "query": "10s,1m,5m,15m"
+      }
+    ]
+  },
+  "annotations": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Trading Activity",
+      "description": "Orders, fills, and agent decisions per minute",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "fillOpacity": 15,
+            "pointSize": 5,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "lineWidth": 2,
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisLabel": "requests/min",
+            "stacking": { "mode": "none" }
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max", "lastNotNull"] }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(orders_total[$interval]))",
+          "legendFormat": "Orders/sec",
+          "datasource": "Prometheus"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate(orders_total{status=\"FILLED\"}[$interval]))",
+          "legendFormat": "Fills/sec",
+          "datasource": "Prometheus"
+        },
+        {
+          "refId": "C",
+          "expr": "sum(rate(agent_decisions_total[$interval]))",
+          "legendFormat": "Agent Decisions/sec",
+          "datasource": "Prometheus"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Risk Overview - Approval Rate",
+      "description": "Percentage of risk approvals vs rejections",
+      "type": "gauge",
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 0 },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 50 },
+              { "color": "green", "value": 80 }
+            ]
+          },
+          "min": 0,
+          "max": 100,
+          "unit": "percent",
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(risk_approvals_total{result=\"approved\"}[5m])) / sum(rate(risk_approvals_total[5m])) * 100",
+          "legendFormat": "Approval Rate %",
+          "datasource": "Prometheus"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Risk Rejection Breakdown",
+      "description": "Distribution of risk approval results by level",
+      "type": "piechart",
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 0 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] },
+        "pieType": "donut",
+        "tooltip": { "mode": "single" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (result, level) (increase(risk_approvals_total[1h]))",
+          "legendFormat": "{{result}} / {{level}}",
+          "datasource": "Prometheus"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Signal Distribution",
+      "description": "BUY / SELL / HOLD signal ratio",
+      "type": "bargauge",
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "BUY" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "SELL" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "HOLD" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "yellow" } }]
+          }
+        ]
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "minVizWidth": 8,
+        "minVizHeight": 16
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (direction) (increase(signals_evaluated_total[1h]))",
+          "legendFormat": "{{direction}}",
+          "datasource": "Prometheus"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Portfolio Fills (BUY vs SELL)",
+      "description": "Portfolio fill rate by side over time",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": { "mode": "none" },
+            "axisBorderShow": false,
+            "axisLabel": "fills/min"
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "BUY" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "SELL" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["sum"] }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (side) (rate(portfolio_fills_total[$interval]))",
+          "legendFormat": "{{side}}",
+          "datasource": "Prometheus"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Agent Orders by Status",
+      "description": "Order outcomes: FILLED, REJECTED, FAILED split by shadow mode",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": { "mode": "none" },
+            "axisBorderShow": false,
+            "axisLabel": "orders/sec"
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "lastNotNull"] }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (status, shadow_mode) (rate(orders_total[$interval]))",
+          "legendFormat": "{{status}} (shadow={{shadow_mode}})",
+          "datasource": "Prometheus"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Agent Decision Latency (p50 / p95 / p99)",
+      "description": "Decision loop latency percentiles",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": { "mode": "none" },
+            "axisBorderShow": false,
+            "axisLabel": "seconds"
+          },
+          "unit": "s"
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "p99" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } },
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "p95" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "p50" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max", "lastNotNull"] }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.50, sum(rate(agent_decision_latency_seconds_bucket[$interval])) by (le))",
+          "legendFormat": "p50",
+          "datasource": "Prometheus"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum(rate(agent_decision_latency_seconds_bucket[$interval])) by (le))",
+          "legendFormat": "p95",
+          "datasource": "Prometheus"
+        },
+        {
+          "refId": "C",
+          "expr": "histogram_quantile(0.99, sum(rate(agent_decision_latency_seconds_bucket[$interval])) by (le))",
+          "legendFormat": "p99",
+          "datasource": "Prometheus"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Order Fill Latency Distribution",
+      "description": "Order fill latency histogram heatmap",
+      "type": "histogram",
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 1,
+            "stacking": { "mode": "none" }
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "bucketSize": "",
+        "combine": false,
+        "fillOpacity": 80,
+        "gradientMode": "scheme",
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "single" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(order_fill_latency_seconds_bucket[$interval])) by (le)",
+          "legendFormat": "{{le}}",
+          "format": "heatmap",
+          "datasource": "Prometheus"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Risk Approval Latency (p50 / p95 / p99)",
+      "description": "Risk engine latency percentiles",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": { "mode": "none" },
+            "axisBorderShow": false,
+            "axisLabel": "seconds"
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max", "lastNotNull"] }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.50, sum(rate(risk_approval_latency_seconds_bucket[$interval])) by (le))",
+          "legendFormat": "p50",
+          "datasource": "Prometheus"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum(rate(risk_approval_latency_seconds_bucket[$interval])) by (le))",
+          "legendFormat": "p95",
+          "datasource": "Prometheus"
+        },
+        {
+          "refId": "C",
+          "expr": "histogram_quantile(0.99, sum(rate(risk_approval_latency_seconds_bucket[$interval])) by (le))",
+          "legendFormat": "p99",
+          "datasource": "Prometheus"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Agent Decisions by Action",
+      "description": "BUY/SELL/HOLD decisions with threshold crossed breakdown",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": { "mode": "normal" },
+            "axisBorderShow": false,
+            "axisLabel": "decisions/sec"
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "desc" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["sum", "lastNotNull"] }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (action, threshold_crossed) (rate(agent_decisions_total[$interval]))",
+          "legendFormat": "{{action}} (crossed={{threshold_crossed}})",
+          "datasource": "Prometheus"
+        }
+      ]
+    }
+  ]
+}

@@ -1,4 +1,32 @@
+from datetime import timedelta
+
 from app.models.candle import CandlePayload, ValidationResult
+
+
+def detect_gaps(candles: list[CandlePayload], expected_interval_minutes: int = 60) -> list[dict]:
+    """Return list of detected gaps with from_ts, to_ts, missing_count."""
+    if len(candles) < 2:
+        return []
+
+    sorted_candles = sorted(candles, key=lambda c: c.timestamp)
+    interval = timedelta(minutes=expected_interval_minutes)
+    gaps: list[dict] = []
+
+    for i in range(1, len(sorted_candles)):
+        prev_ts = sorted_candles[i - 1].timestamp
+        curr_ts = sorted_candles[i].timestamp
+        diff = curr_ts - prev_ts
+
+        if diff > interval * 1.5:  # Allow 50% tolerance before flagging
+            missing_count = int(diff / interval) - 1
+            if missing_count > 0:
+                gaps.append({
+                    "from_ts": prev_ts.isoformat(),
+                    "to_ts": curr_ts.isoformat(),
+                    "missing_count": missing_count,
+                })
+
+    return gaps
 
 
 def validate_candle_transition(
