@@ -15,6 +15,7 @@ from shared.alpha.kalman_trend import KalmanTrendAlpha
 from shared.alpha.mean_reversion import MeanReversionAlpha
 from shared.alpha.ml_forest import MetaForestAlpha
 from shared.alpha.ml_meta import MetaMLAlpha
+from shared.alpha.online_rls import OnlineRLSAlpha
 from shared.alpha.momentum_ensemble import MomentumEnsembleAlpha
 from shared.alpha.stat_arb import StatArbAlpha
 from shared.alpha.trend_breakout import TrendBreakoutAlpha
@@ -33,6 +34,7 @@ ALPHA_REGISTRY: dict[str, Callable[[AlphaConfig | None], Alpha]] = {
     "ml_meta": lambda cfg=None: MetaMLAlpha(cfg),
     "kalman_trend": lambda cfg=None: KalmanTrendAlpha(cfg),
     "ml_forest": lambda cfg=None: MetaForestAlpha(cfg),
+    "online_rls": lambda cfg=None: OnlineRLSAlpha(cfg),
 }
 
 

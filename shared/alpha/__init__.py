@@ -23,6 +23,7 @@ from shared.alpha.cross_sectional import CrossSectionalMomentumAlpha
 from shared.alpha.ml_meta import MetaMLAlpha
 from shared.alpha.kalman_trend import KalmanTrendAlpha
 from shared.alpha.ml_forest import MetaForestAlpha
+from shared.alpha.online_rls import OnlineRLSAlpha
 
 __all__ = [
     "Alpha",
@@ -41,4 +42,5 @@ __all__ = [
     "MetaMLAlpha",
     "KalmanTrendAlpha",
     "MetaForestAlpha",
+    "OnlineRLSAlpha",
 ]
