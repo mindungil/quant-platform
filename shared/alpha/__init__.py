@@ -21,6 +21,8 @@ from shared.alpha.carry import CarryAlpha
 from shared.alpha.stat_arb import StatArbAlpha
 from shared.alpha.cross_sectional import CrossSectionalMomentumAlpha
 from shared.alpha.ml_meta import MetaMLAlpha
+from shared.alpha.kalman_trend import KalmanTrendAlpha
+from shared.alpha.ml_forest import MetaForestAlpha
 
 __all__ = [
     "Alpha",
@@ -37,4 +39,6 @@ __all__ = [
     "StatArbAlpha",
     "CrossSectionalMomentumAlpha",
     "MetaMLAlpha",
+    "KalmanTrendAlpha",
+    "MetaForestAlpha",
 ]

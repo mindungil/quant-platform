@@ -11,7 +11,9 @@ from typing import Callable
 from shared.alpha.base import Alpha, AlphaConfig
 from shared.alpha.carry import CarryAlpha
 from shared.alpha.cross_sectional import CrossSectionalMomentumAlpha
+from shared.alpha.kalman_trend import KalmanTrendAlpha
 from shared.alpha.mean_reversion import MeanReversionAlpha
+from shared.alpha.ml_forest import MetaForestAlpha
 from shared.alpha.ml_meta import MetaMLAlpha
 from shared.alpha.momentum_ensemble import MomentumEnsembleAlpha
 from shared.alpha.stat_arb import StatArbAlpha
@@ -29,6 +31,8 @@ ALPHA_REGISTRY: dict[str, Callable[[AlphaConfig | None], Alpha]] = {
     "stat_arb": lambda cfg=None: StatArbAlpha(cfg),
     "cross_sectional_momentum": lambda cfg=None: CrossSectionalMomentumAlpha(cfg),
     "ml_meta": lambda cfg=None: MetaMLAlpha(cfg),
+    "kalman_trend": lambda cfg=None: KalmanTrendAlpha(cfg),
+    "ml_forest": lambda cfg=None: MetaForestAlpha(cfg),
 }
 
 

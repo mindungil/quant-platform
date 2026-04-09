@@ -25,6 +25,7 @@ import numpy as np
 import pandas as pd
 
 from shared.portfolio.hrp import hrp_weights
+from shared.portfolio.nco import NCOConfig, nco_weights
 
 
 @dataclass
@@ -218,6 +219,18 @@ class EnsembleAllocator:
                 else:
                     res = hrp_weights(arr, list(cols))
                     last_w = np.array([res["weights"].get(c, 0.0) for c in cols])
+            elif mode == "nco":
+                arr = window.values
+                non_flat = (arr.std(axis=0) > 1e-9).sum()
+                if non_flat < 2:
+                    last_w = np.full(n, 1.0 / n)
+                else:
+                    cov = np.cov(arr, rowvar=False)
+                    last_w = nco_weights(
+                        cov, NCOConfig(max_clusters=min(4, n), n_obs_for_denoise=len(window))
+                    )
+                    if not np.isfinite(last_w).all() or last_w.sum() <= 0:
+                        last_w = np.full(n, 1.0 / n)
             else:
                 last_w = np.full(n, 1.0 / n)
 

@@ -142,6 +142,8 @@ class StrategyRepository:
             ("vol_breakout",      "Crypto Volatility Breakout", vol_cycle_synth),
             ("mean_reversion",    "Crypto Mean Reversion",     ranging_synth),
             ("ml_meta",           "Crypto ML Meta-Alpha",      trending_synth),
+            ("kalman_trend",      "Crypto Kalman Trend",       trending_synth),
+            ("ml_forest",         "Crypto Meta-Forest (Triple Barrier)", trending_synth),
         ]
 
         runner = BacktestRunner(
