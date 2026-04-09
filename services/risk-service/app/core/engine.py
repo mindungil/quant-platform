@@ -103,8 +103,43 @@ def _classify_volatility(realized_vol: float) -> str:
     return "normal"
 
 
+def _resolve_safe_defaults(payload: RiskApprovalRequest) -> None:
+    """Mutate the payload to enforce non-zero, sane risk limits.
+
+    The order-service was historically able to send `max_notional=0` and
+    `exposure_limit=0` (or 1.0 default) and have the gate evaluate them as
+    written. That meant a sloppy caller effectively bypassed the limit
+    (because requested_notional < 0 is impossible) — but more importantly,
+    a missing field meant "no limit", which is unsafe.
+
+    With this resolver, missing/zero fields collapse to env-driven defaults.
+    Set RISK_DEFAULT_MAX_NOTIONAL / RISK_DEFAULT_EXPOSURE_LIMIT to override.
+    """
+    import os
+    default_max_notional = float(os.getenv("RISK_DEFAULT_MAX_NOTIONAL", "1000.0"))
+    default_exposure_limit = float(os.getenv("RISK_DEFAULT_EXPOSURE_LIMIT", "5000.0"))
+
+    if payload.max_notional is None or payload.max_notional <= 0:
+        payload.max_notional = default_max_notional
+    if payload.exposure_limit is None or payload.exposure_limit <= 0:
+        payload.exposure_limit = default_exposure_limit
+
+
+# Hard ceiling: any single order exceeding this notional in USD is rejected
+# regardless of per-strategy max_notional. Provides a tail-safety bound when
+# misconfigured strategies bypass per-request limits.
+HARD_NOTIONAL_CEILING = float(__import__("os").getenv("RISK_HARD_NOTIONAL_CEILING", "100000.0"))
+
+# Hard ceiling: portfolio realized vol above this triggers rejection
+HARD_VOL_CEILING = float(__import__("os").getenv("RISK_HARD_VOL_CEILING", "1.0"))  # 100% annualized
+
+# Daily-loss limit (fraction of portfolio)
+DAILY_LOSS_LIMIT = float(__import__("os").getenv("RISK_DAILY_LOSS_LIMIT", "0.05"))
+
+
 def approve_order(payload: RiskApprovalRequest) -> RiskApprovalResponse:
     _start = time.monotonic()
+    _resolve_safe_defaults(payload)
     exposure_ratio = 0.0 if payload.exposure_limit == 0 else payload.current_exposure / payload.exposure_limit
 
     # Calculate VaR/CVaR from recent returns
@@ -156,11 +191,39 @@ def approve_order(payload: RiskApprovalRequest) -> RiskApprovalResponse:
             "HALT",
         )
 
+    # Hard ceiling — independent of per-strategy max_notional. This is the
+    # backstop for misconfigured callers.
+    if payload.requested_notional > HARD_NOTIONAL_CEILING:
+        return _make_response(
+            False,
+            f"hard_notional_ceiling_exceeded ({payload.requested_notional:.0f} > {HARD_NOTIONAL_CEILING:.0f})",
+            "HALT",
+        )
+
     if payload.requested_notional > payload.max_notional:
         return _make_response(False, "notional_limit_exceeded", "HALT")
 
     if payload.current_exposure + payload.requested_notional > payload.exposure_limit:
         return _make_response(False, "exposure_limit_exceeded", "HALT")
+
+    # Realized-vol ceiling: if recent vol is extreme, halt new entries
+    if realized_vol > HARD_VOL_CEILING:
+        return _make_response(
+            False,
+            f"realized_vol_ceiling_exceeded ({realized_vol:.2f} > {HARD_VOL_CEILING:.2f})",
+            "HALT",
+        )
+
+    # Daily loss limit: if today's PnL is below -DAILY_LOSS_LIMIT * portfolio_value, halt
+    if payload.recent_daily_returns and payload.portfolio_value > 0:
+        # Latest "daily" return is the last element. We treat it as today's bar.
+        today_ret = payload.recent_daily_returns[-1] if payload.recent_daily_returns else 0.0
+        if today_ret < -DAILY_LOSS_LIMIT:
+            return _make_response(
+                False,
+                f"daily_loss_limit_breached ({today_ret:.3f} < -{DAILY_LOSS_LIMIT})",
+                "HALT",
+            )
 
     # VaR-based check: reject if single order > 50% of daily VaR
     if var_95 > 0 and payload.requested_notional > var_95 * 0.5:

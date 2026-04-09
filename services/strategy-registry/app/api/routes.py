@@ -11,6 +11,32 @@ from shared.health import check_sql, health_payload
 router = APIRouter()
 
 
+def _is_backtest_passed(bt: dict | None) -> bool:
+    """A strategy may transition to ACTIVE / SHADOW only when its backtest
+    payload says PASSED *and* carries actual metrics. We require:
+      - status == "PASSED"
+      - metrics.sharpe present and finite
+      - metrics.n_obs >= 250 (one trading year of hourly bars or ~1y daily)
+
+    The previous "source==bootstrap_seed bypass" allowed seed strategies to
+    walk straight to ACTIVE with no evidence — removed.
+    """
+    if not isinstance(bt, dict) or bt.get("status") != "PASSED":
+        return False
+    metrics = bt.get("metrics") or {}
+    sharpe = metrics.get("sharpe")
+    n_obs = metrics.get("n_obs", 0)
+    if sharpe is None:
+        return False
+    try:
+        sharpe = float(sharpe)
+    except (TypeError, ValueError):
+        return False
+    if sharpe != sharpe or sharpe == float("inf") or sharpe == float("-inf"):
+        return False
+    return int(n_obs or 0) >= 250
+
+
 @router.get("/health")
 def health() -> dict:
     return health_payload(
@@ -142,19 +168,23 @@ def update_status(
             status_code=409,
             detail=f"invalid_transition: {strategy.status} -> {payload.status}",
         )
+    # Strict promotion gating: a strategy may only become ACTIVE / SHADOW
+    # if it carries a real PASSED backtest. The previous code allowed any
+    # strategy whose source string was the literal "bootstrap_seed" to
+    # bypass this check — that escape hatch is removed. Bootstrapped
+    # strategies must now run a real shared.backtest.runner pass at seed
+    # time and persist the metrics, just like every other strategy.
     if payload.status == "ACTIVE" and strategy.status == "DRAFT":
-        bt = strategy.backtest_results or {}
-        if bt.get("status") != "PASSED" and bt.get("source") != "bootstrap_seed":
+        if not _is_backtest_passed(strategy.backtest_results):
             raise HTTPException(
                 status_code=409,
-                detail="backtest_not_passed: DRAFT->ACTIVE requires backtest PASSED",
+                detail="backtest_not_passed: DRAFT->ACTIVE requires PASSED backtest with metrics",
             )
     if payload.status == "SHADOW" and strategy.status == "TESTED":
-        bt = strategy.backtest_results or {}
-        if bt.get("status") != "PASSED" and bt.get("source") != "bootstrap_seed":
+        if not _is_backtest_passed(strategy.backtest_results):
             raise HTTPException(
                 status_code=409,
-                detail="backtest_not_passed: TESTED->SHADOW requires backtest PASSED",
+                detail="backtest_not_passed: TESTED->SHADOW requires PASSED backtest with metrics",
             )
     strategy = strategy_repository.update_status(strategy_id, payload.status)
     if strategy is None:

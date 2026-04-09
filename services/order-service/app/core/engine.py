@@ -7,6 +7,7 @@ from prometheus_client import Counter, Histogram
 
 from app.core.config import settings
 from app.core.protection import protection_manager
+from app.core.twap import TwapPlan, execute_twap
 from app.db.repository import order_repository
 from app.models.order import CredentialSnapshot, FillSnapshot, OrderRequest, OrderResponse, PortfolioSnapshot, StatisticsSnapshot
 from app.services.exchange_client import ExchangeClient
@@ -59,7 +60,40 @@ def _record_order_metrics(status: str, shadow_mode: bool, start: float, exchange
         order_fills_total.labels(exchange=exchange, asset=asset).inc()
 
 
-def process_order(payload: OrderRequest) -> OrderResponse:
+def _process_order_single(payload: OrderRequest) -> "OrderResponse":
+    """Execute a single, non-sliced order. This is the original path; the
+    public `process_order` wraps this in a TWAP slicer for large orders."""
+    return _process_order_impl(payload)
+
+
+def process_order(payload: OrderRequest) -> "OrderResponse":
+    """Public entry point. For live orders above the TWAP threshold, splits
+    into N children and submits them serially via the same path. For shadow
+    or small orders, the original single-shot path is used."""
+    plan = TwapPlan.from_request(payload)
+    if plan is None:
+        return _process_order_impl(payload)
+
+    children = execute_twap(payload, plan, _process_order_impl)
+    if not children:
+        # Slicer aborted before any child went through — produce a synthetic FAILED response
+        return OrderResponse(
+            order_id=str(uuid4()),
+            user_id=payload.user_id,
+            asset=payload.asset,
+            side=payload.side,
+            quantity=0.0,
+            status="FAILED",
+            risk_reason="twap_no_children_executed",
+            exchange=payload.exchange,
+            shadow_mode=payload.shadow_mode,
+            credential=CredentialSnapshot(user_id=payload.user_id, exchange=payload.exchange, loaded=False),
+        )
+    # Last child carries the latest snapshot — return that
+    return children[-1]
+
+
+def _process_order_impl(payload: OrderRequest) -> OrderResponse:
     _start = time.monotonic()
 
     # Idempotency check: return cached result if duplicate
@@ -396,6 +430,71 @@ def process_order(payload: OrderRequest) -> OrderResponse:
         idempotency_key=payload.idempotency_key,
     )
     publisher.publish_order_filled(payload, response)
+
+    # Shadow ledger: when a strategy is in shadow/paper mode, every "fill" is
+    # a paper trade. Record it so the strategy-registry's promotion gate has
+    # real metrics to evaluate. This closes the SHADOW → ACTIVE loop.
+    if (
+        payload.shadow_mode
+        and response.status == "FILLED"
+        and payload.strategy_id
+        and response.fill is not None
+    ):
+        try:
+            from shared.shadow import ShadowFill
+            from shared.shadow.recorder import get_recorder
+            recorder = get_recorder()
+            # Heuristic realized PnL: if there's an existing open position from
+            # the portfolio snapshot, treat this fill as a close. Otherwise it's
+            # an open. We don't have full per-strategy position bookkeeping in
+            # the order-service so we use a simple "every fill is a round-trip
+            # at the requested notional" model — the goal is to *track relative
+            # performance*, not to be a portfolio accountant.
+            entry = float(response.fill.filled_price or payload.price or 0.0)
+            qty = float(response.fill.filled_quantity or payload.quantity or 0.0)
+            # PnL approximation: for a closing fill, pnl_pct from previous mark.
+            # We don't have a previous mark, so for the shadow ledger we record
+            # signed notional change driven by direction; the recorder uses
+            # this as the "trade outcome" series to compute Sharpe over time.
+            sign = 1.0 if payload.side.upper() == "BUY" else -1.0
+            # Pull most recent quote for a quick-and-dirty mark via portfolio snapshot
+            mark = entry
+            if response.portfolio is not None:
+                try:
+                    pos = next((p for p in (response.portfolio.positions or []) if getattr(p, "asset", None) == payload.asset), None)
+                    if pos is not None and getattr(pos, "average_price", None):
+                        mark = float(pos.average_price)
+                except Exception:
+                    mark = entry
+            # The shadow ledger needs realized pnl to compute metrics; for the
+            # bar-by-bar shadow strategy this is approximated as 0 on open
+            # fills and pnl_pct * notional on closing ones. We mark every fill
+            # as realized=True with pnl=0 by default; the orchestrator promotes
+            # by counting trades + checking subsequent strategy state.
+            recorder.record_fill(
+                ShadowFill(
+                    strategy_id=str(payload.strategy_id),
+                    user_id=str(payload.user_id),
+                    asset=str(payload.asset),
+                    side=str(payload.side).upper(),
+                    quantity=qty,
+                    entry_price=entry,
+                    exit_price=mark if mark != entry else None,
+                    pnl=(mark - entry) * qty * sign if mark != entry else 0.0,
+                    realized=True,
+                )
+            )
+            # Best-effort push to registry — don't block the order path
+            recorder.push_snapshot(str(payload.strategy_id))
+        except Exception:
+            logger.exception(
+                "shadow_recorder_failed",
+                extra={
+                    "service": "order-service",
+                    "order_id": response.order_id,
+                    "strategy_id": payload.strategy_id,
+                },
+            )
 
     # Create protective orders (stop-loss, take-profit, trailing stop) for filled orders
     if response.status == "FILLED" and response.fill is not None:

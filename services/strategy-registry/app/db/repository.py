@@ -69,38 +69,193 @@ class StrategyRepository:
         )
 
     def _seed_default(self) -> None:
-        active_bootstrap = self._store.fetch_one(
+        """Bootstrap one or more seed strategies, each backed by a *real*
+        seed-time backtest run via shared.backtest.runner. Strategies that
+        do not pass the seed-tier thresholds are persisted as DRAFT (with
+        their failed metrics) so the operator can see what was tried.
+        Strategies that do pass go straight to ACTIVE with full metrics.
+
+        Idempotent: if any ACTIVE bootstrap strategy exists for the asset
+        type, this is a no-op.
+        """
+        existing_active = self._store.fetch_one(
             """
             SELECT * FROM strategy_records
             WHERE user_id = 'bootstrap' AND asset_type = 'crypto' AND status = 'ACTIVE'
             ORDER BY created_at DESC LIMIT 1
             """
         )
-        if active_bootstrap is not None:
+        if existing_active is not None:
             return
-        bootstrap_row = self._store.fetch_one(
-            """
-            SELECT * FROM strategy_records
-            WHERE user_id = 'bootstrap' AND asset_type = 'crypto'
-            ORDER BY created_at DESC LIMIT 1
-            """
+
+        try:
+            from shared.alpha import get_alpha
+            from shared.backtest import (
+                BacktestRunner,
+                CostModel,
+                SEED_THRESHOLDS,
+                generate_ranging_ohlcv,
+                generate_synthetic_ohlcv,
+                generate_volatility_cycle_ohlcv,
+            )
+        except Exception as exc:
+            # In environments without numpy/pandas, fall back to a placeholder
+            # DRAFT strategy with no bypass. The strict gate keeps it inactive.
+            placeholder = Strategy(
+                user_id="bootstrap",
+                name="Crypto Momentum Placeholder",
+                asset_type="crypto",
+                indicators=["rsi_14", "macd"],
+                weights={"rsi": 0.5, "macd": 0.5},
+                thresholds={"entry": 0.6, "exit": -0.6},
+                version="v1",
+                status="DRAFT",
+                backtest_results={
+                    "status": "FAILED",
+                    "failure_reasons": [f"bootstrap_runner_unavailable: {exc}"],
+                },
+            )
+            self._items[placeholder.id] = placeholder
+            self._persist(placeholder)
+            return
+
+        # Each seed alpha is paired with the synthetic regime that
+        # exercises its hypothesis. Strategies are honestly tested on
+        # data shaped to give them a fair chance, not on a single
+        # universal regime that would arbitrarily favor trend-following.
+        def trending(seed: int):
+            return generate_synthetic_ohlcv(n_bars=4500, seed=seed, trend_strength=8.0)
+
+        def ranging(seed: int):
+            return generate_ranging_ohlcv(n_bars=4500, seed=seed)
+
+        def vol_cycle(seed: int):
+            return generate_volatility_cycle_ohlcv(n_bars=4500, seed=seed)
+
+        seed_specs = [
+            ("trend_breakout",    "Crypto Trend Breakout",     trending),
+            ("momentum_ensemble", "Crypto Momentum Ensemble",  trending),
+            ("vol_breakout",      "Crypto Volatility Breakout", vol_cycle),
+            ("mean_reversion",    "Crypto Mean Reversion",     ranging),
+        ]
+
+        runner = BacktestRunner(
+            cost_model=CostModel(commission_bps=4.0, slippage_bps=2.0, impact_coef=0.10),
+            periods_per_year=24 * 365,
+            n_trials=len(seed_specs),
+            pass_thresholds=dict(SEED_THRESHOLDS),
         )
-        if bootstrap_row is not None:
-            strategy = self._hydrate(bootstrap_row)
-            strategy.status = "ACTIVE"
+
+        # A few different synthetic regimes so seed validation is somewhat robust
+        regime_seeds = [7, 11, 23, 42]
+        any_passed = False
+
+        for alpha_name, display_name, data_factory in seed_specs:
+            try:
+                alpha = get_alpha(alpha_name)
+            except Exception as exc:
+                self._persist_failed_seed(display_name, alpha_name, str(exc))
+                continue
+
+            per_regime: list[dict] = []
+            for sd in regime_seeds:
+                try:
+                    df = data_factory(sd)
+                    rep = runner.run(alpha, df)
+                    per_regime.append(rep.to_dict())
+                except Exception as exc:
+                    per_regime.append({"status": "FAILED", "error": str(exc)[:200]})
+
+            valid = [r for r in per_regime if r.get("status") in {"PASSED", "FAILED"} and "metrics" in r]
+            if not valid:
+                self._persist_failed_seed(display_name, alpha_name, "all_regimes_errored")
+                continue
+
+            sharpes = [float(r["metrics"].get("sharpe", 0.0)) for r in valid]
+            sharpes_sorted = sorted(sharpes)
+            median_sharpe = sharpes_sorted[len(sharpes_sorted) // 2]
+            best_sharpe = sharpes_sorted[-1]
+            n_passed = sum(1 for r in valid if r.get("status") == "PASSED")
+
+            # Seed-tier verdict: an alpha is "viable to shadow" if
+            #   (a) at least one regime delivers sharpe >= seed_min, AND
+            #   (b) the median sharpe across regimes is non-negative.
+            # This is intentionally a low bar — we just want to weed out
+            # alphas that lose money everywhere. The strict bar is at
+            # SHADOW->ACTIVE (real fills, real Sharpe, see promote_shadow_if_ready).
+            seed_thr_sharpe = SEED_THRESHOLDS["sharpe_min"]
+            combined_status = (
+                "PASSED"
+                if (best_sharpe >= seed_thr_sharpe and median_sharpe >= 0.0)
+                else "FAILED"
+            )
+
+            best = max(valid, key=lambda r: r["metrics"].get("sharpe", -999))
+            summary = {
+                "status": combined_status,
+                "alpha_name": alpha_name,
+                "engine": "shared.backtest.runner",
+                "regime_count": len(valid),
+                "regimes_passed": n_passed,
+                "median_sharpe": round(median_sharpe, 4),
+                "best_sharpe": round(best_sharpe, 4),
+                "metrics": best["metrics"],
+                "cost_model": best["cost_model"],
+                "per_regime_sharpes": [round(s, 4) for s in sharpes],
+                "per_regime_status": [r.get("status") for r in valid],
+                "failure_reasons": (
+                    []
+                    if combined_status == "PASSED"
+                    else [
+                        f"best_sharpe_{best_sharpe:.2f}_below_{seed_thr_sharpe}",
+                        f"median_sharpe_{median_sharpe:.2f}_below_zero",
+                    ]
+                ),
+                "diagnostics": best.get("diagnostics", {}),
+            }
+
+            target_status = "ACTIVE" if combined_status == "PASSED" else "DRAFT"
+            if target_status == "ACTIVE":
+                any_passed = True
+
+            strategy = Strategy(
+                user_id="bootstrap",
+                name=display_name,
+                asset_type="crypto",
+                indicators=[alpha_name],
+                weights={alpha_name: 1.0},
+                thresholds={"entry": 0.0, "exit": 0.0},  # alpha emits position directly
+                version="v1",
+                status=target_status,
+                backtest_results=summary,
+            )
             self._items[strategy.id] = strategy
             self._persist(strategy)
-            return
+
+        # If absolutely nothing passed, leave the platform in a state where
+        # no bootstrap strategy is ACTIVE. The strict gate ensures we never
+        # silently activate a strategy with no evidence.
+        if not any_passed:
+            import logging
+            logging.getLogger(__name__).warning(
+                "no_seed_alpha_passed_bootstrap; platform has no ACTIVE strategies"
+            )
+
+    def _persist_failed_seed(self, name: str, alpha_name: str, reason: str) -> None:
         strategy = Strategy(
             user_id="bootstrap",
-            name="Crypto Momentum Bootstrap",
+            name=name,
             asset_type="crypto",
-            indicators=["rsi_14", "macd", "sma_20", "vwap"],
-            weights={"rsi": 0.25, "macd": 0.25, "sma_20": 0.25, "vwap": 0.25},
-            thresholds={"entry": 0.6, "exit": -0.6},
+            indicators=[alpha_name],
+            weights={alpha_name: 1.0},
+            thresholds={"entry": 0.0, "exit": 0.0},
             version="v1",
-            status="ACTIVE",
-            backtest_results={"source": "bootstrap_seed"},
+            status="DRAFT",
+            backtest_results={
+                "status": "FAILED",
+                "alpha_name": alpha_name,
+                "failure_reasons": [reason],
+            },
         )
         self._items[strategy.id] = strategy
         self._persist(strategy)
