@@ -20,6 +20,7 @@ from shared.alpha.vol_breakout import VolBreakoutAlpha
 from shared.alpha.carry import CarryAlpha
 from shared.alpha.stat_arb import StatArbAlpha
 from shared.alpha.cross_sectional import CrossSectionalMomentumAlpha
+from shared.alpha.ml_meta import MetaMLAlpha
 
 __all__ = [
     "Alpha",
@@ -35,4 +36,5 @@ __all__ = [
     "CarryAlpha",
     "StatArbAlpha",
     "CrossSectionalMomentumAlpha",
+    "MetaMLAlpha",
 ]

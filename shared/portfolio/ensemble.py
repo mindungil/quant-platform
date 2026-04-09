@@ -39,6 +39,10 @@ class EnsembleConfig:
     kill_window: int = 720                 # rolling DD window
     min_history: int = 100                 # min bars before any allocation fires
     rebalance_every: int = 1               # bars between weight refreshes
+    # Tail-hedge: vol z-score above this triggers an extra position scaledown
+    tail_vol_z_threshold: float = 3.0
+    tail_vol_window: int = 168
+    tail_position_scale: float = 0.3       # multiply position by this when triggered
 
 
 @dataclass
@@ -57,6 +61,8 @@ class EnsembleAllocator:
         self,
         alpha_positions: dict[str, pd.Series],
         underlying_returns: pd.Series,
+        regime_proba: pd.DataFrame | None = None,
+        regime_alpha_affinity: dict[str, dict[str, float]] | None = None,
     ) -> EnsembleResult:
         """Combine alpha positions into a single target-position series.
 
@@ -83,6 +89,26 @@ class EnsembleAllocator:
         alpha_returns = positions_df.multiply(ret, axis=0)
 
         weights = self._compute_weights(alpha_returns)
+
+        # Regime-aware reweighting: multiply each alpha's weight by its
+        # affinity to the current regime, then renormalize. Affinity is
+        # an external prior — typically: trend alphas like TREND_*, MR
+        # alphas like RANGE, vol-breakout likes CRISIS-recovery, etc.
+        if regime_proba is not None and regime_alpha_affinity is not None:
+            regime_proba = regime_proba.reindex(positions_df.index).ffill().fillna(1.0 / regime_proba.shape[1])
+            for alpha_name in positions_df.columns:
+                affinity = regime_alpha_affinity.get(alpha_name, {})
+                if not affinity:
+                    continue
+                # Weighted affinity at each bar = Σ_state proba(state) * affinity(state)
+                aff_series = pd.Series(0.0, index=positions_df.index)
+                for state, score in affinity.items():
+                    if state in regime_proba.columns:
+                        aff_series = aff_series + regime_proba[state] * float(score)
+                weights[alpha_name] = weights[alpha_name] * aff_series
+            # Renormalize after regime weighting
+            row_sums = weights.sum(axis=1).replace(0, 1.0)
+            weights = weights.div(row_sums, axis=0)
 
         # Apply per-alpha cap. The classical "cap then renormalize" loop
         # over-shoots when uncapped weights remain — we use a closed-form
@@ -128,6 +154,9 @@ class EnsembleAllocator:
         # Vol target: scale so realized vol == target
         scale = self._vol_target_scale(combined * ret)
         target = (combined * scale).clip(-self.config.max_gross, self.config.max_gross)
+
+        # Tail hedge: check rolling vol z-score and scale down if extreme
+        target = self._apply_tail_hedge(target, ret)
 
         # Kill switch
         target = self._apply_kill_switch(target, target * ret)
@@ -206,6 +235,21 @@ class EnsembleAllocator:
         rolling_vol = returns.rolling(win, min_periods=max(20, win // 4)).std(ddof=0) * annualizer
         scale = (target / rolling_vol.replace(0, np.nan)).clip(0.0, 3.0)
         return scale.fillna(1.0)
+
+    # ---- tail hedge ----
+
+    def _apply_tail_hedge(self, position: pd.Series, returns: pd.Series) -> pd.Series:
+        win = self.config.tail_vol_window
+        thr = self.config.tail_vol_z_threshold
+        scale = self.config.tail_position_scale
+        rolling_vol = returns.rolling(win, min_periods=20).std(ddof=0)
+        baseline = rolling_vol.rolling(win * 4, min_periods=50).mean()
+        baseline_std = rolling_vol.rolling(win * 4, min_periods=50).std(ddof=0)
+        vol_z = ((rolling_vol - baseline) / baseline_std.replace(0, np.nan)).fillna(0.0)
+        out = position.copy()
+        mask = vol_z > thr
+        out[mask] = out[mask] * scale
+        return out
 
     # ---- kill switch ----
 

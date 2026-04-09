@@ -98,6 +98,8 @@ class StrategyRepository:
                 generate_synthetic_ohlcv,
                 generate_volatility_cycle_ohlcv,
             )
+            # Prefer real historical data if data/ohlcv/ has been populated
+            real_data = self._load_real_panel()
         except Exception as exc:
             # In environments without numpy/pandas, fall back to a placeholder
             # DRAFT strategy with no bypass. The strict gate keeps it inactive.
@@ -119,24 +121,27 @@ class StrategyRepository:
             self._persist(placeholder)
             return
 
-        # Each seed alpha is paired with the synthetic regime that
-        # exercises its hypothesis. Strategies are honestly tested on
-        # data shaped to give them a fair chance, not on a single
-        # universal regime that would arbitrarily favor trend-following.
-        def trending(seed: int):
+        # Each seed alpha is paired with data that exercises its hypothesis.
+        # If real OHLCV data is available under data/ohlcv/ (populated by
+        # scripts/data/fetch_binance_klines.py), seed validation runs against
+        # the REAL series and strategies inherit real metrics. Otherwise
+        # we fall back to synthetic regime-tailored data.
+        def trending_synth(seed: int):
             return generate_synthetic_ohlcv(n_bars=4500, seed=seed, trend_strength=8.0)
 
-        def ranging(seed: int):
+        def ranging_synth(seed: int):
             return generate_ranging_ohlcv(n_bars=4500, seed=seed)
 
-        def vol_cycle(seed: int):
+        def vol_cycle_synth(seed: int):
             return generate_volatility_cycle_ohlcv(n_bars=4500, seed=seed)
 
         seed_specs = [
-            ("trend_breakout",    "Crypto Trend Breakout",     trending),
-            ("momentum_ensemble", "Crypto Momentum Ensemble",  trending),
-            ("vol_breakout",      "Crypto Volatility Breakout", vol_cycle),
-            ("mean_reversion",    "Crypto Mean Reversion",     ranging),
+            # alpha_name, display, fallback_data_factory
+            ("trend_breakout",    "Crypto Trend Breakout",     trending_synth),
+            ("momentum_ensemble", "Crypto Momentum Ensemble",  trending_synth),
+            ("vol_breakout",      "Crypto Volatility Breakout", vol_cycle_synth),
+            ("mean_reversion",    "Crypto Mean Reversion",     ranging_synth),
+            ("ml_meta",           "Crypto ML Meta-Alpha",      trending_synth),
         ]
 
         runner = BacktestRunner(
@@ -150,7 +155,7 @@ class StrategyRepository:
         regime_seeds = [7, 11, 23, 42]
         any_passed = False
 
-        for alpha_name, display_name, data_factory in seed_specs:
+        for alpha_name, display_name, fallback_factory in seed_specs:
             try:
                 alpha = get_alpha(alpha_name)
             except Exception as exc:
@@ -158,13 +163,28 @@ class StrategyRepository:
                 continue
 
             per_regime: list[dict] = []
-            for sd in regime_seeds:
-                try:
-                    df = data_factory(sd)
-                    rep = runner.run(alpha, df)
-                    per_regime.append(rep.to_dict())
-                except Exception as exc:
-                    per_regime.append({"status": "FAILED", "error": str(exc)[:200]})
+            data_source = "synthetic"
+            if real_data:
+                # Use real BTC/ETH/SOL/BNB as the "regimes" — each symbol
+                # is one regime variant. This is dramatically better
+                # validation than synthetic, when available.
+                for symbol, df in real_data.items():
+                    try:
+                        rep = runner.run(alpha, df)
+                        rep_dict = rep.to_dict()
+                        rep_dict["regime_label"] = symbol
+                        per_regime.append(rep_dict)
+                    except Exception as exc:
+                        per_regime.append({"status": "FAILED", "error": str(exc)[:200]})
+                data_source = "real_binance_1h"
+            else:
+                for sd in regime_seeds:
+                    try:
+                        df = fallback_factory(sd)
+                        rep = runner.run(alpha, df)
+                        per_regime.append(rep.to_dict())
+                    except Exception as exc:
+                        per_regime.append({"status": "FAILED", "error": str(exc)[:200]})
 
             valid = [r for r in per_regime if r.get("status") in {"PASSED", "FAILED"} and "metrics" in r]
             if not valid:
@@ -194,6 +214,7 @@ class StrategyRepository:
             summary = {
                 "status": combined_status,
                 "alpha_name": alpha_name,
+                "data_source": data_source,
                 "engine": "shared.backtest.runner",
                 "regime_count": len(valid),
                 "regimes_passed": n_passed,
@@ -240,6 +261,28 @@ class StrategyRepository:
             logging.getLogger(__name__).warning(
                 "no_seed_alpha_passed_bootstrap; platform has no ACTIVE strategies"
             )
+
+    def _load_real_panel(self) -> dict:
+        """Load OHLCV from data/ohlcv/ if present. Returns {symbol: DataFrame}."""
+        try:
+            import os as _os
+            from pathlib import Path as _Path
+            import pandas as _pd
+
+            base = _Path(_os.environ.get("QUANT_DATA_DIR", "/home/ubuntu/quant/data/ohlcv"))
+            if not base.exists():
+                return {}
+            out: dict = {}
+            for symbol in ("BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT"):
+                p = base / f"{symbol}_1h.parquet"
+                c = base / f"{symbol}_1h.csv"
+                if p.exists():
+                    out[symbol] = _pd.read_parquet(p)
+                elif c.exists():
+                    out[symbol] = _pd.read_csv(c, index_col=0, parse_dates=True)
+            return out
+        except Exception:
+            return {}
 
     def _persist_failed_seed(self, name: str, alpha_name: str, reason: str) -> None:
         strategy = Strategy(

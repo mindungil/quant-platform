@@ -32,8 +32,10 @@ class AutonomousLoop:
     def __init__(self, interval_seconds: int = 300) -> None:
         self.interval_seconds = interval_seconds
         self._task: asyncio.Task | None = None
+        self._retrain_task: asyncio.Task | None = None
         self._running = False
         self._last_tick_summary: dict | None = None
+        self._last_retrain_summary: dict | None = None
         self._started_at: datetime | None = None
 
     # ------------------------------------------------------------------
@@ -46,18 +48,42 @@ class AutonomousLoop:
         self._running = True
         self._started_at = datetime.now(UTC)
         self._task = asyncio.create_task(self._run_loop())
+        self._retrain_task = asyncio.create_task(self._run_retrain_loop())
         logger.info("autonomous_loop_started", extra={"interval": self.interval_seconds})
 
     async def stop(self) -> None:
         self._running = False
-        if self._task is not None:
-            self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
-            self._task = None
+        for attr in ("_task", "_retrain_task"):
+            t = getattr(self, attr, None)
+            if t is not None:
+                t.cancel()
+                try:
+                    await t
+                except asyncio.CancelledError:
+                    pass
+                setattr(self, attr, None)
         logger.info("autonomous_loop_stopped")
+
+    # ------------------------------------------------------------------
+    # Retrain loop — re-validates ACTIVE strategies on real recent data
+    # and demotes degraded ones to PAUSED. Closes the live monitoring loop.
+    # ------------------------------------------------------------------
+
+    async def _run_retrain_loop(self) -> None:
+        from app.core.strategy_retrain import (
+            RETRAIN_INTERVAL_SECONDS,
+            retrain_pass,
+        )
+        # Stagger the first retrain so it doesn't collide with startup health checks
+        await asyncio.sleep(60)
+        while self._running:
+            try:
+                summary = await retrain_pass()
+                self._last_retrain_summary = summary
+                logger.info("retrain_pass_complete", extra={"summary_keys": list(summary.keys())})
+            except Exception as exc:
+                logger.exception("retrain_pass_error", extra={"error": str(exc)[:200]})
+            await asyncio.sleep(RETRAIN_INTERVAL_SECONDS)
 
     # ------------------------------------------------------------------
     # Main loop
