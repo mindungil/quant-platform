@@ -12,6 +12,12 @@ from shared.risk.position_sizing import (
     DEFAULT_CVAR_CAP_PCT,
     DEFAULT_MAX_LEVERAGE,
 )
+from shared.risk.forecast_combination import (
+    scale_forecast,
+    forecast_diversification_multiplier,
+    combine_forecasts,
+    forecast_to_position,
+)
 
 __all__ = [
     "SizingResult",
@@ -25,4 +31,8 @@ __all__ = [
     "DEFAULT_TARGET_ANNUAL_VOL",
     "DEFAULT_CVAR_CAP_PCT",
     "DEFAULT_MAX_LEVERAGE",
+    "scale_forecast",
+    "forecast_diversification_multiplier",
+    "combine_forecasts",
+    "forecast_to_position",
 ]

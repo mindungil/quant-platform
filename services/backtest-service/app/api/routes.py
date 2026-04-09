@@ -87,3 +87,24 @@ def run_monte_carlo_simulation(payload: dict):
     confidence = payload.get("confidence_level", 0.95)
     result = run_monte_carlo(returns, n_simulations=n, confidence_level=confidence)
     return result
+
+
+@router.post("/backtests/nautilus")
+def run_nautilus(payload: dict):
+    """Replay decisions through Nautilus Trader's HFT-grade engine.
+
+    Models fees + slippage realistically (production-quality estimate).
+    """
+    from app.core.nautilus_runner import run_nautilus_backtest
+
+    decisions = payload.get("decisions") or []
+    candles = payload.get("candles") or []
+    starting_balance = payload.get("starting_balance", 10000.0)
+    fee_bps = payload.get("fee_bps", 10.0)
+    slippage_bps = payload.get("slippage_bps", 5.0)
+    return run_nautilus_backtest(
+        decisions, candles,
+        starting_balance=starting_balance,
+        fee_bps=fee_bps,
+        slippage_bps=slippage_bps,
+    )

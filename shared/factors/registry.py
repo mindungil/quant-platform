@@ -10,6 +10,7 @@ from shared.factors.derivatives import DERIVATIVES_FACTORS
 from shared.factors.sentiment import SENTIMENT_FACTORS
 from shared.factors.kimchi_premium import KIMCHI_PREMIUM_FACTORS
 from shared.factors.research_alpha import RESEARCH_ALPHA_FACTORS
+from shared.factors.worldquant_alphas import WORLDQUANT_ALPHA_FACTORS
 
 ALL_FACTORS: list[Factor] = (
     TECHNICAL_FACTORS
@@ -20,6 +21,7 @@ ALL_FACTORS: list[Factor] = (
     + SENTIMENT_FACTORS
     + KIMCHI_PREMIUM_FACTORS
     + RESEARCH_ALPHA_FACTORS
+    + WORLDQUANT_ALPHA_FACTORS
 )
 
 
