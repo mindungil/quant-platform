@@ -132,5 +132,8 @@ def compute_paper_portfolio(decisions: list[dict], current_price: float) -> dict
             "unrealized_pnl_pct": round(open_pnl, 2),
         } if open_position else None,
         "recent_trades": completed_trades[-10:] if completed_trades else [],
+        # Full pnl history for Monte Carlo robustness analysis (just the numbers,
+        # no metadata, to keep the payload small).
+        "all_trade_returns": [round(t["pnl_pct"], 4) for t in completed_trades],
         "equity_curve": [round(e, 2) for e in equity_curve[-50:]],  # last 50 points
     }

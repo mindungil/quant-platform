@@ -487,6 +487,52 @@ async def get_track_record_public(asset: str) -> JSONResponse:
         return JSONResponse({"error": str(exc)}, status_code=502)
 
 
+@router.get("/track-record/{asset}/robustness")
+async def get_track_record_robustness(asset: str) -> JSONResponse:
+    """Public Monte Carlo robustness — bootstraps the asset's paper-trade returns
+    and exposes 95% confidence intervals on Sharpe / drawdown / total return.
+
+    Trust signal for users: shows the *distribution* of outcomes, not a single
+    cherry-picked equity curve. Pattern from Jesse / QuantConnect / Stoic.
+    """
+    stats_url = settings.statistics_service_base_url
+    backtest_url = settings.backtest_service_base_url
+    try:
+        async with httpx.AsyncClient() as client:
+            # 1) Pull the paper portfolio for trade returns
+            pp_resp = await client.get(
+                f"{stats_url.rstrip('/')}/statistics/paper-portfolio/{asset}",
+                timeout=10.0,
+            )
+            if pp_resp.status_code != 200:
+                return JSONResponse({"error": "paper_portfolio_unavailable"}, status_code=502)
+            pp = pp_resp.json()
+            # Prefer the full history (all_trade_returns) over recent_trades.
+            returns = pp.get("all_trade_returns") or []
+            if not returns:
+                trades = pp.get("recent_trades") or []
+                returns = [t.get("pnl_pct", 0.0) for t in trades if t.get("pnl_pct") is not None]
+            if len(returns) < 10:
+                return JSONResponse({
+                    "robust": False,
+                    "trades": len(returns),
+                    "min_required": 10,
+                    "message": "검증 진행 중 — 최소 10건 거래 필요",
+                })
+
+            # 2) Run Monte Carlo on the bootstrap distribution
+            mc_resp = await client.post(
+                f"{backtest_url}/backtests/monte-carlo",
+                json={"trade_returns": returns, "simulations": 1000, "confidence_level": 0.95},
+                timeout=15.0,
+            )
+            if mc_resp.status_code != 200:
+                return JSONResponse({"error": "monte_carlo_failed"}, status_code=502)
+            return JSONResponse(mc_resp.json())
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)[:200]}, status_code=502)
+
+
 # ── Agent Decisions (proxy to crypto-agent) ─────────────────────────────
 
 

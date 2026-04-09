@@ -348,6 +348,23 @@ def _calculate_position_size(
         vol_scalar = max(0.3, min(vol_scalar, 2.0))  # clamp between 0.3x and 2x
         risk_fraction *= vol_scalar
 
+    # CVaR cap (Rockafellar & Uryasev 2000) — bound expected tail loss
+    # Skip if we don't know vol; otherwise enforce 95% CVaR ≤ 2% of equity.
+    if realized_vol > 0:
+        try:
+            from shared.risk.position_sizing import cvar_cap_scaler
+            # Treat realized_vol as per-period sigma. Edge proxy from signal.
+            edge_proxy = max(0.0, abs(signal_score) * 0.01)
+            cvar_scale = cvar_cap_scaler(
+                sigma_per_period=realized_vol,
+                mean_per_period=edge_proxy,
+                cap_pct=0.02,
+                confidence=0.95,
+            )
+            risk_fraction *= cvar_scale
+        except Exception as exc:
+            logger.debug("cvar_cap_skipped", extra={"error": str(exc)[:100]})
+
     # Hard caps
     risk_fraction = min(risk_fraction, settings.max_position_pct)
 

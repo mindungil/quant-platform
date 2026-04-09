@@ -38,6 +38,7 @@ class Settings:
     order_service_base_url: str = os.getenv("ORDER_SERVICE_BASE_URL", "http://localhost:8006")
     risk_service_base_url: str = os.getenv("RISK_SERVICE_BASE_URL", "http://localhost:8008")
     feature_store_base_url: str = os.getenv("FEATURE_STORE_BASE_URL", "http://localhost:8009")
+    market_data_base_url: str = os.getenv("MARKET_DATA_BASE_URL", "http://localhost:8001")
     http_timeout: float = float(os.getenv("HTTP_TIMEOUT", "10.0"))
     default_user_id: str = os.getenv("DEFAULT_USER_ID", "system")
     default_quantity: float = float(os.getenv("DEFAULT_AGENT_QUANTITY", "0"))

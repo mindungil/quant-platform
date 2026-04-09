@@ -159,6 +159,34 @@ def detect_node(state: AgentState) -> dict:
         if val is not None:
             features[field_name] = val
 
+    # Hydrate lookback closes for time-series momentum factors
+    # (Liu & Tsyvinski 2021 — research-backed alpha; non-fatal)
+    try:
+        candles_resp = httpx.get(
+            f"{settings.market_data_base_url}/candles/{state['asset']}/history",
+            params={"interval": "1d", "limit": 35},
+            timeout=4.0,
+        )
+        if candles_resp.status_code == 200:
+            candles = candles_resp.json()
+            if isinstance(candles, list) and len(candles) >= 2:
+                # Sort by timestamp ascending; assume 'close' and 'timestamp' fields
+                sorted_candles = sorted(
+                    candles,
+                    key=lambda c: c.get("timestamp") or c.get("ts") or 0,
+                )
+                closes = [c.get("close") for c in sorted_candles if c.get("close") is not None]
+                if len(closes) >= 2:
+                    features["close_1d_ago"] = float(closes[-2])
+                if len(closes) >= 8:
+                    features["close_7d_ago"] = float(closes[-8])
+                if len(closes) >= 29:
+                    features["close_28d_ago"] = float(closes[-29])
+    except Exception as exc:
+        logger.warning("graph_detect_lookback_skipped", extra={
+            "asset": state["asset"], "error": str(exc)[:100],
+        })
+
     # Fetch external context (non-fatal)
     external_used = False
     ext = {}

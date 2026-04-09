@@ -20,15 +20,37 @@ interface PaperPortfolio {
   equity_curve: number[];
 }
 
+interface RobustnessMetric {
+  mean: number;
+  median: number;
+  ci_lower: number;
+  ci_upper: number;
+}
+
+interface Robustness {
+  simulations?: number;
+  confidence_level?: number;
+  sharpe?: RobustnessMetric;
+  max_drawdown?: RobustnessMetric;
+  total_return?: RobustnessMetric;
+  win_rate?: RobustnessMetric;
+  profit_factor?: RobustnessMetric;
+  robust?: boolean;
+  trades?: number;
+  min_required?: number;
+  message?: string;
+}
+
 export default function TrackRecordPage() {
   const [portfolio, setPortfolio] = useState<PaperPortfolio | null>(null);
+  const [robustness, setRobustness] = useState<Robustness | null>(null);
   const [asset, setAsset] = useState("BTCUSDT");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const load = () => {
       setLoading(true);
-      // Use plain fetch (no auth header) — this is a public endpoint
+      // Use plain fetch (no auth header) — these are public endpoints
       fetch(`/api/gateway/track-record/${asset}`)
         .then((r) => r.json())
         .then((data) => {
@@ -36,6 +58,10 @@ export default function TrackRecordPage() {
           setLoading(false);
         })
         .catch(() => setLoading(false));
+      fetch(`/api/gateway/track-record/${asset}/robustness`)
+        .then((r) => r.json())
+        .then((data) => setRobustness(data))
+        .catch(() => setRobustness(null));
     };
     load();
     const interval = setInterval(load, 60000); // refresh every 60s
@@ -205,6 +231,94 @@ export default function TrackRecordPage() {
                     ))}
                 </div>
               </div>
+            )}
+
+            {/* Monte Carlo robustness — Trust signal */}
+            {robustness && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                className="mt-10 rounded-2xl border border-white/[0.10] bg-white/[0.04] p-6"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold text-white">검증된 신뢰구간</h2>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      Monte Carlo 1,000회 부트스트랩 시뮬레이션 (95% 신뢰구간)
+                    </p>
+                  </div>
+                  {robustness.robust !== undefined && robustness.sharpe && (
+                    <span
+                      className={`rounded-full border px-3 py-1 text-[10px] font-medium uppercase tracking-wider ${
+                        robustness.robust
+                          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                          : "border-zinc-700 bg-zinc-800/50 text-zinc-400"
+                      }`}
+                    >
+                      {robustness.robust ? "Verified" : "Building"}
+                    </span>
+                  )}
+                </div>
+
+                {robustness.message && (
+                  <p className="mt-4 text-sm text-zinc-400">{robustness.message}</p>
+                )}
+
+                {robustness.sharpe && (
+                  <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                      <p className="text-[10px] uppercase tracking-wider text-zinc-500">
+                        Sharpe Ratio
+                      </p>
+                      <p className="mt-2 text-2xl font-bold text-white">
+                        {robustness.sharpe.median.toFixed(2)}
+                      </p>
+                      <p className="mt-1 text-[10px] text-zinc-500">
+                        95% CI: [{robustness.sharpe.ci_lower.toFixed(2)},{" "}
+                        {robustness.sharpe.ci_upper.toFixed(2)}]
+                      </p>
+                    </div>
+
+                    {robustness.max_drawdown && (
+                      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                        <p className="text-[10px] uppercase tracking-wider text-zinc-500">
+                          예상 최대 낙폭
+                        </p>
+                        <p className="mt-2 text-2xl font-bold text-white">
+                          -{(robustness.max_drawdown.median * 100).toFixed(1)}%
+                        </p>
+                        <p className="mt-1 text-[10px] text-zinc-500">
+                          최악 5%: -
+                          {(robustness.max_drawdown.ci_upper * 100).toFixed(1)}%
+                        </p>
+                      </div>
+                    )}
+
+                    {robustness.total_return && (
+                      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                        <p className="text-[10px] uppercase tracking-wider text-zinc-500">
+                          총 수익률 분포
+                        </p>
+                        <p className="mt-2 text-2xl font-bold text-white">
+                          {robustness.total_return.median >= 0 ? "+" : ""}
+                          {robustness.total_return.median.toFixed(1)}%
+                        </p>
+                        <p className="mt-1 text-[10px] text-zinc-500">
+                          95% CI: [{robustness.total_return.ci_lower.toFixed(1)}%,{" "}
+                          {robustness.total_return.ci_upper.toFixed(1)}%]
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <p className="mt-4 text-[11px] leading-relaxed text-zinc-500">
+                  단일 백테스트 결과를 믿지 마세요. 위 신뢰구간은 실제 거래 기록을
+                  1,000회 재추출하여 계산한 분포의 5–95 백분위입니다. 좁은 구간일수록
+                  결과가 안정적이라는 의미입니다.
+                </p>
+              </motion.div>
             )}
 
             <p className="mt-8 text-center text-xs text-zinc-500">
