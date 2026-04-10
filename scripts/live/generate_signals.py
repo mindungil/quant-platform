@@ -50,10 +50,11 @@ AFFINITY = {
     "trend_breakout":    {"TREND_UP": 1.5, "TREND_DOWN": 1.5, "RANGE": 0.4, "CRISIS": 0.6},
 }
 
+# v4.1 deep-sweep-tuned params (half-Kelly, validated on 5-8yr × 5 symbols)
 BEST_PARAMS = {
-    "kalman_trend": {"obs_var": 5e-4, "slope_var": 2e-7},
-    "momentum_ensemble": {},
-    "trend_breakout": {"donchian_window": 96, "exit_window": 40},
+    "kalman_trend": {"obs_var": 5e-4, "slope_var": 5e-8},
+    "momentum_ensemble": {"windows": [168, 720]},
+    "trend_breakout": {"donchian_window": 120, "exit_window": 55},
 }
 
 
@@ -108,6 +109,7 @@ def run_engine(symbol: str, df: pd.DataFrame) -> dict:
         combine_mode="equal",
         periods_per_year=PPY,
         turnover_deadzone=0.10,
+        sizing_mode="half_kelly",
     )
     res = EnsembleAllocator(cfg).combine(
         alpha_pos, ret, regime_proba=regime.proba, regime_alpha_affinity=AFFINITY

@@ -1,0 +1,42 @@
+[
+  {
+    "symbol": "BTCUSDT",
+    "timestamp": "2026-04-10 07:00:00+00:00",
+    "price": 71722.2,
+    "regime": "TREND_UP",
+    "target_position": 0.0,
+    "position_change": -0.3801,
+    "action": "SELL",
+    "rolling_30d_sharpe": 2.18,
+    "alpha_positions": {
+      "kalman_trend": 0.2236,
+      "momentum_ensemble": 0.1875,
+      "trend_breakout": 1.0
+    },
+    "alpha_weights": {
+      "kalman_trend": 0.0,
+      "momentum_ensemble": 0.4,
+      "trend_breakout": 0.6
+    }
+  },
+  {
+    "symbol": "ETHUSDT",
+    "timestamp": "2026-04-10 07:00:00+00:00",
+    "price": 2185.38,
+    "regime": "TREND_UP",
+    "target_position": 0.0,
+    "position_change": 0.0,
+    "action": "HOLD",
+    "rolling_30d_sharpe": 2.29,
+    "alpha_positions": {
+      "kalman_trend": -0.0593,
+      "momentum_ensemble": 0.18,
+      "trend_breakout": 0.4961
+    },
+    "alpha_weights": {
+      "kalman_trend": 0.0,
+      "momentum_ensemble": 0.6,
+      "trend_breakout": 0.0
+    }
+  }
+]
