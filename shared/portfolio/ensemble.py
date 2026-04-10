@@ -35,6 +35,10 @@ class EnsembleConfig:
     target_vol_annual: float = 0.20
     periods_per_year: int = 252 * 24       # hourly default
     max_gross: float = 1.0                 # cap on |combined position|
+    # v4: position sizing mode. "vol_target" = scale to target vol (default).
+    # "half_kelly" = fractional Kelly criterion (aggressive but risk-aware).
+    sizing_mode: str = "vol_target"       # vol_target | half_kelly
+    kelly_fraction: float = 0.5           # fractional Kelly (0.5 = half Kelly)
     max_per_alpha: float = 0.6             # cap on any single alpha's weight
     kill_drawdown: float = 0.20            # zero the signal beyond this rolling DD
     kill_window: int = 720                 # rolling DD window
@@ -209,8 +213,11 @@ class EnsembleAllocator:
         combined = (positions_df * weights).sum(axis=1)
         combined = combined.clip(-self.config.max_gross, self.config.max_gross)
 
-        # Vol target: scale so realized vol == target
-        scale = self._vol_target_scale(combined * ret)
+        # Position sizing
+        if self.config.sizing_mode == "half_kelly":
+            scale = self._kelly_scale(combined, ret)
+        else:
+            scale = self._vol_target_scale(combined * ret)
         target = (combined * scale).clip(-self.config.max_gross, self.config.max_gross)
 
         # Tail hedge: check rolling vol z-score and scale down if extreme
@@ -306,6 +313,29 @@ class EnsembleAllocator:
             weights.iloc[i] = last_w
 
         return weights
+
+    # ---- Kelly sizing ----
+
+    def _kelly_scale(self, combined: pd.Series, ret: pd.Series) -> pd.Series:
+        """Fractional Kelly position sizing.
+
+        Kelly fraction f* = μ / σ². Half-Kelly = f*/2 for robustness.
+        Uses rolling estimates of the strategy's mean and variance of
+        per-bar PnL. Caps at 3x to prevent extreme leverage.
+
+        Kelly is attractive vs vol-targeting because it accounts for BOTH
+        the signal quality (mean) and the risk (variance). A high-Sharpe
+        period gets more leverage; a low-Sharpe period gets less — similar
+        to the self-Sharpe gate but as a sizing mechanism, not a gate.
+        """
+        win = self.config.vol_lookback
+        frac = self.config.kelly_fraction
+        pnl = combined * ret
+        mean = pnl.rolling(win, min_periods=max(20, win // 4)).mean()
+        var = pnl.rolling(win, min_periods=max(20, win // 4)).var(ddof=0).replace(0, np.nan)
+        kelly_f = (mean / var).fillna(0.0) * frac
+        # Clip to reasonable range [0, 3] — never leverage beyond 3x, never go negative
+        return kelly_f.clip(0.0, 3.0).fillna(1.0)
 
     # ---- vol targeting ----
 

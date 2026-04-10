@@ -1,0 +1,102 @@
+[
+  {
+    "symbol": "BTCUSDT",
+    "timestamp": "2026-04-10 06:00:00+00:00",
+    "price": 72176.0,
+    "regime": "TREND_UP",
+    "target_position": 0.7793,
+    "position_change": 0.1205,
+    "action": "BUY",
+    "rolling_30d_sharpe": -0.53,
+    "alpha_positions": {
+      "kalman_trend": 0.1861,
+      "momentum_ensemble": 0.1881,
+      "trend_breakout": 1.0
+    },
+    "alpha_weights": {
+      "kalman_trend": 0.0,
+      "momentum_ensemble": 0.4,
+      "trend_breakout": 0.6
+    }
+  },
+  {
+    "symbol": "ETHUSDT",
+    "timestamp": "2026-04-10 06:00:00+00:00",
+    "price": 2198.32,
+    "regime": "TREND_UP",
+    "target_position": 0.1166,
+    "position_change": -0.1328,
+    "action": "SELL",
+    "rolling_30d_sharpe": 0.77,
+    "alpha_positions": {
+      "kalman_trend": 0.0086,
+      "momentum_ensemble": 0.18,
+      "trend_breakout": 0.5262
+    },
+    "alpha_weights": {
+      "kalman_trend": 0.0,
+      "momentum_ensemble": 0.6,
+      "trend_breakout": 0.0
+    }
+  },
+  {
+    "symbol": "BNBUSDT",
+    "timestamp": "2026-04-10 06:00:00+00:00",
+    "price": 601.93,
+    "regime": "TREND_UP",
+    "target_position": 0.0,
+    "position_change": 0.0,
+    "action": "HOLD",
+    "rolling_30d_sharpe": 1.27,
+    "alpha_positions": {
+      "kalman_trend": -0.0524,
+      "momentum_ensemble": 0.0,
+      "trend_breakout": 0.4
+    },
+    "alpha_weights": {
+      "kalman_trend": 0.0,
+      "momentum_ensemble": 0.6,
+      "trend_breakout": 0.0
+    }
+  },
+  {
+    "symbol": "SOLUSDT",
+    "timestamp": "2026-04-10 06:00:00+00:00",
+    "price": 83.46,
+    "regime": "TREND_UP",
+    "target_position": 0.0502,
+    "position_change": 0.0,
+    "action": "HOLD",
+    "rolling_30d_sharpe": -0.48,
+    "alpha_positions": {
+      "kalman_trend": 0.0896,
+      "momentum_ensemble": 0.0,
+      "trend_breakout": 0.0
+    },
+    "alpha_weights": {
+      "kalman_trend": 0.0,
+      "momentum_ensemble": 0.6,
+      "trend_breakout": 0.0
+    }
+  },
+  {
+    "symbol": "LINKUSDT",
+    "timestamp": "2026-04-10 06:00:00+00:00",
+    "price": 8.99,
+    "regime": "TREND_UP",
+    "target_position": 0.0575,
+    "position_change": 0.0,
+    "action": "HOLD",
+    "rolling_30d_sharpe": -0.08,
+    "alpha_positions": {
+      "kalman_trend": 0.1955,
+      "momentum_ensemble": 0.0,
+      "trend_breakout": 0.6623
+    },
+    "alpha_weights": {
+      "kalman_trend": 0.3391,
+      "momentum_ensemble": 0.3268,
+      "trend_breakout": 0.3341
+    }
+  }
+]
