@@ -24,6 +24,9 @@ from shared.alpha.ml_meta import MetaMLAlpha
 from shared.alpha.kalman_trend import KalmanTrendAlpha
 from shared.alpha.ml_forest import MetaForestAlpha
 from shared.alpha.online_rls import OnlineRLSAlpha
+from shared.alpha.order_flow import OrderFlowAlpha
+from shared.alpha.lead_lag import LeadLagAlpha
+from shared.alpha.vwap_reversion import VWAPReversionAlpha
 
 __all__ = [
     "Alpha",
@@ -43,4 +46,7 @@ __all__ = [
     "KalmanTrendAlpha",
     "MetaForestAlpha",
     "OnlineRLSAlpha",
+    "OrderFlowAlpha",
+    "LeadLagAlpha",
+    "VWAPReversionAlpha",
 ]

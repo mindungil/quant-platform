@@ -16,6 +16,9 @@ from shared.alpha.mean_reversion import MeanReversionAlpha
 from shared.alpha.ml_forest import MetaForestAlpha
 from shared.alpha.ml_meta import MetaMLAlpha
 from shared.alpha.online_rls import OnlineRLSAlpha
+from shared.alpha.order_flow import OrderFlowAlpha
+from shared.alpha.lead_lag import LeadLagAlpha
+from shared.alpha.vwap_reversion import VWAPReversionAlpha
 from shared.alpha.momentum_ensemble import MomentumEnsembleAlpha
 from shared.alpha.stat_arb import StatArbAlpha
 from shared.alpha.trend_breakout import TrendBreakoutAlpha
@@ -35,6 +38,12 @@ ALPHA_REGISTRY: dict[str, Callable[[AlphaConfig | None], Alpha]] = {
     "kalman_trend": lambda cfg=None: KalmanTrendAlpha(cfg),
     "ml_forest": lambda cfg=None: MetaForestAlpha(cfg),
     "online_rls": lambda cfg=None: OnlineRLSAlpha(cfg),
+    # v4 alphas — DISABLED from default ensemble after 8-year eval showed
+    # strongly negative standalone Sharpe (order_flow -4.37, vwap_reversion -3.31,
+    # lead_lag -2.10). Code preserved for future debugging/improvement.
+    # "order_flow": lambda cfg=None: OrderFlowAlpha(cfg),
+    # "lead_lag": lambda cfg=None: LeadLagAlpha(cfg),
+    # "vwap_reversion": lambda cfg=None: VWAPReversionAlpha(cfg),
 }
 
 
