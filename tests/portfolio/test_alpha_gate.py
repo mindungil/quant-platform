@@ -158,6 +158,71 @@ def test_hysteresis_is_causal():
     pd.testing.assert_series_equal(base.iloc[:400], pert.iloc[:400], check_names=False)
 
 
+def test_long_kill_suppresses_dead_regime():
+    """Long-kill should scale down hard when the 1-year rolling Sharpe is negative."""
+    # Build a run where the first half is losing (alpha anti-aligned), second
+    # half is winning. With long_kill on, the switch over to second half should
+    # start suppressed (due to bad 1-year history) then recover.
+    n = 3000
+    rng = np.random.default_rng(42)
+    underlying = _ts(rng.normal(0, 0.01, n))
+    # First 1500 bars: bad; next 1500: good
+    signs = np.where(np.arange(n) < n // 2, -np.sign(underlying.values), np.sign(underlying.values))
+    alphas = {"swing": _ts(signs)}
+
+    cfg_on = EnsembleConfig(
+        combine_mode="equal",
+        periods_per_year=24 * 365,
+        enable_alpha_gate=False,
+        enable_self_sharpe_gate=False,
+        enable_long_kill=True,
+        long_kill_window=1500,
+        long_kill_min_history=500,
+        long_kill_floor=0.1,
+        long_kill_full=0.3,
+        long_kill_below=0.0,
+        kill_drawdown=0.99,
+        turnover_deadzone=0.0,
+        min_history=10,
+    )
+    res = EnsembleAllocator(cfg_on).combine(alphas, underlying)
+    abs_pos = res.target_position.abs()
+    # Early-in-second-half must be suppressed (long history still bad)
+    early_second = abs_pos.iloc[1600:1800].mean()
+    # Late-in-second-half has accumulated good history → should be higher
+    late_second = abs_pos.iloc[2700:2900].mean()
+    assert late_second > early_second * 1.5, (
+        f"long_kill did not recover: early={early_second:.3f} late={late_second:.3f}"
+    )
+
+
+def test_long_kill_is_causal():
+    """Future returns must not change current long_kill multiplier."""
+    n = 2000
+    rng = np.random.default_rng(3)
+    underlying = _ts(rng.normal(0, 0.01, n))
+    alphas = {"a": _ts(rng.normal(0, 0.3, n))}
+    cfg = EnsembleConfig(
+        combine_mode="equal",
+        periods_per_year=24 * 365,
+        enable_alpha_gate=False,
+        enable_self_sharpe_gate=False,
+        enable_long_kill=True,
+        long_kill_window=500,
+        long_kill_min_history=200,
+        kill_drawdown=0.99,
+        turnover_deadzone=0.0,
+        min_history=10,
+    )
+    base = EnsembleAllocator(cfg).combine(alphas, underlying).target_position
+    underlying2 = underlying.copy()
+    underlying2.iloc[1500] = 99.0  # perturb far future
+    pert = EnsembleAllocator(cfg).combine(alphas, underlying2).target_position
+    pd.testing.assert_series_equal(
+        base.iloc[:1500], pert.iloc[:1500], check_names=False
+    )
+
+
 def test_alpha_gate_recovers_when_alpha_recovers():
     """If a bad alpha turns good mid-sample, the gate should re-open."""
     n = 1500

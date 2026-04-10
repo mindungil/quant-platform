@@ -71,6 +71,23 @@ class EnsembleConfig:
     # Cuts thrashing 30-60% in practice with marginal Sharpe loss. Set to 0
     # to disable.
     turnover_deadzone: float = 0.10
+    # v3.5: long-window master kill switch. Independent of the monthly
+    # self-Sharpe gate. If the rolling 1-year Sharpe of the engine's own
+    # PnL has drifted negative, the engine is in a dead regime — scale to
+    # `long_kill_floor` until it recovers. This catches entire bad years
+    # (2021, 2023) that the regime detector labeled as "RANGE" but were
+    # actually unfit for the alpha library. Disabled by default so tests
+    # stay deterministic; enabled by real scripts.
+    enable_long_kill: bool = False
+    long_kill_window: int = 24 * 365       # 1 year of hourly bars
+    long_kill_min_history: int = 24 * 120  # need 120d before it activates
+    long_kill_floor: float = 0.1           # go nearly flat when dead
+    long_kill_full: float = 0.3            # sharpe above which full scale returns
+    long_kill_below: float = 0.0           # sharpe below this → floor
+    # The long kill should evaluate the rolling Sharpe of the COST-ADJUSTED
+    # (net) PnL — otherwise it misses bad years where gross is positive but
+    # costs eat the entire edge (e.g. 2023 BTC: gross +0.4 Sharpe, net -1.9).
+    long_kill_cost_bps: float = 5.0
 
 
 @dataclass
@@ -202,6 +219,10 @@ class EnsembleAllocator:
         # v3.1: self-Sharpe gate (adaptive confidence)
         if self.config.enable_self_sharpe_gate:
             target = self._apply_self_sharpe_gate(target, ret)
+
+        # v3.5: long-window master kill switch
+        if self.config.enable_long_kill:
+            target = self._apply_long_kill(target, ret)
 
         # Kill switch
         target = self._apply_kill_switch(target, target * ret)
@@ -372,6 +393,63 @@ class EnsembleAllocator:
         # Linear ramp from -1.0 to full → floor..1
         scale = floor + (rolling_sharpe + 1.0) * (1.0 - floor) / max(full + 1.0, 1e-6)
         scale = scale.clip(floor, 1.0)
+        return position * scale
+
+    # ---- long-window master kill (v3.5) ----
+
+    def _apply_long_kill(self, position: pd.Series, returns: pd.Series) -> pd.Series:
+        """Scale position by 1-year rolling Sharpe of the engine's own PnL.
+
+        Strictly causal: at bar t, uses rolling Sharpe computed through t-1.
+        Maps through a piecewise-linear ramp:
+            sharpe ≤ long_kill_below → long_kill_floor
+            long_kill_below < sh < long_kill_full → linear
+            sharpe ≥ long_kill_full → 1.0
+        Before warmup, multiplier = 1 (no-op) so we don't kill the warmup.
+        """
+        win = int(self.config.long_kill_window)
+        min_hist = int(self.config.long_kill_min_history)
+        floor = float(self.config.long_kill_floor)
+        full = float(self.config.long_kill_full)
+        kill = float(self.config.long_kill_below)
+        cost_bps = float(self.config.long_kill_cost_bps)
+        annualizer = float(np.sqrt(self.config.periods_per_year))
+
+        # Evaluate rolling sharpe on COST-ADJUSTED pnl so years where gross
+        # is positive but turnover cost eats the entire edge (e.g. 2023 BTC
+        # equal: gross +0.4, net -1.9 at 5bp) correctly trigger the kill.
+        gross = position * returns
+        if cost_bps > 0:
+            turnover = position.diff().abs().fillna(position.abs()) * (cost_bps * 1e-4)
+            pnl = gross - turnover
+        else:
+            pnl = gross
+        # Asymmetric detection: slow window (win) for "kill", fast 90d EWM
+        # for "recovery override". This fixes the v3.5.0 flaw where the
+        # 1-year rolling mean stayed negative long after the regime turned
+        # (2024-2026 missed recovery).
+        slow_mean = pnl.rolling(win, min_periods=min_hist).mean()
+        slow_std = pnl.rolling(win, min_periods=min_hist).std(ddof=0).replace(0, np.nan)
+        sharpe_slow = (slow_mean / slow_std).fillna(0.0) * annualizer
+
+        # 90d fast Sharpe — serves as a recovery override
+        fast_win = max(24 * 60, min_hist // 2)  # ≥ 60d
+        fast_mean = pnl.rolling(fast_win, min_periods=max(fast_win // 3, 240)).mean()
+        fast_std = pnl.rolling(fast_win, min_periods=max(fast_win // 3, 240)).std(ddof=0).replace(0, np.nan)
+        sharpe_fast = (fast_mean / fast_std).fillna(0.0) * annualizer
+
+        # Take the more optimistic signal: max of slow/fast.
+        # Slow dominates during quiet rolling → conservative kill.
+        # Fast dominates when a recovery rally lifts the short window early.
+        sharpe = pd.concat([sharpe_slow, sharpe_fast], axis=1).max(axis=1)
+        sharpe = sharpe.shift(1).fillna(0.0)  # causal
+        mean = slow_mean  # used below for warmup detection
+
+        denom = max(full - kill, 1e-6)
+        ramp = floor + (sharpe - kill) * (1.0 - floor) / denom
+        ramp = ramp.clip(floor, 1.0)
+        warm = mean.shift(1).notna()
+        scale = ramp.where(warm, 1.0)
         return position * scale
 
     # ---- turnover hysteresis (v3.3) ----
