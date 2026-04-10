@@ -16,11 +16,36 @@ def _to_array(returns) -> np.ndarray:
     return arr[np.isfinite(arr)]
 
 
+def apply_funding_cost(
+    position,
+    funding_rate_per_bar,
+) -> np.ndarray:
+    """Compute per-bar funding cost for a perpetual futures position.
+
+    Funding is paid by the side that has the position in the direction of
+    the funding rate: if funding > 0 and you're long, you PAY funding.
+    If funding > 0 and you're short, you RECEIVE funding.
+
+    Args:
+        position: target position series (positive = long, negative = short)
+        funding_rate_per_bar: funding rate already amortized to the bar
+            frequency (e.g. for 1h bars, divide the 8h funding rate by 8).
+
+    Returns:
+        per-bar funding cost (positive = cost, negative = income)
+    """
+    pos = np.asarray(position, dtype=float)
+    fr = np.asarray(funding_rate_per_bar, dtype=float)
+    # Long pays positive funding, short receives (and vice versa)
+    return pos * fr
+
+
 def apply_transaction_costs(
     position,
     returns,
     cost_bps: float = 0.0,
     slippage_bps: float = 0.0,
+    funding_rate_per_bar=None,
 ) -> np.ndarray:
     """Compute net per-bar PnL after costs from a (position, return) pair.
 
@@ -46,7 +71,13 @@ def apply_transaction_costs(
     delta_pos = np.abs(np.diff(pos, prepend=0.0))
     bps_total = (float(cost_bps) + float(slippage_bps)) * 1e-4
     cost = delta_pos * bps_total
-    return gross_pnl - cost
+    net = gross_pnl - cost
+    # Subtract funding cost if provided
+    if funding_rate_per_bar is not None:
+        fr = np.asarray(funding_rate_per_bar, dtype=float)
+        if len(fr) == len(pos):
+            net = net - apply_funding_cost(pos, fr)
+    return net
 
 
 def turnover_stats(position, periods_per_year: int = 252) -> dict[str, float]:
