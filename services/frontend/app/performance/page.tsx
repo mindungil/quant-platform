@@ -13,6 +13,8 @@ import {
   Expandable,
   motion,
 } from "../../components/motion";
+import { GradientCard } from "../../components/gradient-card";
+import { Sparkline } from "../../components/sparkline";
 
 /* ── asset name mapping ──────────────────────────────────────── */
 const ASSET_NAMES: Record<string, string> = {
@@ -202,7 +204,7 @@ function PerformanceContent() {
           <StaggerContainer className="grid gap-4 sm:grid-cols-3">
             {/* 적중률 */}
             <StaggerItem>
-              <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-6">
+              <GradientCard accent="green" delay={0.1}>
                 <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">적중률</p>
                 <p className="text-[10px] text-zinc-600">맞춘 비율</p>
                 <div className="mt-2 flex items-end gap-2">
@@ -211,21 +213,20 @@ function PerformanceContent() {
                   </span>
                   <span className="mb-1 text-lg text-zinc-500">%</span>
                 </div>
-                {/* visual win-rate bar */}
                 <div className="mt-3 h-2 rounded-full bg-white/[0.06] overflow-hidden">
                   <motion.div
-                    className="h-2 rounded-full bg-green-500"
+                    className="h-2 rounded-full bg-emerald-500"
                     initial={{ width: 0 }}
                     animate={{ width: `${Math.min(winRatePct, 100)}%` }}
                     transition={{ duration: 0.7, delay: 0.3, ease: "easeOut" }}
                   />
                 </div>
-              </div>
+              </GradientCard>
             </StaggerItem>
 
             {/* 거래 횟수 */}
             <StaggerItem>
-              <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-6">
+              <GradientCard accent="blue" delay={0.15}>
                 <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">거래 횟수</p>
                 <div className="mt-2 flex items-end gap-2">
                   <span className="font-mono text-3xl font-bold tracking-tighter tabular-nums text-zinc-50">
@@ -233,16 +234,16 @@ function PerformanceContent() {
                   </span>
                   <span className="mb-1 text-lg text-zinc-500">건</span>
                 </div>
-              </div>
+              </GradientCard>
             </StaggerItem>
 
             {/* 최대 손실폭 */}
             <StaggerItem>
-              <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-6">
+              <GradientCard accent="red" delay={0.2}>
                 <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">최대 손실폭</p>
                 <p className="text-[10px] text-zinc-600">가장 많이 떨어진 적</p>
                 <div className="mt-2 flex items-end gap-2">
-                  <span className="font-mono text-3xl font-bold tracking-tighter tabular-nums text-red-500">
+                  <span className="font-mono text-3xl font-bold tracking-tighter tabular-nums text-red-400">
                     <AnimatedNumber value={Math.abs(maxDrawdownPct)} decimals={1} />
                   </span>
                   <span className="mb-1 text-lg text-red-400">%</span>
@@ -255,7 +256,7 @@ function PerformanceContent() {
                     transition={{ duration: 0.7, delay: 0.3, ease: "easeOut" }}
                   />
                 </div>
-              </div>
+              </GradientCard>
             </StaggerItem>
           </StaggerContainer>
         </FadeInView>

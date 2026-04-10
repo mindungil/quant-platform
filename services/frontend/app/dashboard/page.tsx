@@ -15,6 +15,10 @@ import {
 } from "../../components/motion";
 import { MarketChart } from "../../components/market-chart";
 import { IconUp, IconDown, IconPause, IconEmpty } from "../../components/icons";
+import { GradientCard } from "../../components/gradient-card";
+import { AnimatedStat } from "../../components/animated-stat";
+import { PulseDot } from "../../components/pulse-dot";
+import { Sparkline } from "../../components/sparkline";
 
 /* ── Types ───────────────────────────────────────────────────── */
 
@@ -395,6 +399,8 @@ function DashboardContent() {
 
   const unrealizedPnl = portfolio?.unrealized_pnl ?? 0;
   const realizedPnl = portfolio?.realized_pnl ?? 0;
+  // Sparkline data — use recent trade PnLs if available, else a synthetic placeholder
+  const recentPnls = decisions?.slice(0, 20).map((d: Decision) => d.signal_score ?? 0).reverse() ?? [];
 
   return (
     <PageTransition>
@@ -465,56 +471,55 @@ function DashboardContent() {
         {/* ── Portfolio Summary Cards ─────────────────────── */}
         <StaggerContainer className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <StaggerItem>
-            <motion.div
-              className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 hover:bg-white/[0.04] hover:border-white/[0.10] transition-all duration-150"
-              whileHover={{ scale: 1.02, y: -4 }}
-            >
-              <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">총 투자금</p>
-              <div className="mt-2 text-3xl font-bold tracking-tighter tabular-nums text-zinc-50">
-                $<AnimatedNumber value={portfolio?.total_exposure ?? 0} decimals={0} />
-              </div>
+            <GradientCard accent="blue" glow delay={0.05}>
+              <AnimatedStat
+                label="총 투자금"
+                value={portfolio?.total_exposure ?? 0}
+                decimals={0}
+                prefix="$"
+                positive
+                format="currency"
+              />
               {portfolio?.positions && (
-                <p className="mt-2 text-xs font-medium text-zinc-500">
+                <p className="mt-3 text-xs font-medium text-zinc-500">
+                  <PulseDot status="active" className="mr-1.5" />
                   {Object.keys(portfolio.positions).length}개 자산 보유 중
                 </p>
               )}
-            </motion.div>
+            </GradientCard>
           </StaggerItem>
 
           <StaggerItem>
-            <motion.div
-              className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 hover:bg-white/[0.04] hover:border-white/[0.10] transition-all duration-150"
-              whileHover={{ scale: 1.02, y: -4 }}
-            >
-              <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">평가 손익</p>
-              <div className={`mt-2 text-3xl font-bold tracking-tighter tabular-nums ${
-                unrealizedPnl >= 0 ? "text-green-500" : "text-red-500"
-              }`}>
-                {unrealizedPnl >= 0 ? "+" : ""}$<AnimatedNumber value={unrealizedPnl} decimals={0} />
-              </div>
-              <p className="mt-2 text-xs font-medium text-zinc-500">
+            <GradientCard accent={unrealizedPnl >= 0 ? "green" : "red"} glow delay={0.1}>
+              <AnimatedStat
+                label="평가 손익"
+                value={unrealizedPnl}
+                decimals={0}
+                prefix="$"
+                format="currency"
+                trend={recentPnls}
+              />
+              <p className="mt-3 text-xs font-medium text-zinc-500">
                 현재 보유 자산 기준
               </p>
-            </motion.div>
+            </GradientCard>
           </StaggerItem>
 
           <StaggerItem>
-            <motion.div
-              className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 hover:bg-white/[0.04] hover:border-white/[0.10] transition-all duration-150"
-              whileHover={{ scale: 1.02, y: -4 }}
-            >
-              <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">실현 손익</p>
-              <div className={`mt-2 text-3xl font-bold tracking-tighter tabular-nums ${
-                realizedPnl >= 0 ? "text-green-500" : "text-red-500"
-              }`}>
-                {realizedPnl >= 0 ? "+" : ""}$<AnimatedNumber value={realizedPnl} decimals={0} />
-              </div>
+            <GradientCard accent={realizedPnl >= 0 ? "green" : "red"} glow delay={0.15}>
+              <AnimatedStat
+                label="실현 손익"
+                value={realizedPnl}
+                decimals={0}
+                prefix="$"
+                format="currency"
+              />
               {stats?.win_rate != null && (
-                <p className="mt-2 text-xs font-medium text-zinc-500">
+                <p className="mt-3 text-xs font-medium text-zinc-500">
                   승률 {(stats.win_rate * 100).toFixed(0)}% / {stats?.trade_count ?? 0}회 거래
                 </p>
               )}
-            </motion.div>
+            </GradientCard>
           </StaggerItem>
         </StaggerContainer>
 
@@ -526,7 +531,9 @@ function DashboardContent() {
             className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 hover:bg-white/[0.04] hover:border-white/[0.10] transition-all duration-150"
           >
             <div className="flex items-center justify-between">
-              <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">김치 프리미엄</p>
+              <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
+                <PulseDot status="active" className="mr-1.5" />김치 프리미엄
+              </p>
               <span className="text-[10px] text-zinc-500">Upbit vs Binance</span>
             </div>
             {kimchi && typeof kimchi.premium_pct === "number" && !kimchi.error ? (
