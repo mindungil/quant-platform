@@ -47,8 +47,15 @@ from _common import BEST_PARAMS, AFFINITY, SIZING_MODE, TURNOVER_DEADZONE, PPY  
 UTC = timezone.utc
 
 
-def fetch_recent(symbol: str, lookback_days: int = 120) -> pd.DataFrame:
-    """Fetch recent OHLCV from Binance public API."""
+def resample_ohlcv(df: pd.DataFrame, rule: str) -> pd.DataFrame:
+    if rule == "1h":
+        return df
+    agg = {"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}
+    return df.resample(rule, label="right", closed="right").agg(agg).dropna(subset=["close"])
+
+
+def fetch_recent(symbol: str, lookback_days: int = 120, timeframe: str = "1h") -> pd.DataFrame:
+    """Fetch recent OHLCV from Binance public API, optionally resampled."""
     end = datetime.now(UTC)
     start = end - timedelta(days=lookback_days)
     start_ms = int(start.timestamp() * 1000)
@@ -57,7 +64,10 @@ def fetch_recent(symbol: str, lookback_days: int = 120) -> pd.DataFrame:
     for c in ("open", "high", "low", "close", "volume"):
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
-    return df.dropna(subset=["close"]).sort_index()
+    df = df.dropna(subset=["close"]).sort_index()
+    if timeframe != "1h":
+        df = resample_ohlcv(df, timeframe)
+    return df
 
 
 def make_alpha(name: str, params: dict):
@@ -71,7 +81,10 @@ def make_alpha(name: str, params: dict):
     raise ValueError(name)
 
 
-def run_engine(symbol: str, df: pd.DataFrame) -> dict:
+TF_PPY = {"1h": 24*365, "2h": 12*365, "4h": 6*365, "8h": 3*365, "1d": 365}
+
+
+def run_engine(symbol: str, df: pd.DataFrame, timeframe: str = "1h") -> dict:
     """Run v4 engine on a single symbol, return current signal + diagnostics."""
     ret = df["close"].pct_change().fillna(0.0)
 
@@ -94,10 +107,12 @@ def run_engine(symbol: str, df: pd.DataFrame) -> dict:
     current_regime = regime.proba.iloc[-1].idxmax() if regime.proba is not None else "?"
 
     # Ensemble
+    ppy = TF_PPY.get(timeframe, PPY)
+    dz = TURNOVER_DEADZONE if timeframe == "1h" else 0.05
     cfg = EnsembleConfig(
         combine_mode="equal",
-        periods_per_year=PPY,
-        turnover_deadzone=TURNOVER_DEADZONE,
+        periods_per_year=ppy,
+        turnover_deadzone=dz,
         sizing_mode=SIZING_MODE,
     )
     res = EnsembleAllocator(cfg).combine(
@@ -110,8 +125,9 @@ def run_engine(symbol: str, df: pd.DataFrame) -> dict:
 
     # Recent performance (30-day rolling)
     pnl = (pos * ret).values
-    recent_30d = pnl[-720:] if len(pnl) >= 720 else pnl
-    recent_sharpe = sharpe_ratio(recent_30d, periods_per_year=PPY)
+    bars_30d = int(30 * ppy / 365)
+    recent_30d = pnl[-bars_30d:] if len(pnl) >= bars_30d else pnl
+    recent_sharpe = sharpe_ratio(recent_30d, periods_per_year=ppy)
 
     # Price info
     last_close = float(df["close"].iloc[-1])
@@ -133,20 +149,23 @@ def run_engine(symbol: str, df: pd.DataFrame) -> dict:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser()
     ap.add_argument("--symbols", default="BTCUSDT,ETHUSDT,BNBUSDT,SOLUSDT,LINKUSDT")
     ap.add_argument("--lookback", type=int, default=120, help="days of history to fetch")
+    ap.add_argument("--timeframe", default="1h", choices=["1h", "4h", "8h"])
     ap.add_argument("--json", action="store_true", help="output as JSON")
     args = ap.parse_args()
 
     symbols = [s.strip() for s in args.symbols.split(",")]
+    tf = args.timeframe
     signals = []
 
     for symbol in symbols:
-        print(f"Fetching {symbol}...", end=" ", flush=True)
+        print(f"Fetching {symbol} ({tf})...", end=" ", flush=True)
         try:
-            df = fetch_recent(symbol, args.lookback)
+            df = fetch_recent(symbol, args.lookback, timeframe=tf)
             print(f"{len(df)} bars", flush=True)
-            sig = run_engine(symbol, df)
+            sig = run_engine(symbol, df, timeframe=tf)
             signals.append(sig)
         except Exception as exc:
             print(f"ERROR: {exc}")

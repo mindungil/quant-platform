@@ -166,3 +166,129 @@ Fetching LINKUSDT... 2880 bars
 ======================================================================
 
 Saved to /home/ubuntu/quant/data/signals/signals_20260410_0905.json
+Fetching BTCUSDT... 2880 bars
+Fetching ETHUSDT... 2880 bars
+Fetching BNBUSDT... 2880 bars
+Fetching SOLUSDT... 2880 bars
+Fetching LINKUSDT... 2880 bars
+
+======================================================================
+  v4 LIVE SIGNALS — 2026-04-10 10:05 UTC
+======================================================================
+
+  BTCUSDT  $71,797.81  regime=TREND_UP
+    Position: +0.6732  Δ=+0.0000     HOLD
+    30d Sharpe: +0.58  OK
+    Alphas: kalman_trend=+0.124 momentum_ensemble=+0.187 trend_breakout=+0.801 
+
+  ETHUSDT  $2,195.17  regime=TREND_UP
+    Position: +0.1381  Δ=+0.0000     HOLD
+    30d Sharpe: +1.70  OK
+    Alphas: kalman_trend=-0.080 momentum_ensemble=+0.180 trend_breakout=+0.400 
+
+  BNBUSDT  $601.13  regime=TREND_UP
+    Position: +0.1000  Δ=+0.0000     HOLD
+    30d Sharpe: -1.42  BAD
+    Alphas: kalman_trend=-0.140 momentum_ensemble=+0.000 trend_breakout=+0.400 
+
+  SOLUSDT  $83.50  regime=TREND_UP
+    Position: +0.0895  Δ=+0.0000     HOLD
+    30d Sharpe: -3.29  BAD
+    Alphas: kalman_trend=+0.054 momentum_ensemble=+0.000 trend_breakout=+0.000 
+
+  LINKUSDT  $8.95  regime=TREND_UP
+    Position: +0.1006  Δ=+0.0000     HOLD
+    30d Sharpe: -1.50  BAD
+    Alphas: kalman_trend=+0.120 momentum_ensemble=+0.000 trend_breakout=+0.423 
+
+----------------------------------------------------------------------
+  Net exposure: +1.10
+  Positions: BTCUSDT=+0.673, ETHUSDT=+0.138, BNBUSDT=+0.100, SOLUSDT=+0.089, LINKUSDT=+0.101
+  Engine health: DANGER (avg 30d Sharpe = -0.79)
+======================================================================
+
+Saved to /home/ubuntu/quant/data/signals/signals_20260410_1005.json
+Fetching BTCUSDT... 2880 bars
+Fetching ETHUSDT... 2880 bars
+Fetching BNBUSDT... 2880 bars
+Fetching SOLUSDT... 2880 bars
+Fetching LINKUSDT... 2880 bars
+
+======================================================================
+  v4 LIVE SIGNALS — 2026-04-10 11:05 UTC
+======================================================================
+
+  BTCUSDT  $71,996.52  regime=TREND_UP
+    Position: +0.5503  Δ=-0.1229  >> SELL
+    30d Sharpe: +0.72  OK
+    Alphas: kalman_trend=+0.117 momentum_ensemble=+0.187 trend_breakout=+0.749 
+
+  ETHUSDT  $2,201.33  regime=TREND_UP
+    Position: +0.1381  Δ=+0.0000     HOLD
+    30d Sharpe: +1.68  OK
+    Alphas: kalman_trend=-0.067 momentum_ensemble=+0.180 trend_breakout=+0.400 
+
+  BNBUSDT  $601.17  regime=TREND_UP
+    Position: +0.1000  Δ=+0.0000     HOLD
+    30d Sharpe: -1.43  BAD
+    Alphas: kalman_trend=-0.148 momentum_ensemble=+0.000 trend_breakout=+0.400 
+
+  SOLUSDT  $83.42  regime=TREND_UP
+    Position: +0.0895  Δ=+0.0000     HOLD
+    30d Sharpe: -3.42  BAD
+    Alphas: kalman_trend=+0.051 momentum_ensemble=+0.000 trend_breakout=+0.000 
+
+  LINKUSDT  $8.96  regime=TREND_UP
+    Position: +0.1006  Δ=+0.0000     HOLD
+    30d Sharpe: -1.50  BAD
+    Alphas: kalman_trend=+0.116 momentum_ensemble=+0.000 trend_breakout=+0.400 
+
+----------------------------------------------------------------------
+  Net exposure: +0.98
+  Positions: BTCUSDT=+0.550, ETHUSDT=+0.138, BNBUSDT=+0.100, SOLUSDT=+0.089, LINKUSDT=+0.101
+  Engine health: DANGER (avg 30d Sharpe = -0.79)
+======================================================================
+
+Saved to /home/ubuntu/quant/data/signals/signals_20260410_1105.json
+Fetching BTCUSDT... 2880 bars
+Fetching ETHUSDT... 2880 bars
+Fetching BNBUSDT... 2880 bars
+Fetching SOLUSDT... 2880 bars
+Fetching LINKUSDT... 2880 bars
+
+======================================================================
+  v4 LIVE SIGNALS — 2026-04-10 12:05 UTC
+======================================================================
+
+  BTCUSDT  $72,178.94  regime=TREND_UP
+    Position: +0.5495  Δ=+0.0000     HOLD
+    30d Sharpe: +0.82  OK
+    Alphas: kalman_trend=+0.127 momentum_ensemble=+0.187 trend_breakout=+0.760 
+
+  ETHUSDT  $2,220.09  regime=TREND_UP
+    Position: +0.1381  Δ=+0.0000     HOLD
+    30d Sharpe: +1.77  OK
+    Alphas: kalman_trend=-0.022 momentum_ensemble=+0.180 trend_breakout=+0.434 
+
+  BNBUSDT  $603.17  regime=TREND_UP
+    Position: +0.1000  Δ=+0.0000     HOLD
+    30d Sharpe: -1.39  BAD
+    Alphas: kalman_trend=-0.134 momentum_ensemble=+0.000 trend_breakout=+0.400 
+
+  SOLUSDT  $83.66  regime=TREND_UP
+    Position: +0.0895  Δ=+0.0000     HOLD
+    30d Sharpe: -3.28  BAD
+    Alphas: kalman_trend=+0.058 momentum_ensemble=+0.000 trend_breakout=+0.000 
+
+  LINKUSDT  $9.00  regime=TREND_UP
+    Position: +0.1006  Δ=+0.0000     HOLD
+    30d Sharpe: -1.44  BAD
+    Alphas: kalman_trend=+0.132 momentum_ensemble=+0.000 trend_breakout=+0.431 
+
+----------------------------------------------------------------------
+  Net exposure: +0.98
+  Positions: BTCUSDT=+0.549, ETHUSDT=+0.138, BNBUSDT=+0.100, SOLUSDT=+0.089, LINKUSDT=+0.101
+  Engine health: DANGER (avg 30d Sharpe = -0.70)
+======================================================================
+
+Saved to /home/ubuntu/quant/data/signals/signals_20260410_1205.json

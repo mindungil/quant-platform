@@ -1,0 +1,24 @@
+{
+  "capital": 9995.1115,
+  "positions": {
+    "BTCUSDT": 0.5495,
+    "ETHUSDT": 0.1381,
+    "BNBUSDT": 0.1,
+    "SOLUSDT": 0.0895,
+    "LINKUSDT": 0.1006
+  },
+  "prices": {
+    "BTCUSDT": 72178.94,
+    "ETHUSDT": 2220.09,
+    "BNBUSDT": 603.17,
+    "SOLUSDT": 83.66,
+    "LINKUSDT": 9.0
+  },
+  "total_pnl": -4.8885000000000005,
+  "total_costs": 4.8885000000000005,
+  "n_trades": 5,
+  "peak_equity": 10000.0,
+  "max_drawdown": 0.0004888499999999112,
+  "last_update": "2026-04-10T12:53:52.482006+00:00",
+  "start_time": "2026-04-10T12:53:52.481608+00:00"
+}

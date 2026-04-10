@@ -9,8 +9,12 @@ mkdir -p "$LOG_DIR"
 
 # Write crontab
 (
-  # Hourly: generate signals for all 5 symbols
-  echo "5 * * * * cd $REPO && $PYTHON scripts/live/generate_signals.py >> $LOG_DIR/signals.log 2>&1"
+  # Hourly: generate 1h signals for all 5 symbols
+  echo "5 * * * * cd $REPO && $PYTHON scripts/live/generate_signals.py --timeframe 1h >> $LOG_DIR/signals.log 2>&1"
+  # Every 8h (00:05, 08:05, 16:05): generate 8h signals (deployment config)
+  echo "5 0,8,16 * * * cd $REPO && $PYTHON scripts/live/generate_signals.py --timeframe 8h >> $LOG_DIR/signals_8h.log 2>&1"
+  # Hourly +10min: update paper portfolio with latest signals
+  echo "10 * * * * cd $REPO && $PYTHON scripts/live/paper_portfolio.py update >> $LOG_DIR/paper.log 2>&1"
   # Daily at 00:15 UTC: performance report
   echo "15 0 * * * cd $REPO && $PYTHON scripts/live/daily_report.py >> $LOG_DIR/daily.log 2>&1"
   # Weekly Sunday 01:00: fetch latest funding rates
