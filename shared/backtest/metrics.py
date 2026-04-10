@@ -40,28 +40,62 @@ def apply_funding_cost(
     return pos * fr
 
 
+def market_impact_bps(
+    delta_notional: float,
+    bar_volume: float,
+    impact_coeff: float = 0.1,
+) -> float:
+    """Square-root market impact model (Almgren & Chriss 2001).
+
+    impact_bps = impact_coeff × √(|delta_notional| / bar_volume) × 10000
+
+    For a $50k trade on a bar with $10M volume:
+      impact = 0.1 × √(50000/10000000) × 10000 ≈ 7 bps
+
+    Args:
+        delta_notional: absolute change in notional ($)
+        bar_volume: total bar volume ($, use quote_volume)
+        impact_coeff: calibration constant (0.05-0.20 typical for crypto)
+
+    Returns:
+        additional cost in basis points (on top of fixed commission)
+    """
+    if bar_volume <= 0 or delta_notional <= 0:
+        return 0.0
+    participation = delta_notional / bar_volume
+    return float(impact_coeff * np.sqrt(participation) * 10000)
+
+
 def apply_transaction_costs(
     position,
     returns,
     cost_bps: float = 0.0,
     slippage_bps: float = 0.0,
     funding_rate_per_bar=None,
+    volume=None,
+    notional_per_unit: float = 0.0,
+    impact_coeff: float = 0.1,
 ) -> np.ndarray:
-    """Compute net per-bar PnL after costs from a (position, return) pair.
+    """Compute net per-bar PnL after ALL costs.
 
-    Cost model: round-trip = (cost_bps + slippage_bps) bps charged on the
-    *change in position* between bars (turnover). For a leverage move from
-    0.3→0.5 we pay |0.2| × bps. Two-sided trades (e.g. -0.4 → +0.4) pay 0.8.
-    This is the standard linear-impact cost model used in CTA backtests.
+    Cost layers:
+      1) Fixed commission: (cost_bps + slippage_bps) × |Δposition|
+      2) Market impact (if volume provided): sqrt(participation) model
+      3) Funding rate (if provided): position × funding_rate_per_bar
 
     Args:
         position: target position series (in units of underlying notional, [-1,1])
         returns:  underlying bar returns
         cost_bps: round-trip taker fee, e.g. 4 for Binance taker
         slippage_bps: extra slippage assumption, e.g. 1-3 bps
+        funding_rate_per_bar: per-bar funding rate (amortized from 8h)
+        volume: per-bar quote volume (for market impact). If None, impact=0.
+        notional_per_unit: $ value of 1 unit position (e.g. $100k portfolio).
+            Used to convert fractional position to notional for impact calc.
+        impact_coeff: sqrt-impact calibration (0.05-0.20 for crypto)
 
     Returns:
-        net per-bar return series after costs
+        net per-bar return series after all costs
     """
     pos = np.asarray(position, dtype=float)
     ret = np.asarray(returns, dtype=float)
@@ -71,6 +105,16 @@ def apply_transaction_costs(
     delta_pos = np.abs(np.diff(pos, prepend=0.0))
     bps_total = (float(cost_bps) + float(slippage_bps)) * 1e-4
     cost = delta_pos * bps_total
+
+    # Market impact (optional — requires volume data)
+    if volume is not None and notional_per_unit > 0:
+        vol_arr = np.asarray(volume, dtype=float)
+        for i in range(len(pos)):
+            if delta_pos[i] > 1e-8 and vol_arr[i] > 0:
+                trade_notional = delta_pos[i] * notional_per_unit
+                impact = market_impact_bps(trade_notional, vol_arr[i], impact_coeff) * 1e-4
+                cost[i] += delta_pos[i] * impact
+
     net = gross_pnl - cost
     # Subtract funding cost if provided
     if funding_rate_per_bar is not None:
