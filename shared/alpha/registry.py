@@ -16,9 +16,6 @@ from shared.alpha.mean_reversion import MeanReversionAlpha
 from shared.alpha.ml_forest import MetaForestAlpha
 from shared.alpha.ml_meta import MetaMLAlpha
 from shared.alpha.online_rls import OnlineRLSAlpha
-from shared.alpha.order_flow import OrderFlowAlpha
-from shared.alpha.lead_lag import LeadLagAlpha
-from shared.alpha.vwap_reversion import VWAPReversionAlpha
 from shared.alpha.momentum_ensemble import MomentumEnsembleAlpha
 from shared.alpha.stat_arb import StatArbAlpha
 from shared.alpha.trend_breakout import TrendBreakoutAlpha

@@ -1,0 +1,22 @@
+[
+  {
+    "symbol": "BTCUSDT",
+    "timestamp": "2026-04-10 08:00:00+00:00",
+    "price": 71634.71,
+    "regime": "TREND_UP",
+    "target_position": 0.0,
+    "position_change": 0.0,
+    "action": "HOLD",
+    "rolling_30d_sharpe": 2.18,
+    "alpha_positions": {
+      "kalman_trend": 0.1755,
+      "momentum_ensemble": 0.187,
+      "trend_breakout": 0.9633
+    },
+    "alpha_weights": {
+      "kalman_trend": 0.0,
+      "momentum_ensemble": 0.0,
+      "trend_breakout": 0.6
+    }
+  }
+]

@@ -3,7 +3,7 @@
 # Run: bash scripts/live/cron_setup.sh
 
 REPO="/home/ubuntu/quant"
-PYTHON="/usr/bin/python3"
+PYTHON="$(which python3)"
 LOG_DIR="$REPO/data/logs"
 mkdir -p "$LOG_DIR"
 

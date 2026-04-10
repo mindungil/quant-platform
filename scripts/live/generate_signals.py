@@ -40,22 +40,11 @@ from shared.regime import VolTrendRegime  # noqa: E402
 # Use the existing fetcher
 from scripts.data.fetch_binance_klines import fetch_full_history, INTERVAL_MS  # noqa: E402
 
+# Import v4.1 config from single source of truth
+sys.path.insert(0, str(REPO_ROOT / "scripts" / "bootstrap"))
+from _common import BEST_PARAMS, AFFINITY, SIZING_MODE, TURNOVER_DEADZONE, PPY  # noqa: E402
+
 UTC = timezone.utc
-PPY = 24 * 365
-CONFIG_PATH = REPO_ROOT / "config" / "v4_production.json"
-
-AFFINITY = {
-    "kalman_trend":      {"TREND_UP": 1.4, "TREND_DOWN": 1.4, "RANGE": 0.6, "CRISIS": 0.5},
-    "momentum_ensemble": {"TREND_UP": 1.4, "TREND_DOWN": 1.4, "RANGE": 0.5, "CRISIS": 0.4},
-    "trend_breakout":    {"TREND_UP": 1.5, "TREND_DOWN": 1.5, "RANGE": 0.4, "CRISIS": 0.6},
-}
-
-# v4.1 deep-sweep-tuned params (half-Kelly, validated on 5-8yr × 5 symbols)
-BEST_PARAMS = {
-    "kalman_trend": {"obs_var": 5e-4, "slope_var": 5e-8},
-    "momentum_ensemble": {"windows": [168, 720]},
-    "trend_breakout": {"donchian_window": 120, "exit_window": 55},
-}
 
 
 def fetch_recent(symbol: str, lookback_days: int = 120) -> pd.DataFrame:
@@ -108,8 +97,8 @@ def run_engine(symbol: str, df: pd.DataFrame) -> dict:
     cfg = EnsembleConfig(
         combine_mode="equal",
         periods_per_year=PPY,
-        turnover_deadzone=0.10,
-        sizing_mode="half_kelly",
+        turnover_deadzone=TURNOVER_DEADZONE,
+        sizing_mode=SIZING_MODE,
     )
     res = EnsembleAllocator(cfg).combine(
         alpha_pos, ret, regime_proba=regime.proba, regime_alpha_affinity=AFFINITY
