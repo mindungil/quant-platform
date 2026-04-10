@@ -17,8 +17,12 @@ mkdir -p "$LOG_DIR"
   echo "10 * * * * cd $REPO && $PYTHON scripts/live/paper_portfolio.py update >> $LOG_DIR/paper.log 2>&1"
   # Daily at 00:15 UTC: performance report
   echo "15 0 * * * cd $REPO && $PYTHON scripts/live/daily_report.py >> $LOG_DIR/daily.log 2>&1"
+  # Hourly +15min: engine health check
+  echo "15 * * * * cd $REPO && $PYTHON scripts/engine/health_check.py >> $LOG_DIR/health.log 2>&1"
   # Weekly Sunday 01:00: fetch latest funding rates
   echo "0 1 * * 0 cd $REPO && $PYTHON scripts/data/fetch_funding_rate.py >> $LOG_DIR/funding.log 2>&1"
+  # Weekly Sunday 02:00: automated parameter refit
+  echo "0 2 * * 0 cd $REPO && $PYTHON scripts/engine/weekly_refit.py >> $LOG_DIR/refit.log 2>&1"
 ) | crontab -
 
 echo "Cron jobs installed:"
