@@ -6,5 +6,32 @@ __pycache__/
 node_modules/
 .next/
 *.tsbuildinfo
+
+# Runtime data (writes from live/paper/loop processes — never commit)
 data/ohlcv/
 data/results/
+data/logs/
+data/loop/
+data/signals/
+data/cycles/
+data/metrics/
+data/models/
+data/external/
+data/derivatives/
+data/onchain/
+data/macro/
+data/kimchi/
+data/analysis/
+data/live_guard/
+data/paper/portfolio_state.json
+data/paper/portfolio_state.*.json
+data/paper/portfolio_history.jsonl
+data/state/
+data/tradfi/
+data/virtual/
+
+# Local Claude session state
+.claude/
+
+# Real credentials (use *.env.example to commit templates)
+infra/sentiment-daemon.env
