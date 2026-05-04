@@ -173,11 +173,48 @@ def run_engine(
     ret = df["close"].pct_change().fillna(0.0)
     ppy = TF_PPY.get(timeframe, 24 * 365)
 
-    # Config-level park check first
+    # Config-level park check. Parked symbols still compute live SR (with the
+    # default production alpha set if no override) so oos_tracker_30d and
+    # alpha_health_daily can keep monitoring whether the park decision still
+    # holds — without it we lose the signal needed to unpark.
     config_parked, park_reason = is_symbol_parked(cfg, symbol)
     if config_parked:
         last_close = float(df["close"].iloc[-1])
         last_time = str(df.index[-1])
+        sr_6m: float | None = None
+        sr_30d: float | None = None
+        try:
+            shadow_alphas = list(cfg.alphas.keys())
+            shadow_pos: dict[str, pd.Series] = {}
+            for name in shadow_alphas:
+                cfg_a = AlphaConfig(name=name, params=cfg.alphas.get(name, {}))
+                a = get_alpha(name, cfg_a, symbol=symbol)
+                shadow_pos[name] = a.generate(df).position
+            if shadow_pos:
+                regime = VolTrendRegime().fit_predict(df)
+                rr = RangeReversionAlpha()
+                chop = rr.get_regime_score(df).reindex(df.index).fillna(0.0)
+                damping = 1.0 - 0.5 * chop
+                for n in list(shadow_pos):
+                    shadow_pos[n] = shadow_pos[n] * damping
+                ens_cfg = EnsembleConfig(
+                    combine_mode=cfg.combine_mode, periods_per_year=ppy,
+                    sizing_mode=cfg.sizing_mode, kelly_fraction=cfg.kelly_fraction,
+                )
+                shadow_res = EnsembleAllocator(ens_cfg).combine(
+                    shadow_pos, ret, regime_proba=regime.proba, regime_alpha_affinity=AFFINITY
+                )
+                shadow_target = shadow_res.target_position.fillna(0.0)
+                shadow_pnl = (shadow_target.shift(1).fillna(0.0) * ret).values
+                bars_30d = int(30 * ppy / 365)
+                sr_30d_v = sharpe_ratio(shadow_pnl[-bars_30d:], periods_per_year=ppy)
+                _, _, sr_6m_v = evaluate_live_guard(cfg, shadow_pnl, ppy, symbol=symbol) if apply_live_guard else (None, None, float("nan"))
+                if np.isfinite(sr_6m_v):
+                    sr_6m = round(float(sr_6m_v), 2)
+                if np.isfinite(sr_30d_v):
+                    sr_30d = round(float(sr_30d_v), 2)
+        except Exception:
+            pass  # Monitoring is best-effort; never block PARK semantics
         return {
             "symbol": symbol,
             "timestamp": last_time,
@@ -189,8 +226,8 @@ def run_engine(
             "parked": True,
             "live_guard": "CONFIG_PARKED",
             "parked_reason": park_reason,
-            "rolling_30d_sharpe": None,
-            "live_6m_sharpe": None,
+            "rolling_30d_sharpe": sr_30d,
+            "live_6m_sharpe": sr_6m,
             "alpha_positions": {},
             "alpha_weights": {},
         }
