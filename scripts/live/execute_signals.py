@@ -43,7 +43,6 @@ import numpy as np
 import pandas as pd
 
 from shared.alpha.base import AlphaConfig
-from shared.alpha.kalman_trend import KalmanTrendAlpha
 from shared.alpha.momentum_ensemble import MomentumEnsembleAlpha
 from shared.alpha.trend_breakout import TrendBreakoutAlpha
 from shared.alpha.vol_breakout import VolBreakoutAlpha
@@ -59,9 +58,11 @@ from shared.notifications.telegram import TelegramNotifier
 UPBIT_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT"]
 BINANCE_SYMBOLS = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT"]
 
-# Production 알파 세트 (long-only eval에서 SR > 0.3 검증)
+# Production 알파 세트 (long-only eval에서 SR > 0.3 검증).
+# kalman_trend removed 2026-05-04: demoted in registry 2026-04-30 (6M SR -1.82).
+# generate_signals.py + signal_to_order_bridge are the canonical live signal
+# path; this list is only used by Upbit-spot dry-runs via bar_scheduler.
 ALPHAS = [
-    (KalmanTrendAlpha, "kalman", {"obs_var": 5e-4, "slope_var": 5e-8}),
     (MomentumEnsembleAlpha, "momentum", {}),   # default params (walk-forward tuned)
     (VolBreakoutAlpha, "vol_breakout", {}),
     (TrendBreakoutAlpha, "trend", {"donchian_window": 15, "exit_window": 7}),

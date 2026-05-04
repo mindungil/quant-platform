@@ -51,8 +51,8 @@ from shared.regime import VolTrendRegime  # noqa: E402
 from scripts.data.fetch_binance_klines import fetch_full_history  # noqa: E402
 
 # AFFINITY: regime → alpha weights. Built in-code (kept from v4.1).
+# kalman_trend entry removed 2026-05-04 (demoted from production set 2026-04-30).
 AFFINITY = {
-    "kalman_trend":      {"TREND_UP": 1.4, "TREND_DOWN": 1.4, "RANGE": 0.6, "CRISIS": 0.5},
     "momentum_ensemble": {"TREND_UP": 1.4, "TREND_DOWN": 1.4, "RANGE": 0.5, "CRISIS": 0.4},
     "trend_breakout":    {"TREND_UP": 1.5, "TREND_DOWN": 1.5, "RANGE": 0.4, "CRISIS": 0.6},
     "vol_breakout":      {"TREND_UP": 1.2, "TREND_DOWN": 1.2, "RANGE": 0.5, "CRISIS": 1.0},
