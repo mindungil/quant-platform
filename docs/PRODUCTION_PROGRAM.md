@@ -165,11 +165,13 @@ Scope:
 - `make seed-admin`
 - `make demo-flow`
 - `make smoke-e2e`
-- `make release-check`
+- `make release-check` with the compose stack already running, including `smoke-e2e`
 
 ## Remaining Gaps After Train D+
 
 - richer business metrics and dashboards beyond the shared HTTP request and correlation layer
 - broader live-mode verification across admin toggle, credentials, and allowed exchange policy
 - deeper execution-path integration coverage and duplicate-delivery idempotency tests
+- durable external-context fallback and degraded-mode monitoring are now required release surfaces
+- active-order reconciliation must remain green for partial fills and delayed exchange confirmations
 - full multi-asset completion for ETF and stock release quality
