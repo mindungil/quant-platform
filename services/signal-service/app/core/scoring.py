@@ -218,7 +218,12 @@ def build_signal_response(
             w = _EXT_WEIGHTS["news_sentiment"]
             score_components["news_sentiment"] = round(external_context.news_sentiment * w, 4)
             external_keyed.append(("news_sentiment", external_context.news_sentiment, w))
-        if external_context.onchain_score is not None:
+        # On-chain composite is computed only for BTC (n_tx, hash_rate, fees
+        # are BTC-specific; non-BTC assets get a hardcoded 0.0 in the
+        # external-data-service snapshot). Including it for ETH/BNB/SOL would
+        # add a constant -w bias from `(0 * 2 - 1) * w = -w` which is noise,
+        # not signal. Skip for non-BTC assets.
+        if external_context.onchain_score is not None and asset.upper().startswith("BTC"):
             # Normalize [0, 1] → [-1, 1]
             onchain_norm = external_context.onchain_score * 2 - 1
             w = _EXT_WEIGHTS["onchain"]

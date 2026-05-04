@@ -371,3 +371,35 @@ def test_reference_price_is_close():
     f = _features(close=42000, rsi_14=50, macd=0, macd_signal=0, sma_20=42000)
     r = _score(f, threshold=0.6)
     assert r.reference_price == 42000
+
+
+def test_onchain_score_btc_only():
+    """onchain_score is BTC-specific (n_tx/hash_rate/fees). For non-BTC assets
+    the external-data-service hardcodes 0.0, which scoring would normalize to
+    -1 and add a constant -w bias to the signal — noise, not signal. Verify
+    onchain_score is included only when asset starts with BTC."""
+    f = _features(close=100, rsi_14=50, macd=0, macd_signal=0, sma_20=100)
+    ext = _external(news_sentiment=0.5, onchain_score=0.0, fear_greed_index=50)
+
+    # BTC: onchain_score component present
+    r_btc = build_signal_response(
+        asset="BTCUSDT", features=f, threshold=0.6,
+        external_context=ext, external_signal_weight=0.35,
+    )
+    assert "onchain_score" in r_btc.components
+
+    # ETH: onchain_score component must be absent (skipped at scoring boundary)
+    r_eth = build_signal_response(
+        asset="ETHUSDT", features=f, threshold=0.6,
+        external_context=ext, external_signal_weight=0.35,
+    )
+    assert "onchain_score" not in r_eth.components, \
+        "non-BTC assets must not receive an onchain bias"
+
+    # Same for SOL/BNB/XRP
+    for asset in ("BNBUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT"):
+        r = build_signal_response(
+            asset=asset, features=f, threshold=0.6,
+            external_context=ext, external_signal_weight=0.35,
+        )
+        assert "onchain_score" not in r.components, f"{asset} got an onchain bias"
