@@ -66,7 +66,7 @@ def test_get_alpha_unknown_raises():
     ["trend_breakout", "mean_reversion", "momentum_ensemble", "vol_breakout"],
 )
 def test_position_in_bounds(name, trending_df):
-    alpha = get_alpha(name)
+    alpha = get_alpha(name, allow_blocked=True)
     sig = alpha.generate(trending_df)
     assert sig.position.between(-1.0, 1.0).all()
     assert len(sig.position) == len(trending_df)
@@ -112,9 +112,10 @@ def test_carry_uses_funding_column():
 
 
 def test_stat_arb_requires_dict():
+    """Single-asset df → zero series + warning (safe-zero over TypeError)."""
     alpha = StatArbAlpha(AlphaConfig(name="stat_arb", params={"asset_a": "BTC", "asset_b": "ETH"}))
-    with pytest.raises(TypeError):
-        alpha._generate(generate_synthetic_ohlcv(n_bars=500))
+    sig = alpha._generate(generate_synthetic_ohlcv(n_bars=500))
+    assert (sig == 0).all()
 
 
 def test_stat_arb_runs_on_panel():

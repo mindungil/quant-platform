@@ -1,0 +1,37 @@
+{
+  "_doc": "Single source of truth for execution mode. Read by shared/execution/mode.py. Override priority: env EXECUTION_MODE > this file > legacy LIVE_TRADING_ENABLED env. Always defaults to 'paper'.",
+  "_modes": {
+    "paper": "scripts/live/paper_portfolio.py — signal-price fills, in-memory equity, no exchange calls",
+    "virtual": "shared/execution/virtual_futures.py — full sim with slippage/latency/partial-fills, isolated to data/virtual/",
+    "testnet": "Binance Futures testnet — real API, fake money, real microstructure",
+    "live": "Binance Futures mainnet — REAL MONEY, requires LIVE_TRADING_ENABLED=true + 2-week testnet soak + per-deploy --confirm-live"
+  },
+  "mode": "paper",
+  "live_safety": {
+    "require_confirm_flag": true,
+    "max_initial_capital_usd": 10000,
+    "kill_switch_required": true,
+    "min_testnet_soak_days": 14
+  },
+  "ramp": {
+    "_doc": "paper→live capital ramp. Applied as a multiplier to position sizes when mode=live. scripts/live/ramp_controller.py manages stage progression. Stays at 0.0 in non-live modes.",
+    "factor": 0.0,
+    "stages": [
+      0.0,
+      0.1,
+      0.3,
+      0.6,
+      1.0
+    ],
+    "min_days_per_stage": 3,
+    "promote_gates": {
+      "max_paper_dd_pct": 5.0,
+      "max_drift_bps_abs": 100.0,
+      "no_critical_alerts": true,
+      "min_live_pnl_pct": 0.0,
+      "_min_live_pnl_pct_doc": "Cumulative paper PnL since stage_started_at must be >= this percent (0 = break-even). Blocks promotion when alpha is bleeding even if DD/drift gates would otherwise pass."
+    }
+  },
+  "version": "1.1",
+  "last_updated": "2026-04-26"
+}

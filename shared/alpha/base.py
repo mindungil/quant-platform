@@ -60,7 +60,30 @@ class Alpha:
     They MUST avoid look-ahead (no using future bars to set position[t]).
     The base class enforces this by shifting the raw output by 1 bar — the
     position decided using bar `t`'s close becomes the target *from* `t+1`.
+
+    Class-level capability flags let the validator + meta-engine make
+    informed decisions before calling generate():
+
+      requires_panel   — needs a {asset: df} dict input, not a single
+                         DataFrame. Cross-sectional and pairs alphas.
+      requires_exog    — needs exogenous data injected via constructor
+                         (fear/greed, funding, tradfi). Returning zero
+                         from _generate() is the safe no-op when the
+                         factory didn't wire it up.
+      requires_training — ML alphas that need an explicit fit cycle
+                         before predictions are meaningful. Default
+                         False because most in-house ML alphas do
+                         internal walk-forward training.
+      safe_for_standalone_use — False when using this alpha solo as a
+                         trading strategy is likely to cause catastrophic
+                         cumulative drawdown. Consumers should only use
+                         such alphas inside a diversified ensemble.
     """
+
+    requires_panel: bool = False
+    requires_exog: bool = False
+    requires_training: bool = False
+    safe_for_standalone_use: bool = True
 
     def __init__(self, config: AlphaConfig) -> None:
         self.config = config
@@ -78,6 +101,14 @@ class Alpha:
             )
         # Enforce no look-ahead: shift by 1 so target_pos[t+1] is decided on bar t close
         shifted = raw.shift(1).fillna(0.0)
+        # Opt-in position smoothing: ML alphas and any alpha that sets
+        # `position_smoothing` in its config params gets a final EMA
+        # pass. Stops high-turnover predictors from bleeding all their
+        # edge into transaction costs.
+        smoothing = getattr(self, "_position_smoothing_default", 0)
+        smoothing = int(self.config.params.get("position_smoothing", smoothing) or 0)
+        if smoothing > 1:
+            shifted = shifted.ewm(span=smoothing, adjust=False, min_periods=1).mean()
         # Apply long-only mask
         if self.config.long_only:
             shifted = shifted.clip(lower=0.0)

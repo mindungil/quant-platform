@@ -15,7 +15,7 @@ def ensemble_setup():
     df = generate_synthetic_ohlcv(n_bars=2500, seed=7, trend_strength=8.0)
     ret = df["close"].pct_change().fillna(0.0)
     alpha_pos = {
-        name: get_alpha(name).generate(df).position
+        name: get_alpha(name, allow_blocked=True).generate(df).position
         for name in ["trend_breakout", "momentum_ensemble", "mean_reversion"]
     }
     alloc = EnsembleAllocator(EnsembleConfig(combine_mode="inverse_vol", periods_per_year=24 * 365))

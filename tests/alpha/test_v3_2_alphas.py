@@ -32,7 +32,12 @@ def test_online_rls_warmup_zeros(df):
 
 
 def test_online_rls_in_registry():
-    a = get_alpha("online_rls")
+    import pytest
+    # online_rls is blocked by default (numerically unstable)
+    with pytest.raises(ValueError, match="blocked"):
+        get_alpha("online_rls")
+    # But accessible with allow_blocked=True
+    a = get_alpha("online_rls", allow_blocked=True)
     assert a.name == "online_rls"
 
 

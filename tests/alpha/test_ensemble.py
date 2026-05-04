@@ -15,7 +15,9 @@ def df_and_alphas():
     df = generate_synthetic_ohlcv(n_bars=2500, seed=7, trend_strength=8.0)
     alpha_pos = {}
     for name in ["trend_breakout", "momentum_ensemble", "mean_reversion"]:
-        alpha_pos[name] = get_alpha(name).generate(df).position
+        # mean_reversion is registry-blocked (harmful on crypto). Still OK as
+        # a fixture for ensemble-combine logic tests — we never actually trade it.
+        alpha_pos[name] = get_alpha(name, allow_blocked=True).generate(df).position
     return df, alpha_pos
 
 

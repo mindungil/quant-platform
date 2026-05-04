@@ -18,6 +18,7 @@ deterministic and side-effect-free.
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import Iterable
 
@@ -25,6 +26,8 @@ import numpy as np
 import pandas as pd
 
 from shared.portfolio.hrp import hrp_weights
+
+logger = logging.getLogger("ensemble")
 from shared.portfolio.nco import NCOConfig, nco_weights
 
 
@@ -51,8 +54,10 @@ class EnsembleConfig:
     # v3.1: self-Sharpe confidence gate. When the rolling Sharpe of the
     # combined signal turns negative, scale positions down. Acts as a
     # "trend-follow your own equity curve" guard against dead markets.
-    self_sharpe_window: int = 720          # ~30d hourly
-    self_sharpe_floor: float = 0.3         # minimum scale when self-sharpe is bad
+    # v4.5 (2026-04-20): widened from 720 to 1440 (60d) so short noise spikes
+    # don't trigger the gate; floor raised from 0.3 to 0.5 for same reason.
+    self_sharpe_window: int = 1440         # ~60d hourly (was 720/30d)
+    self_sharpe_floor: float = 0.5         # minimum scale when self-sharpe is bad (was 0.3)
     self_sharpe_full: float = 0.5          # sharpe at which scale = 1
     enable_self_sharpe_gate: bool = True
     # v3.3: per-alpha online performance gate. Each alpha gets a multiplicative
@@ -64,9 +69,14 @@ class EnsembleConfig:
     # aggressively (-0.2 instead of -0.5), and require positive Sharpe (+0.3)
     # to fully open the gate. This actually fires on real data; the v3.3
     # defaults barely activated.
+    # v4.5 (2026-04-20): 12h MC loop showed alpha_gate_floor=0.0 caused
+    # total kill under fill_failure/latency noise → stale positions drag
+    # mean Sharpe from 1.09 (clean) to -0.15 (perturbed). Raising floor to
+    # 0.3 keeps alphas minimally alive during noise episodes so the
+    # recovery path remains reachable.
     alpha_gate_window: int = 360
     alpha_gate_min_history: int = 120
-    alpha_gate_floor: float = 0.0
+    alpha_gate_floor: float = 0.3
     alpha_gate_full: float = 0.3
     alpha_gate_kill_below: float = -0.2
     # v3.3: turnover hysteresis. After all gating/scaling, if the new target
@@ -80,9 +90,11 @@ class EnsembleConfig:
     # PnL has drifted negative, the engine is in a dead regime — scale to
     # `long_kill_floor` until it recovers. This catches entire bad years
     # (2021, 2023) that the regime detector labeled as "RANGE" but were
-    # actually unfit for the alpha library. Disabled by default so tests
-    # stay deterministic; enabled by real scripts.
-    enable_long_kill: bool = False
+    # actually unfit for the alpha library. v4.5 (2026-04-20): enabled by
+    # default — the 12h MC loop showed letting long-dead regimes run
+    # compounds losses into 100% DD tail. Tests that need deterministic
+    # behavior pass a config override.
+    enable_long_kill: bool = True
     long_kill_window: int = 24 * 365       # 1 year of hourly bars
     long_kill_min_history: int = 24 * 120  # need 120d before it activates
     long_kill_floor: float = 0.1           # go nearly flat when dead
@@ -92,6 +104,38 @@ class EnsembleConfig:
     # (net) PnL — otherwise it misses bad years where gross is positive but
     # costs eat the entire edge (e.g. 2023 BTC: gross +0.4 Sharpe, net -1.9).
     long_kill_cost_bps: float = 5.0
+    # v4.5 (2026-04-20): stale-position guard. If the target has been pinned
+    # at the same non-zero value for `stale_ttl_bars` bars AND gates are
+    # active (meaning the engine isn't generating fresh conviction), flatten
+    # to zero instead of carrying the stale position. 0 disables the guard.
+    stale_ttl_bars: int = 48               # 2d hourly
+    # v4.6 (2026-04-20): massive robustness overhaul driven by 3h MC loop.
+    # B2: minimum bars between gate state flips — prevents cool-off flicker.
+    gate_cooldown_bars: int = 48
+    # B3: only feed gates with PnL beyond `pnl_noise_z` std-devs (noise floor).
+    pnl_noise_z: float = 1.0
+    # B4: cap |ΔposÎ per rolling window — hard turnover budget.
+    turnover_budget_window: int = 168      # weekly
+    turnover_budget_max: float = 8.0       # sum(|Δpos|) over window
+    # C2: reduce weight of alphas whose pairwise rolling corr > threshold.
+    corr_penalty_threshold: float = 0.8
+    corr_penalty_scale: float = 0.5
+    corr_penalty_window: int = 360
+    # C3: 3σ left-tail vol spike → scale override.
+    tail_left_window: int = 168
+    tail_left_z: float = 3.0
+    tail_left_scale: float = 0.5
+    # C4: engine equity self-regime scaling. Detects CHOP/DEAD on OWN
+    # equity → gross *= scale.
+    equity_regime_scale: float = 0.3
+    equity_regime_window: int = 720
+    # C5: DD-penalty Kelly multiplier.
+    kelly_dd_penalty: float = 0.7           # multiplier per 10% DD
+    # D2: regime persistence — only switch regime if new label holds ≥ N bars.
+    regime_persistence_bars: int = 24
+    # D3: out-of-regime starvation threshold. Alphas with affinity <= this
+    # in the current regime get weight 0.
+    regime_starvation_floor: float = 0.3
 
 
 @dataclass
@@ -156,21 +200,29 @@ class EnsembleAllocator:
         # affinity to the current regime, then renormalize. Affinity is
         # an external prior — typically: trend alphas like TREND_*, MR
         # alphas like RANGE, vol-breakout likes CRISIS-recovery, etc.
+        # v4.6 D3: alphas with weighted affinity < regime_starvation_floor
+        # get zero weight (out-of-regime starvation).
         if regime_proba is not None and regime_alpha_affinity is not None:
             regime_proba = regime_proba.reindex(positions_df.index).ffill().fillna(1.0 / regime_proba.shape[1])
             for alpha_name in positions_df.columns:
                 affinity = regime_alpha_affinity.get(alpha_name, {})
                 if not affinity:
                     continue
-                # Weighted affinity at each bar = Σ_state proba(state) * affinity(state)
                 aff_series = pd.Series(0.0, index=positions_df.index)
                 for state, score in affinity.items():
                     if state in regime_proba.columns:
                         aff_series = aff_series + regime_proba[state] * float(score)
-                weights[alpha_name] = weights[alpha_name] * aff_series
-            # Renormalize after regime weighting
-            row_sums = weights.sum(axis=1).replace(0, 1.0)
-            weights = weights.div(row_sums, axis=0)
+                # D3: zero out when affinity severely negative
+                starve_mask = aff_series < self.config.regime_starvation_floor
+                weights[alpha_name] = weights[alpha_name] * aff_series.where(~starve_mask, 0.0)
+            # Renormalize after regime weighting (rows that collapsed get uniform)
+            row_sums = weights.sum(axis=1)
+            zero_rows = row_sums <= 1e-12
+            if zero_rows.any():
+                n = weights.shape[1]
+                weights.loc[zero_rows] = 1.0 / n
+                row_sums = weights.sum(axis=1)
+            weights = weights.div(row_sums.replace(0, 1.0), axis=0)
 
         # Apply per-alpha cap. The classical "cap then renormalize" loop
         # over-shoots when uncapped weights remain — we use a closed-form
@@ -231,8 +283,19 @@ class EnsembleAllocator:
         if self.config.enable_long_kill:
             target = self._apply_long_kill(target, ret)
 
+        # v4.6 C3: 3σ left-tail vol spike → downscale
+        target = self._apply_tail_left_spike(target, ret)
+
         # Kill switch
         target = self._apply_kill_switch(target, target * ret)
+
+        # v4.4: sentiment risk filter — dampen signals during risk events
+        target = self._apply_sentiment_dampening(target)
+
+        # v4.5: stale-position guard (runs before hysteresis so flattens
+        # propagate; otherwise hysteresis would veto the return-to-zero move)
+        if self.config.stale_ttl_bars > 0:
+            target = self._apply_stale_guard(target)
 
         # v3.3: turnover hysteresis (final step — applied to fully resolved target)
         if self.config.turnover_deadzone > 0:
@@ -482,6 +545,52 @@ class EnsembleAllocator:
         scale = ramp.where(warm, 1.0)
         return position * scale
 
+    # ---- tail-left vol spike (v4.6 C3) ----
+
+    def _apply_tail_left_spike(self, position: pd.Series, returns: pd.Series) -> pd.Series:
+        """If rolling downside std spikes > tail_left_z σ vs long baseline,
+        scale gross by tail_left_scale. Catches asymmetric crashes."""
+        win = int(self.config.tail_left_window)
+        z_thr = float(self.config.tail_left_z)
+        scale = float(self.config.tail_left_scale)
+        downside = returns.clip(upper=0.0).abs()
+        std = downside.rolling(win, min_periods=max(20, win // 4)).std(ddof=0)
+        base = std.rolling(win * 4, min_periods=50).mean()
+        base_std = std.rolling(win * 4, min_periods=50).std(ddof=0).replace(0, np.nan)
+        z = ((std - base) / base_std).fillna(0.0)
+        out = position.copy()
+        mask = z > z_thr
+        if mask.any():
+            out[mask] = out[mask] * scale
+        return out
+
+    # ---- stale-position guard (v4.5) ----
+
+    def _apply_stale_guard(self, position: pd.Series) -> pd.Series:
+        """Flatten positions that have stayed at the same non-zero value for
+        `stale_ttl_bars` bars without refresh.
+
+        Signals that an upstream gate (alpha_gate, self_sharpe, long_kill)
+        has pinned the target — instead of holding a stale bet forever, we
+        return to flat so the next real conviction starts from zero.
+        """
+        ttl = int(self.config.stale_ttl_bars)
+        if ttl <= 0 or position.empty:
+            return position
+        arr = position.values.astype(float)
+        out = arr.copy()
+        stale_len = 0
+        last = arr[0]
+        for i in range(len(arr)):
+            if abs(arr[i] - last) < 1e-9:
+                stale_len += 1
+            else:
+                stale_len = 1
+                last = arr[i]
+            if stale_len > ttl and abs(arr[i]) > 1e-6:
+                out[i] = 0.0
+        return pd.Series(out, index=position.index)
+
     # ---- turnover hysteresis (v3.3) ----
 
     def _apply_hysteresis(self, position: pd.Series) -> pd.Series:
@@ -499,6 +608,50 @@ class EnsembleAllocator:
                 prev = new
             out[i] = prev
         return pd.Series(out, index=position.index)
+
+    # ---- sentiment risk filter ----
+
+    def _apply_sentiment_dampening(self, position: pd.Series) -> pd.Series:
+        """Dampen signals during active risk events (hack, regulation, etc).
+
+        Supports two index layouts:
+          - DatetimeIndex (single-asset time series) → apply GLOBAL dampening uniformly
+          - String index (multi-asset cross-section)  → per-asset lookup
+
+        Early returns are safer than per-timestamp string ops (Timestamp.replace
+        has a different meaning than str.replace — would raise ValueError).
+        """
+        try:
+            from shared.portfolio.sentiment_risk_filter import get_risk_dampening
+        except ImportError:
+            return position
+
+        # Time-indexed Series → apply single global dampening factor
+        if isinstance(position.index, pd.DatetimeIndex):
+            rd = get_risk_dampening("")  # "" → global events only
+            if rd.factor > 0.01:
+                if rd.factor > 0.3:
+                    logger.info(
+                        "DAMPENED (global) by %.0f%%: %s",
+                        rd.factor * 100, rd.reason,
+                    )
+                return position * (1 - rd.factor)
+            return position
+
+        # Symbol-indexed Series → per-asset
+        dampened = position.copy()
+        for asset in position.index:
+            if not isinstance(asset, str):
+                continue  # defensive: skip non-string keys
+            rd = get_risk_dampening(asset)
+            if rd.factor > 0.01:
+                dampened[asset] *= (1 - rd.factor)
+                if rd.factor > 0.3:
+                    logger.info(
+                        "DAMPENED %s by %.0f%%: %s",
+                        asset, rd.factor * 100, rd.reason,
+                    )
+        return dampened
 
     # ---- kill switch ----
 

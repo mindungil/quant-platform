@@ -68,14 +68,17 @@ class BacktestReport:
         }
 
 
-# Threshold tiers — different bars for seed-time validation vs. live promotion
+# Threshold tiers — different bars for seed-time validation vs. live promotion.
+# Seed thresholds raised: a 0.3 Sharpe seed lets through strategies that are
+# indistinguishable from noise, wasting shadow capacity. 0.5 minimum ensures
+# at least weak edge before consuming shadow resources.
 SEED_THRESHOLDS = {
-    "sharpe_min": 0.30,
-    "sortino_min": 0.40,
-    "max_drawdown_max": 0.45,
-    "profit_factor_min": 1.01,
+    "sharpe_min": 0.50,
+    "sortino_min": 0.60,
+    "max_drawdown_max": 0.35,
+    "profit_factor_min": 1.10,
     "min_n_obs": 250,
-    "deflated_sharpe_pvalue_min": 0.30,
+    "deflated_sharpe_pvalue_min": 0.20,
 }
 
 LIVE_THRESHOLDS = {

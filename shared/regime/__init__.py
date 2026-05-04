@@ -11,8 +11,41 @@ Two detectors:
 
 Both produce a per-bar regime label and a state-probability matrix that
 the EnsembleAllocator can use to dynamically reweight alphas.
+
+The legacy feature-dict-based `detect_regime`/`suggest_formula_type` API
+is re-exported for backward compatibility with existing agent code.
 """
 
-from shared.regime.detector import VolTrendRegime, HMMRegime, RegimeOutput
+from shared.regime.composite import (
+    AdxHurstRegime,
+    CompositeOutput,
+    CompositeRegime,
+    TREND_STATES,
+    VOL_STATES,
+    VolQuantileRegime,
+)
+from shared.regime.detector import HMMRegime, RegimeOutput, VolTrendRegime
+from shared.regime.enhanced import EnhancedRegime
+from shared.regime.legacy import (
+    MarketRegime,
+    RegimeDetector,
+    detect_regime,
+    suggest_formula_type,
+)
 
-__all__ = ["VolTrendRegime", "HMMRegime", "RegimeOutput"]
+__all__ = [
+    "VolTrendRegime",
+    "HMMRegime",
+    "EnhancedRegime",
+    "RegimeOutput",
+    "VolQuantileRegime",
+    "AdxHurstRegime",
+    "CompositeRegime",
+    "CompositeOutput",
+    "VOL_STATES",
+    "TREND_STATES",
+    "MarketRegime",
+    "RegimeDetector",
+    "detect_regime",
+    "suggest_formula_type",
+]
