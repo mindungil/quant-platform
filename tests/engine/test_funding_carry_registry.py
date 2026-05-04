@@ -39,36 +39,48 @@ def test_get_alpha_without_symbol_still_works():
     assert alpha is not None
 
 
-def test_production_config_includes_funding_carry_per_symbol():
+def test_production_config_includes_funding_carry_per_active_symbol():
     cfg = load_config("config/v4_production.json")
     assert "funding_carry" in cfg.alphas
 
-    # BTC/ETH/BNB/SOL should have funding_carry in their override list
-    # (SOL re-promoted 2026-04-30 per EXPAND-C findings)
-    for sym in ("BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT"):
+    # Active symbols (BTC + ETH as of 2026-05-04 universe optimization) must
+    # carry funding_carry in their override list. BNB and SOL were parked
+    # (data/results/universe_decision_2026-05-04.md) — their override entries
+    # remain wired for unparking but the symbols themselves are inactive.
+    for sym in ("BTCUSDT", "ETHUSDT"):
         names, params = alphas_for_symbol(cfg, sym)
         assert "funding_carry" in names, f"{sym} missing funding_carry"
-        # Per-symbol param must be set
         sym_params = params["funding_carry"]
         assert "z_window" in sym_params
         assert "dead_zone" in sym_params
         assert "scale" in sym_params
 
-    # Parked symbols should not have it
-    for sym in ("XRPUSDT", "DOGEUSDT"):
+    # All parked symbols (no-edge + universe-decision parks) return [].
+    for sym in ("XRPUSDT", "DOGEUSDT", "BNBUSDT", "SOLUSDT"):
         names, _ = alphas_for_symbol(cfg, sym)
-        assert names == []
+        assert names == [], f"{sym} should be parked (no alphas)"
 
 
-def test_funding_carry_per_symbol_params_differ():
-    """Each symbol has its own sweep-optimal params."""
+def test_funding_carry_per_symbol_params_differ_for_active():
+    """Each active symbol has its own sweep-optimal params."""
     cfg = load_config("config/v4_production.json")
     btc_p = alphas_for_symbol(cfg, "BTCUSDT")[1]["funding_carry"]
     eth_p = alphas_for_symbol(cfg, "ETHUSDT")[1]["funding_carry"]
-    bnb_p = alphas_for_symbol(cfg, "BNBUSDT")[1]["funding_carry"]
     # Per sweep results (2026-04-24): BTC uses longer window, ETH shorter
     assert btc_p["z_window"] != eth_p["z_window"]
-    assert btc_p["z_window"] != bnb_p["z_window"]
+
+
+def test_parked_overrides_still_have_funding_carry_params():
+    """When BNB/SOL get unparked their funding_carry params should already be
+    wired so we don't lose the per-symbol tuning. asset_overrides survives
+    the symbols_parked move (intentional)."""
+    cfg = load_config("config/v4_production.json")
+    bnb_override = cfg.asset_overrides.get("BNBUSDT", {})
+    sol_override = cfg.asset_overrides.get("SOLUSDT", {})
+    assert bnb_override.get("params", {}).get("funding_carry"), \
+        "BNBUSDT override lost funding_carry params — unparking would default-revert"
+    assert sol_override.get("params", {}).get("funding_carry"), \
+        "SOLUSDT override lost funding_carry params"
 
 
 def test_funding_carry_generates_series_for_known_symbol():

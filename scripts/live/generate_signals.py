@@ -46,19 +46,13 @@ from shared.alpha.registry import get_alpha  # noqa: E402
 from shared.backtest.metrics import sharpe_ratio  # noqa: E402
 from shared.engine.config import EngineConfig, alphas_for_symbol, is_symbol_parked, load_config  # noqa: E402
 from shared.portfolio import EnsembleAllocator, EnsembleConfig  # noqa: E402
-from shared.regime import VolTrendRegime  # noqa: E402
+from shared.regime import DEFAULT_AFFINITY as AFFINITY, VolTrendRegime  # noqa: E402
 
 from scripts.data.fetch_binance_klines import fetch_full_history  # noqa: E402
 
-# AFFINITY: regime → alpha weights. Built in-code (kept from v4.1).
-# kalman_trend entry removed 2026-05-04 (demoted from production set 2026-04-30).
-AFFINITY = {
-    "momentum_ensemble": {"TREND_UP": 1.4, "TREND_DOWN": 1.4, "RANGE": 0.5, "CRISIS": 0.4},
-    "trend_breakout":    {"TREND_UP": 1.5, "TREND_DOWN": 1.5, "RANGE": 0.4, "CRISIS": 0.6},
-    "vol_breakout":      {"TREND_UP": 1.2, "TREND_DOWN": 1.2, "RANGE": 0.5, "CRISIS": 1.0},
-    "range_reversion":   {"TREND_UP": 0.5, "TREND_DOWN": 0.5, "RANGE": 1.3, "CRISIS": 0.7},
-    "funding_carry":     {"TREND_UP": 0.8, "TREND_DOWN": 0.8, "RANGE": 1.0, "CRISIS": 1.2},
-}
+# AFFINITY now lives in shared.regime.DEFAULT_AFFINITY (imported above) so
+# generate_signals.py / alpha_attribution / deflation_adjusted_backtest /
+# stress_window_replay don't drift apart over time.
 
 UTC = timezone.utc
 

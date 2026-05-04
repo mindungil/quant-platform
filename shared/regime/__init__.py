@@ -33,6 +33,19 @@ from shared.regime.legacy import (
     suggest_formula_type,
 )
 
+
+# Canonical hard-coded affinity priors for VolTrendRegime's 4 states. Used by
+# generate_signals.py and the research backtest scripts as the static fallback
+# when no fitted affinity (data/state/regime_alpha_fit.json) is available.
+# Keys must match VolTrendRegime.STATE_NAMES exactly.
+DEFAULT_AFFINITY: dict[str, dict[str, float]] = {
+    "momentum_ensemble": {"TREND_UP": 1.4, "TREND_DOWN": 1.4, "RANGE": 0.5, "CRISIS": 0.4},
+    "trend_breakout":    {"TREND_UP": 1.5, "TREND_DOWN": 1.5, "RANGE": 0.4, "CRISIS": 0.6},
+    "vol_breakout":      {"TREND_UP": 1.2, "TREND_DOWN": 1.2, "RANGE": 0.5, "CRISIS": 1.0},
+    "range_reversion":   {"TREND_UP": 0.5, "TREND_DOWN": 0.5, "RANGE": 1.3, "CRISIS": 0.7},
+    "funding_carry":     {"TREND_UP": 0.8, "TREND_DOWN": 0.8, "RANGE": 1.0, "CRISIS": 1.2},
+}
+
 __all__ = [
     "VolTrendRegime",
     "HMMRegime",
@@ -48,4 +61,5 @@ __all__ = [
     "RegimeDetector",
     "detect_regime",
     "suggest_formula_type",
+    "DEFAULT_AFFINITY",
 ]
