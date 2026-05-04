@@ -37,6 +37,49 @@ def compute(payload: StatisticsInput) -> StatisticsSnapshot:
     return compute_statistics(payload)
 
 
+@router.get("/statistics/drift/summary")
+def drift_summary() -> dict:
+    """Aggregate strategy_drift_score / alert across all strategies.
+
+    Pre-2026-05: signal-health monitoring queried /statistics/drift, which
+    silently matched the /statistics/{user_id} catch-all and returned
+    empty stats with user_id="drift". This endpoint surfaces the actual
+    Prometheus drift gauges as JSON so monitoring scripts can consume it
+    without parsing the metrics text format.
+    """
+    from app.core.engine import strategy_drift_score, strategy_drift_alert, drift_alert_threshold
+
+    strategies: dict[str, dict] = {}
+    for metric, key in (
+        (strategy_drift_score, "score"),
+        (strategy_drift_alert, "alert_level"),
+        (drift_alert_threshold, "threshold"),
+    ):
+        for sample in metric.collect()[0].samples:
+            sid = sample.labels.get("strategy_id", "unknown")
+            strategies.setdefault(sid, {})[key] = sample.value
+
+    alerting = [sid for sid, s in strategies.items() if s.get("alert_level", 0) >= 1]
+    critical = [sid for sid, s in strategies.items() if s.get("alert_level", 0) >= 2]
+
+    return {
+        "n_strategies": len(strategies),
+        "n_alerting": len(alerting),
+        "n_critical": len(critical),
+        "alerting_strategies": alerting,
+        "critical_strategies": critical,
+        "by_strategy": {
+            sid: {
+                "score": round(s.get("score", 0.0), 4),
+                "alert_level": int(s.get("alert_level", 0)),
+                "threshold": round(s.get("threshold", 0.0), 4),
+            }
+            for sid, s in strategies.items()
+        },
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 @router.post("/statistics/record", response_model=StatisticsSnapshot)
 def record_trade_internal(
     payload: StatisticsInput,
