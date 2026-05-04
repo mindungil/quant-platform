@@ -72,7 +72,7 @@ def fetch_full(symbol: str, start: datetime, end: datetime) -> pd.DataFrame:
 
 
 def main() -> int:
-    symbols = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "LINKUSDT"]
+    symbols = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT"]
     start = datetime(2019, 9, 1, tzinfo=UTC)  # Binance Futures launch ~Sep 2019
     end = datetime.now(UTC)
     out_dir = REPO_ROOT / "data" / "funding"

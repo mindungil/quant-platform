@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import os
 from pathlib import Path
 
 from common import load_env
@@ -36,6 +37,7 @@ MARKET_TABLES = {
     "market_anomalies",
     "feature_history",
     "signal_history",
+    "external_context_snapshots",
 }
 
 
@@ -51,8 +53,11 @@ def _table_names(store: SqlStore) -> set[str]:
 
 
 def main() -> None:
-    platform = SqlStore("postgresql+psycopg://postgres:postgres@localhost:5432/platform")
-    market = SqlStore("postgresql+psycopg://postgres:postgres@localhost:5433/market")
+    default_db_url = "postgresql+psycopg://postgres:postgres@localhost:5432"
+    platform_base = os.getenv("PLATFORM_DB_SMOKE_URL", default_db_url)
+    market_base = os.getenv("MARKET_DB_SMOKE_URL", default_db_url)
+    platform = SqlStore(f"{platform_base.rstrip('/')}/platform")
+    market = SqlStore(f"{market_base.rstrip('/')}/market")
 
     platform_tables = _table_names(platform)
     market_tables = _table_names(market)

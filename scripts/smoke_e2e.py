@@ -10,6 +10,8 @@ import aiohttp
 
 from common import REPO_ROOT, bearer_headers, ensure_registered, load_env, login, request_json, service_url, wait_for_http
 
+_DEMO_PASSWORD = "Password123A"
+
 
 def _run_demo_flow() -> None:
     subprocess.run([sys.executable, str(REPO_ROOT / "scripts" / "demo_flow.py")], check=True)
@@ -48,7 +50,7 @@ async def _receive_product_event(ws_url: str, gateway_base: str, headers: dict[s
                 message = await socket.receive(timeout=12)
                 if message.type == aiohttp.WSMsgType.TEXT:
                     payload = json.loads(message.data)
-                    if payload.get("type") in {"order.filled", "portfolio.updated", "statistics.updated"}:
+                    if payload.get("type") in {"order.partially_filled", "order.filled", "portfolio.updated", "statistics.updated"}:
                         return payload
                 elif message.type in {aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR}:
                     break
@@ -71,11 +73,11 @@ def main() -> None:
     ensure_registered(
         gateway_base,
         email="demo@example.com",
-        password="password123",
+        password=_DEMO_PASSWORD,
         display_name="Demo Operator",
         plan="premium",
     )
-    login_response = login(gateway_base, email="demo@example.com", password="password123")
+    login_response = login(gateway_base, email="demo@example.com", password=_DEMO_PASSWORD)
     token = login_response["access_token"]
     headers = bearer_headers(token)
 
@@ -85,11 +87,21 @@ def main() -> None:
     signals = request_json("GET", f"{gateway_base}/signals", headers=headers)
     _stage("load feed")
     feed = request_json("GET", f"{gateway_base}/feed", headers=headers)
+    _stage("inspect durable execution state")
+    orders = request_json("GET", f"{gateway_base}/orders", headers=headers)
+    portfolio = request_json("GET", f"{gateway_base}/portfolio", headers=headers)
+    statistics = request_json("GET", f"{gateway_base}/performance", headers=headers)
+    if not orders:
+        raise RuntimeError("demo-flow did not persist orders")
+    if not portfolio.get("positions"):
+        raise RuntimeError("demo-flow did not update portfolio positions")
+    if statistics.get("trade_count", 0) < 1:
+        raise RuntimeError("demo-flow did not update statistics")
 
     ws_base = gateway_base.replace("http://", "ws://").replace("https://", "wss://")
     _stage("open websocket and await product event")
     event_payload = asyncio.run(_receive_product_event(f"{ws_base}/gateway/ws?token={token}", gateway_base, headers))
-    if event_payload.get("type") not in {"order.filled", "portfolio.updated", "statistics.updated"}:
+    if event_payload.get("type") not in {"order.partially_filled", "order.filled", "portfolio.updated", "statistics.updated"}:
         raise RuntimeError(f"unexpected websocket event: {event_payload}")
 
     print(
@@ -99,6 +111,9 @@ def main() -> None:
                 "dashboard_loaded": bool(dashboard),
                 "signals_loaded": len(signals),
                 "feed_loaded": len(feed.get("items", [])),
+                "orders_loaded": len(orders),
+                "portfolio_positions": len(portfolio.get("positions", {})),
+                "trade_count": statistics.get("trade_count", 0),
                 "websocket_event": event_payload.get("type") if event_payload else None,
             },
             indent=2,

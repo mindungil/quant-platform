@@ -8,6 +8,8 @@ from typing import Any
 
 from common import bearer_headers, ensure_registered, load_env, login, print_json, request_json, service_url, wait_for_http
 
+_DEMO_PASSWORD = "Password123A"
+
 
 def _stage(name: str) -> None:
     print(f"[demo-flow] {name}")
@@ -41,6 +43,22 @@ def _seed_strategy(gateway_base: str, token: str) -> dict[str, Any]:
             "version": "demo-v1",
         },
     )
+    request_json(
+        "PATCH",
+        f"{gateway_base}/strategies/{strategy['id']}/backtest",
+        headers=bearer_headers(token),
+        payload={
+            "status": "PASSED",
+            "metrics": {
+                "sharpe": 1.42,
+                "max_drawdown": 0.11,
+                "n_obs": 365,
+                "turnover": 1.8,
+                "expectancy": 0.021,
+            },
+            "source": "demo_flow_seed",
+        },
+    )
     return request_json(
         "PATCH",
         f"{gateway_base}/gateway/strategies/{strategy['id']}/status",
@@ -59,8 +77,62 @@ def _promote_signal_crossing_strategy(gateway_base: str, token: str) -> dict[str
             "asset_type": "crypto",
             "indicators": ["rsi_14", "macd", "sma_20", "vwap"],
             "weights": {"rsi": 0.25, "macd": 0.25, "sma_20": 0.25, "vwap": 0.25},
-            "thresholds": {"entry": 0.3, "exit": -0.3},
+            "thresholds": {"entry": 0.03, "exit": -0.03},
             "version": "demo-v2-tight",
+        },
+    )
+    request_json(
+        "PATCH",
+        f"{gateway_base}/strategies/{strategy['id']}/backtest",
+        headers=bearer_headers(token),
+        payload={
+            "status": "PASSED",
+            "metrics": {
+                "sharpe": 1.67,
+                "max_drawdown": 0.09,
+                "n_obs": 365,
+                "turnover": 2.1,
+                "expectancy": 0.028,
+            },
+            "source": "demo_flow_seed",
+        },
+    )
+    return request_json(
+        "PATCH",
+        f"{gateway_base}/gateway/strategies/{strategy['id']}/status",
+        headers=bearer_headers(token),
+        payload={"status": "ACTIVE"},
+    )
+
+
+def _force_signal_crossing_strategy(gateway_base: str, token: str) -> dict[str, Any]:
+    strategy = request_json(
+        "POST",
+        f"{gateway_base}/gateway/strategies",
+        headers=bearer_headers(token),
+        payload={
+            "name": "Operator Demo Momentum Forced",
+            "asset_type": "crypto",
+            "indicators": ["rsi_14", "macd", "sma_20", "vwap"],
+            "weights": {"rsi": 0.25, "macd": 0.25, "sma_20": 0.25, "vwap": 0.25},
+            "thresholds": {"entry": 0.01, "exit": -0.01},
+            "version": "demo-v3-forced",
+        },
+    )
+    request_json(
+        "PATCH",
+        f"{gateway_base}/strategies/{strategy['id']}/backtest",
+        headers=bearer_headers(token),
+        payload={
+            "status": "PASSED",
+            "metrics": {
+                "sharpe": 1.55,
+                "max_drawdown": 0.08,
+                "n_obs": 365,
+                "turnover": 2.4,
+                "expectancy": 0.031,
+            },
+            "source": "demo_flow_seed",
         },
     )
     return request_json(
@@ -112,11 +184,11 @@ def main() -> None:
     ensure_registered(
         gateway_base,
         email="demo@example.com",
-        password="password123",
+        password=_DEMO_PASSWORD,
         display_name="Demo Operator",
         plan="premium",
     )
-    login_response = login(gateway_base, email="demo@example.com", password="password123")
+    login_response = login(gateway_base, email="demo@example.com", password=_DEMO_PASSWORD)
     token = login_response["access_token"]
 
     _stage("seed active strategy and credentials")
@@ -141,6 +213,10 @@ def main() -> None:
     if not signal.get("threshold_crossed", False):
         _stage("tighten demo strategy thresholds and re-evaluate")
         strategy = _promote_signal_crossing_strategy(gateway_base, token)
+        signal = request_json("POST", f"{signal_base}/signals/evaluate/BTCUSDT", headers=user_headers)
+    if not signal.get("threshold_crossed", False):
+        _stage("force demo strategy thresholds and re-evaluate")
+        strategy = _force_signal_crossing_strategy(gateway_base, token)
         signal = request_json("POST", f"{signal_base}/signals/evaluate/BTCUSDT", headers=user_headers)
     if not signal.get("threshold_crossed", False):
         raise RuntimeError(f"expected demo signal to cross threshold, got {signal}")

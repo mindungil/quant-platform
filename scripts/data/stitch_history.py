@@ -62,7 +62,7 @@ def stitch(symbol: str) -> pd.DataFrame | None:
 
 
 def main() -> int:
-    symbols = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "LINKUSDT"]
+    symbols = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT"]
     for sym in symbols:
         print(f"\n→ {sym}")
         stitched = stitch(sym)

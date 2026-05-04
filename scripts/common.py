@@ -71,7 +71,7 @@ def ensure_registered(gateway_base: str, *, email: str, password: str, display_n
         json={"email": email, "password": password, "display_name": display_name, "plan": plan},
         timeout=10.0,
     )
-    if response.status_code in (200, 201, 409):
+    if response.status_code in (200, 201, 409, 429):
         return
     raise RuntimeError(f"register failed: {response.status_code} {response.text}")
 

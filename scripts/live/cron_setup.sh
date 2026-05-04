@@ -15,6 +15,12 @@ mkdir -p "$LOG_DIR"
   echo "5 0,8,16 * * * cd $REPO && $PYTHON scripts/live/generate_signals.py --timeframe 8h >> $LOG_DIR/signals_8h.log 2>&1"
   # Hourly +10min: update paper portfolio with latest signals
   echo "10 * * * * cd $REPO && $PYTHON scripts/live/paper_portfolio.py update >> $LOG_DIR/paper.log 2>&1"
+  # Hourly +20min: signal→order bridge in VIRTUAL mode (in-memory sim).
+  # State lives under data/virtual/ — ISOLATED from paper/, execution/,
+  # and any real/testnet exchange. Run scripts/virtual/init.py once first.
+  # When promoting to real exchange, replace --virtual with --testnet
+  # (+ --api-key/--api-secret) or --live --confirm-live.
+  echo "20 * * * * cd $REPO && $PYTHON scripts/live/signal_to_order_bridge.py --virtual --max-position-per-symbol 0.40 --max-gross-exposure 2.0 >> $LOG_DIR/bridge_virtual.log 2>&1"
   # Daily at 00:15 UTC: performance report
   echo "15 0 * * * cd $REPO && $PYTHON scripts/live/daily_report.py >> $LOG_DIR/daily.log 2>&1"
   # Hourly +15min: engine health check
