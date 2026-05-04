@@ -90,6 +90,7 @@ def _smart_fallback(payload: ReasoningRequest) -> str:
     """데이터 기반 자동 추론 — LLM 없이도 의미 있는 분석 생성."""
     score = payload.signal_score
     components = payload.components or {}
+    external_context = payload.external_context or {}
     asset = payload.asset.replace("USDT", "")
 
     # Analyze signal strength
@@ -156,6 +157,15 @@ def _smart_fallback(payload: ReasoningRequest) -> str:
     # Add memory reference if available
     if payload.memory_count > 0:
         parts.append(f"과거 유사 상황 {payload.memory_count}건을 참조하여 판단했습니다.")
+
+    if external_context:
+        context_bits = ", ".join(
+            f"{key}={value}"
+            for key, value in sorted(external_context.items())
+            if value is not None
+        )
+        if context_bits:
+            parts.append(f"외부 컨텍스트 반영: {context_bits}.")
 
     return " ".join(parts)
 

@@ -153,8 +153,10 @@ class TestMarketDataValidation:
             open=80000, high=120000, low=79000, close=119000, volume=5000,
         )
         result = validator_mod.validate_candle_transition(c1, c2)
-        assert result.accepted
+        # Spike bars are now quarantined (rejected) instead of accepted with anomaly flag
+        assert not result.accepted
         assert result.anomaly_detected
+        assert "spike_quarantined" in result.reason
 
 
 # ===== feature computation =====

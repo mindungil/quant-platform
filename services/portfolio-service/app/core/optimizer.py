@@ -11,6 +11,7 @@ Production-grade implementation with:
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
 import numpy as np
@@ -21,7 +22,7 @@ logger = logging.getLogger("portfolio-service")
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-MARKET_DATA_BASE = "http://market-data:8001"
+MARKET_DATA_BASE = os.getenv("MARKET_DATA_BASE_URL", "http://localhost:8001")
 HISTORY_LIMIT = 720  # 30 days of 1h candles
 DECAY_HALFLIFE_DAYS = 15  # exponential decay half-life for momentum returns
 ANNUALIZATION_FACTOR = 365 * 24  # hourly candles -> annual

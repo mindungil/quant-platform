@@ -1,10 +1,18 @@
 """Learning Scheduler — 3-tier autonomous self-improvement engine.
 
-Fast (every 5min):  Verify past decisions against price -> MAB feedback
-Daily (every 24h):  Optimize factor weights from verified data
-Weekly (every 7d):  Meta-learning: factor culling, protocol adjustment
+Fast (every 5min):  Verify past decisions against price -> MAB + IC feedback
+Daily (every 24h):  Optimize factor weights from verified data + IC recompute
+Weekly (every 7d):  Meta-learning: IC-based factor culling, protocol adjustment
+
+IC Engine Integration:
+  - Fast loop feeds raw (factor_scores, forward_return) pairs to IC engine
+  - Daily loop recomputes IC weights and persists to Redis
+  - Weekly loop uses IC_IR to cull unstable factors
+  - Signal-service reads IC weights from Redis at scoring time
+  Reference: Grinold & Kahn (2000), Lopez de Prado (2018)
 """
 import asyncio
+import math
 import time
 import os
 from datetime import datetime, timezone, timedelta
@@ -22,6 +30,7 @@ MARKET_DATA_URL = os.getenv("MARKET_DATA_BASE_URL", "http://localhost:8001")
 AGENT_URL = os.getenv("CRYPTO_AGENT_BASE_URL", "http://localhost:8006")
 MEMORY_URL = os.getenv("MEMORY_SERVICE_BASE_URL", "http://localhost:8004")
 STATISTICS_URL = os.getenv("STATISTICS_SERVICE_BASE_URL", "http://localhost:8013")
+EXTERNAL_DATA_URL = os.getenv("EXTERNAL_DATA_SERVICE_BASE_URL", "http://localhost:8020")
 
 
 class LearningScheduler:
@@ -165,6 +174,46 @@ class LearningScheduler:
                 except Exception as exc:
                     logger.warning("fast_loop_mab_save_failed", extra={"error": str(exc)[:120]})
 
+            # ── IC Engine: feed verified decisions for rolling IC tracking ──
+            ic_updated = 0
+            try:
+                from shared.factors.ic_weight_engine import get_ic_engine
+                ic_engine = get_ic_engine()
+                _IC_META_KEYS = frozenset({
+                    "ensemble_score", "style_score", "style_formula",
+                    "formula_confidence", "regime", "adx_filter",
+                    "_n_components", "_insufficient_data", "_agreement_bonus",
+                    "_weight_mode",
+                })
+                for d in decisions:
+                    ref_price = d.get("reference_price")
+                    if not ref_price or ref_price <= 0:
+                        continue
+                    try:
+                        ts_raw = d.get("timestamp", "")
+                        ts = datetime.fromisoformat(ts_raw.replace("Z", "+00:00"))
+                        age_h = (datetime.now(timezone.utc) - ts).total_seconds() / 3600
+                    except Exception:
+                        continue
+                    if age_h < 1 or age_h > 48:
+                        continue
+                    forward_return = (current_price - ref_price) / ref_price
+                    components = d.get("components") or {}
+                    factor_scores = {
+                        k: float(v) for k, v in components.items()
+                        if isinstance(v, (int, float))
+                        and math.isfinite(float(v))
+                        and not k.startswith("cat_")
+                        and k not in _IC_META_KEYS
+                    }
+                    if factor_scores:
+                        ic_engine.update(factor_scores, forward_return)
+                        ic_updated += 1
+                if ic_updated > 0:
+                    logger.info("fast_loop_ic_fed", extra={"observations": ic_updated})
+            except Exception as exc:
+                logger.debug("fast_loop_ic_feed_failed", extra={"error": str(exc)[:120]})
+
             # Update accuracy metric and select protocol based on conditions
             if total_evaluated > 0:
                 try:
@@ -177,7 +226,7 @@ class LearningScheduler:
                     fear_greed = 50
                     try:
                         async with httpx.AsyncClient(timeout=5) as client:
-                            resp = await client.get("http://localhost:8020/external/context/BTCUSDT")
+                            resp = await client.get("{EXTERNAL_DATA_URL}/external/context/BTCUSDT")
                             if resp.status_code == 200:
                                 ext = resp.json()
                                 fear_greed = ext.get("fear_greed_index", 50)
@@ -268,10 +317,69 @@ class LearningScheduler:
             new_cw = optimize_category_weights(verified, current_cw, f2c)
             save_category_weights(new_cw)
 
+            # ── IC Engine: bulk update + recompute weights ──
+            # This is the critical daily recompute that makes signal-service
+            # switch from heuristic (_weight_mode=0) to IC-driven (_weight_mode=1).
+            ic_n_factors = 0
+            ic_active = 0
+            try:
+                from shared.factors.ic_weight_engine import get_ic_engine
+                ic_engine = get_ic_engine()
+
+                # Restore snapshot if engine is cold (first run after restart)
+                if not ic_engine._states:
+                    ic_engine.load_state_snapshot()
+
+                _IC_META_KEYS = frozenset({
+                    "ensemble_score", "style_score", "style_formula",
+                    "formula_confidence", "regime", "adx_filter",
+                    "_n_components", "_insufficient_data", "_agreement_bonus",
+                    "_weight_mode",
+                })
+
+                for d in verified:
+                    forward_return = d.get("price_change_pct", 0.0) / 100.0
+                    if not math.isfinite(forward_return):
+                        continue
+                    components = d.get("components") or {}
+                    factor_scores = {
+                        k: float(v) for k, v in components.items()
+                        if isinstance(v, (int, float))
+                        and math.isfinite(float(v))
+                        and not k.startswith("cat_")
+                        and k not in _IC_META_KEYS
+                    }
+                    if factor_scores:
+                        ic_engine.update(factor_scores, forward_return)
+
+                # Recompute weights → saves to Redis automatically
+                new_ic_weights = ic_engine.recompute_weights()
+                ic_engine.save_state_snapshot()
+
+                ic_n_factors = len(new_ic_weights)
+                ic_active = sum(1 for w in new_ic_weights.values() if w > 0)
+
+                # Log top factors by IC weight for observability
+                if new_ic_weights:
+                    top3 = sorted(new_ic_weights.items(), key=lambda x: -x[1])[:3]
+                    logger.info("daily_ic_recomputed", extra={
+                        "n_factors": ic_n_factors,
+                        "n_active": ic_active,
+                        "top_factors": {k: round(v, 3) for k, v in top3},
+                    })
+
+                # Signal-service runs in a separate process and will pick up
+                # new IC weights from Redis via its TTL cache (300s max staleness).
+
+            except Exception as exc:
+                logger.warning("daily_ic_recompute_failed", extra={"error": str(exc)[:200]})
+
             logger.info("daily_loop_complete", extra={
                 "verified_decisions": len(verified),
                 "factor_weights_count": len(new_fw),
                 "category_weights_count": len(new_cw),
+                "ic_factors_tracked": ic_n_factors,
+                "ic_factors_active": ic_active,
             })
 
             try:
@@ -299,7 +407,7 @@ class LearningScheduler:
             fear_greed = 50
             try:
                 async with httpx.AsyncClient(timeout=5) as client:
-                    resp = await client.get("http://localhost:8020/external/context/BTCUSDT")
+                    resp = await client.get("{EXTERNAL_DATA_URL}/external/context/BTCUSDT")
                     if resp.status_code == 200:
                         fear_greed = resp.json().get("fear_greed_index", 50)
             except Exception:
@@ -308,18 +416,52 @@ class LearningScheduler:
             protocol = select_protocol(accuracy, fear_greed)
             set_active_protocol(protocol["name"])
 
-            # Cull underperforming factors
+            # Cull underperforming factors — IC-informed when available
             current_fw = load_factor_weights()
-            culled = {k: v for k, v in current_fw.items() if v >= 0.15}  # remove factors below 0.15
-            removed = len(current_fw) - len(culled)
-            if removed > 0:
-                save_factor_weights(culled)
-                logger.info("weekly_factor_cull", extra={"removed": removed})
+            ic_cull_count = 0
+            heuristic_cull_count = 0
+
+            try:
+                from shared.factors.ic_weight_engine import get_ic_engine
+                ic_engine = get_ic_engine()
+                states = ic_engine.get_all_states()
+
+                if states and len(states) >= 5:
+                    # IC-based culling: remove factors with |IC| < noise threshold
+                    # AND low IC_IR (unstable predictive power)
+                    for fname, state_info in states.items():
+                        ic = state_info.get("ic", 0)
+                        ic_ir = state_info.get("ic_ir", 0)
+                        n_obs = state_info.get("n_obs", 0)
+                        if n_obs >= 50 and abs(ic) < 0.01 and abs(ic_ir) < 0.2:
+                            # Factor has enough data but no predictive power
+                            if fname in current_fw:
+                                del current_fw[fname]
+                                ic_cull_count += 1
+                                logger.info("weekly_ic_cull", extra={
+                                    "factor": fname, "ic": round(ic, 4),
+                                    "ic_ir": round(ic_ir, 3), "n_obs": n_obs,
+                                })
+                else:
+                    # Fallback: simple threshold culling
+                    culled = {k: v for k, v in current_fw.items() if v >= 0.15}
+                    heuristic_cull_count = len(current_fw) - len(culled)
+                    current_fw = culled
+            except Exception:
+                # Fallback to simple threshold
+                culled = {k: v for k, v in current_fw.items() if v >= 0.15}
+                heuristic_cull_count = len(current_fw) - len(culled)
+                current_fw = culled
+
+            total_culled = ic_cull_count + heuristic_cull_count
+            if total_culled > 0:
+                save_factor_weights(current_fw)
 
             logger.info("weekly_loop_complete", extra={
                 "accuracy": round(accuracy, 4),
                 "protocol": protocol["name"],
-                "factors_culled": removed,
+                "ic_factors_culled": ic_cull_count,
+                "heuristic_factors_culled": heuristic_cull_count,
             })
 
         except Exception as e:

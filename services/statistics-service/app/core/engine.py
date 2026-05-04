@@ -1,6 +1,21 @@
 import math
+import warnings
+
 import numpy as np
 import pandas as pd
+
+# quantstats feeds empty/single-element slices into np.mean when trade history
+# is sparse (e.g. fresh users, low-activity strategies). These warnings do not
+# indicate a bug — _safe_float already maps NaN results to defaults — but they
+# spam stderr, so suppress at the engine entry point.
+warnings.filterwarnings(
+    "ignore", category=RuntimeWarning, message="Mean of empty slice"
+)
+warnings.filterwarnings(
+    "ignore",
+    category=RuntimeWarning,
+    message="invalid value encountered in scalar divide",
+)
 # quantstats 0.0.64 uses IPython for HTML reports; mock it so the server starts without Jupyter
 import sys as _sys, types as _types
 if "IPython" not in _sys.modules:

@@ -1,9 +1,11 @@
+import asyncio
+import contextlib
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from app.api.routes import router
 from app.core.config import settings
-from app.core.recovery import recover_stuck_orders
+from app.core.recovery import recover_stuck_orders, reconciliation_loop
 from app.services.event_publisher import publisher
 from app.services.nats_consumer import consumer
 from app.services import position_monitor
@@ -16,6 +18,7 @@ _logger = get_logger("order-service")
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    reconcile_task = None
     startup_dependency_guard(
         service_name="order-service",
         check_fns={
@@ -40,9 +43,14 @@ async def lifespan(_: FastAPI):
     await publisher.connect()
     await consumer.start()
     await position_monitor.start()
+    reconcile_task = asyncio.create_task(reconciliation_loop())
     try:
         yield
     finally:
+        if reconcile_task is not None:
+            reconcile_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await reconcile_task
         await position_monitor.stop()
         await consumer.stop()
         await publisher.close()

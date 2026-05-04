@@ -5,27 +5,23 @@ OpenCode/Codex 패턴: tool_name + arguments → HTTP 요청 → 결과 반환.
 """
 from __future__ import annotations
 
-import hmac as _hmac
 import json
 import logging
 import time
-from hashlib import sha256
 from typing import Any
 
 import httpx
 
 from app.core.config import settings
+from shared.internal_admin import build_internal_admin_headers as _shared_build_internal_admin_headers
 
 
 def _build_internal_admin_headers(actor_user_id: str, path: str) -> dict[str, str]:
-    ts = str(int(time.time()))
-    message = f"{actor_user_id}:{ts}:{path}"
-    sig = _hmac.new(settings.internal_admin_secret.encode(), message.encode(), sha256).hexdigest()
-    return {
-        "X-Internal-Actor-User-ID": actor_user_id,
-        "X-Internal-Admin-Timestamp": ts,
-        "X-Internal-Admin-Signature": sig,
-    }
+    return _shared_build_internal_admin_headers(
+        settings.internal_admin_secret,
+        actor_user_id,
+        path,
+    )
 
 logger = logging.getLogger("llm-gateway")
 
@@ -90,8 +86,10 @@ async def _get_signal(args: dict, user_id: str) -> dict:
 
 
 async def _get_portfolio(args: dict, user_id: str) -> dict:
-    uid = args.get("user_id", user_id)
-    resp = await _client.get(_url("portfolio_service", f"/portfolio/{uid}"))
+    # Lock to session user_id — never trust an LLM-supplied user_id arg, since
+    # an attacker-prompted agent could otherwise enumerate other users'
+    # portfolios via this tool.
+    resp = await _client.get(_url("portfolio_service", f"/portfolio/{user_id}"))
     resp.raise_for_status()
     return resp.json()
 
@@ -555,6 +553,119 @@ async def _get_rules(args: dict, user_id: str) -> dict:
     }
 
 
+async def _get_loop_state(args: dict, user_id: str) -> dict:
+    """Read autonomous monitoring loop state — directly from mounted /data/loop volume.
+
+    Returns current iteration, paper/virtual snapshot, anomalies, time remaining.
+    Read-only; no auth needed since /data/loop is mounted ro into this container.
+    """
+    import json
+    import os
+    from datetime import datetime, timezone
+
+    state_path = "/data/loop/state.json"
+    snapshots_path = "/data/loop/snapshots.jsonl"
+
+    if not os.path.exists(state_path):
+        return {"error": "loop state not found", "expected_path": state_path}
+
+    with open(state_path, "r", encoding="utf-8") as f:
+        state = json.load(f)
+
+    snapshot_count = min(int(args.get("snapshot_count", 10)), 50)
+    recent_snapshots: list[dict] = []
+    if os.path.exists(snapshots_path):
+        with open(snapshots_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+        for line in lines[-snapshot_count:]:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                recent_snapshots.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+
+    target_end = state.get("target_end")
+    time_remaining_hours: float | None = None
+    if target_end:
+        try:
+            end_dt = datetime.fromisoformat(target_end.replace("Z", "+00:00"))
+            now = datetime.now(timezone.utc)
+            time_remaining_hours = round((end_dt - now).total_seconds() / 3600, 2)
+        except Exception:
+            pass
+
+    return {
+        "loop_name": state.get("loop_name"),
+        "iteration_count": state.get("iteration_count"),
+        "started_at": state.get("started_at"),
+        "target_end": target_end,
+        "time_remaining_hours": time_remaining_hours,
+        "deployment": state.get("deployment"),
+        "baseline_t0": state.get("baseline_t0"),
+        "last_snapshot": state.get("last_snapshot"),
+        "cumulative_paper_change_since_t0": state.get("cumulative_paper_change_since_t0"),
+        "anomalies_observed": state.get("anomalies_observed", []),
+        "anomaly_narrations": state.get("anomaly_narrations", []),
+        "actions_taken": state.get("actions_taken", []),
+        "stop_conditions": state.get("stop_conditions", []),
+        "next_checkpoint": state.get("next_checkpoint"),
+        "recent_snapshots": recent_snapshots,
+    }
+
+
+async def _get_recent_orders(args: dict, user_id: str) -> dict:
+    """Fetch user's recent order history via order-service /orders/{user_id}.
+
+    Filters in-process by asset/status if provided. Truncates to limit (≤100).
+    No internal-admin needed — endpoint is user-scoped by path param, but we still
+    pass the actor header for audit trail consistency.
+    """
+    limit = min(int(args.get("limit", 20)), 100)
+    asset_filter = args.get("asset")
+    status_filter = args.get("status")
+
+    path = f"/orders/{user_id}"
+    resp = await _client.get(
+        _url("order_service", path),
+        headers=_build_internal_admin_headers(user_id, path),
+    )
+    resp.raise_for_status()
+    orders = resp.json()
+    if not isinstance(orders, list):
+        return {"error": "unexpected response shape", "raw": str(orders)[:200]}
+
+    if asset_filter:
+        orders = [o for o in orders if o.get("asset") == asset_filter]
+    if status_filter:
+        orders = [o for o in orders if o.get("status") == status_filter]
+
+    # Newest first; the repository may not guarantee order.
+    orders.sort(key=lambda o: o.get("created_at", ""), reverse=True)
+    orders = orders[:limit]
+
+    return {
+        "total_returned": len(orders),
+        "orders": [
+            {
+                "order_id": o.get("order_id"),
+                "asset": o.get("asset"),
+                "side": o.get("side"),
+                "quantity": o.get("quantity"),
+                "status": o.get("status"),
+                "shadow_mode": o.get("shadow_mode"),
+                "exchange": o.get("exchange"),
+                "risk_reason": o.get("risk_reason"),
+                "fill_price": (o.get("fill") or {}).get("price"),
+                "fill_quantity": (o.get("fill") or {}).get("quantity"),
+                "created_at": o.get("created_at"),
+            }
+            for o in orders
+        ],
+    }
+
+
 async def _get_agent_state(args: dict, user_id: str) -> dict:
     asset = args.get("asset")
     states = []
@@ -616,6 +727,8 @@ _HANDLERS: dict[str, Any] = {
     "store_knowledge": _store_knowledge,
     "get_rules": _get_rules,
     "get_agent_state": _get_agent_state,
+    "get_loop_state": _get_loop_state,
+    "get_recent_orders": _get_recent_orders,
 }
 
 

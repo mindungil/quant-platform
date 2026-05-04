@@ -39,7 +39,7 @@ def _fetch_features(asset: str) -> dict:
     """Fetch latest features from feature-store via signal-service."""
     try:
         resp = httpx.post(
-            f"{settings.signal_service_base_url}/signals/{asset}/evaluate",
+            f"{settings.signal_service_base_url}/signals/evaluate/{asset}",
             timeout=10.0,
         )
         if resp.status_code == 200:

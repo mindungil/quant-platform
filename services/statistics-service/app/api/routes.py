@@ -1,7 +1,7 @@
 import os
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Header, Request, Response
 import httpx
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from app.core.engine import compute_statistics
@@ -10,6 +10,7 @@ from app.core.hindsight import analyze_decision_hindsight, compute_accuracy_repo
 from app.db.repository import statistics_repository
 from app.models.statistics import StatisticsInput, StatisticsSnapshot
 from shared.health import check_redis, check_sql, check_tcp, health_payload
+from shared.internal_admin import require_internal_admin
 
 router = APIRouter()
 
@@ -37,7 +38,21 @@ def compute(payload: StatisticsInput) -> StatisticsSnapshot:
 
 
 @router.post("/statistics/record", response_model=StatisticsSnapshot)
-def record_trade(payload: StatisticsInput) -> StatisticsSnapshot:
+def record_trade_internal(
+    payload: StatisticsInput,
+    request: Request,
+    x_internal_actor_user_id: str | None = Header(default=None),
+    x_internal_admin_timestamp: str | None = Header(default=None),
+    x_internal_admin_signature: str | None = Header(default=None),
+) -> StatisticsSnapshot:
+    require_internal_admin(
+        request=request,
+        secret=settings.internal_admin_secret,
+        actor_user_id=x_internal_actor_user_id,
+        timestamp=x_internal_admin_timestamp,
+        signature=x_internal_admin_signature,
+        ttl_seconds=settings.admin_header_ttl_seconds,
+    )
     if payload.user_id is None:
         return compute_statistics(payload)
     pnl = payload.trade_pnls[-1] if payload.trade_pnls else 0.0
@@ -47,6 +62,12 @@ def record_trade(payload: StatisticsInput) -> StatisticsSnapshot:
         payload.expected_return,
         order_id=payload.order_id,
         asset=payload.asset,
+        strategy_id=payload.strategy_id,
+        lane=payload.lane,
+        agent_name=payload.agent_name,
+        side=payload.side,
+        quantity=payload.quantity,
+        fill_price=payload.fill_price,
         correlation_id=payload.correlation_id,
     )
 
@@ -110,6 +131,11 @@ def strategy_comparison(user_id: str) -> list[dict]:
     return strategies
 
 
+@router.get("/statistics/agent/{agent_name}")
+def get_agent_statistics(agent_name: str) -> dict:
+    return statistics_repository.get_agent_stats(agent_name)
+
+
 @router.get("/statistics/hindsight/{asset}")
 def get_hindsight_report(asset: str):
     """Get agent decision accuracy report for an asset."""
@@ -160,7 +186,7 @@ def get_paper_portfolio(asset: str):
     from app.core.paper_portfolio import compute_paper_portfolio
 
     # Fetch all decisions for this asset
-    agent_url = os.environ.get("CRYPTO_AGENT_BASE_URL", "http://crypto-agent:8006")
+    agent_url = os.environ.get("CRYPTO_AGENT_BASE_URL", "http://localhost:8006")
     try:
         resp = httpx.get(f"{agent_url}/decisions/history/{asset}?limit=500", timeout=10.0)
         decisions = resp.json() if resp.status_code == 200 else []
@@ -168,7 +194,7 @@ def get_paper_portfolio(asset: str):
         decisions = []
 
     # Fetch current price
-    market_url = os.environ.get("MARKET_DATA_BASE_URL", "http://market-data:8001")
+    market_url = os.environ.get("MARKET_DATA_BASE_URL", "http://localhost:8001")
     try:
         resp = httpx.get(f"{market_url}/candles/{asset}/latest", timeout=5.0)
         current_price = resp.json().get("close", 0) if resp.status_code == 200 else 0

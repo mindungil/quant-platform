@@ -101,4 +101,13 @@ def build_dashboard_summary(principal: GatewayPrincipal) -> dict:
     except Exception as exc:
         summary["settings_error"] = str(exc)
 
+    if "admin" in principal.roles:
+        try:
+            summary["execution_posture"] = order_client.get(
+                "/admin/execution/posture",
+                headers=build_internal_admin_headers(principal, "/admin/execution/posture"),
+            )
+        except Exception as exc:
+            summary["execution_posture_error"] = str(exc)
+
     return summary

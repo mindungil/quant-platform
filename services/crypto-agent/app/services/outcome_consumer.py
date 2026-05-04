@@ -194,6 +194,65 @@ class OutcomeReinforcementConsumer:
                         "formula_name": formula_name, "error": str(exc)[:100],
                     })
 
+            # ── IC Engine: feed real fill outcome for factor weight learning ──
+            # This is the highest-quality signal: actual trade result, not hindsight.
+            try:
+                import math
+                from shared.factors.ic_weight_engine import get_ic_engine
+
+                _IC_META_KEYS = frozenset({
+                    "ensemble_score", "style_score", "style_formula",
+                    "formula_confidence", "regime", "adx_filter",
+                    "_n_components", "_insufficient_data", "_agreement_bonus",
+                    "_weight_mode",
+                })
+                factor_scores = {
+                    k: float(v) for k, v in components.items()
+                    if isinstance(v, (int, float))
+                    and math.isfinite(float(v))
+                    and not k.startswith("cat_")
+                    and k not in _IC_META_KEYS
+                }
+                if factor_scores and math.isfinite(trade_outcome):
+                    regime_label = components.get("regime") if isinstance(components.get("regime"), str) else None
+                    get_ic_engine().update(factor_scores, trade_outcome, regime=regime_label)
+                    logger.debug("ic_engine_updated_from_fill", extra={
+                        "n_factors": len(factor_scores),
+                        "regime": regime_label,
+                        "trade_outcome": f"{trade_outcome:.4f}",
+                    })
+
+                    # Phase O: feed live fill outcome into the per-regime
+                    # Kelly persistence. Incremental — grab whatever's
+                    # stored, add this observation, write back.
+                    if regime_label:
+                        try:
+                            from shared.portfolio.kelly_store import KellyStore
+                            store = KellyStore()
+                            snap = store.read()
+                            if snap is None:
+                                fractions = {regime_label: 0.0}
+                                samples = {regime_label: 0}
+                            else:
+                                fractions = dict(snap.fractions)
+                                samples = dict(snap.samples)
+                            # Incremental mean of trade_outcome as edge
+                            # proxy; combined with combine() at scoring
+                            # time via KellyStore.blend().
+                            n = samples.get(regime_label, 0)
+                            prev = fractions.get(regime_label, 0.0)
+                            samples[regime_label] = n + 1
+                            # Simple running mean of outcome bounded [0, 1]
+                            # — MetaSignalEngine interprets this as an
+                            # adjustment factor vs. local estimate.
+                            new_edge = prev * (n / (n + 1)) + max(trade_outcome, 0.0) / (n + 1)
+                            fractions[regime_label] = float(max(0.0, min(new_edge, 0.5)))
+                            store.write(fractions, samples)
+                        except Exception as exc:
+                            logger.debug("kelly_store_update_failed", extra={"error": str(exc)[:80]})
+            except Exception as exc:
+                logger.debug("ic_engine_fill_update_failed", extra={"error": str(exc)[:100]})
+
             logger.info("outcome_reinforced", extra={
                 "correlation_id": correlation_id,
                 "asset": asset,

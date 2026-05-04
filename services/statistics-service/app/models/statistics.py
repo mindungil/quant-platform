@@ -8,8 +8,13 @@ from pydantic import BaseModel, Field
 class StatisticsInput(BaseModel):
     user_id: str | None = None
     strategy_id: str | None = None
+    agent_name: str | None = None
+    lane: str | None = None
     order_id: str | None = None
     asset: str | None = None
+    side: str | None = None
+    quantity: float | None = None
+    fill_price: float | None = None
     correlation_id: str | None = None
     trade_pnls: list[float]
     expected_return: float = 0.0

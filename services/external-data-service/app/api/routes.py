@@ -6,14 +6,23 @@ from app.models.external_data import ExternalContextSnapshot
 router = APIRouter()
 
 
-@router.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
-
-
 @router.get("/external/context/{asset}", response_model=ExternalContextSnapshot)
 def get_external_context(asset: str) -> ExternalContextSnapshot:
     return build_external_context(asset)
+
+
+@router.get("/external/context/{asset}/status")
+def get_external_context_status(asset: str) -> dict:
+    snapshot = build_external_context(asset)
+    return {
+        "asset": snapshot.asset,
+        "timestamp": snapshot.timestamp,
+        "source_timestamp": snapshot.source_timestamp,
+        "degraded_mode": snapshot.degraded_mode,
+        "stale": snapshot.stale,
+        "source": snapshot.source,
+        "missing_fields": snapshot.missing_fields,
+    }
 
 
 @router.get("/external/news/{asset}")

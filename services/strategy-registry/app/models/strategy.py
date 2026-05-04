@@ -7,10 +7,13 @@ from uuid import uuid4
 from pydantic import BaseModel, Field
 
 
-# Default shadow promotion criteria
-SHADOW_DURATION_DAYS = 14
-SHADOW_MIN_TRADES = 10
-SHADOW_MIN_SHARPE = 0.5
+# Shadow promotion criteria — hardened to reduce false promotions.
+# Rationale: 10 trades over 14 days is statistically meaningless for Sharpe estimation.
+# Minimum 30 trades gives ~80% confidence interval within ±0.5 Sharpe units.
+# 28 days ensures at least one full regime cycle in crypto markets.
+SHADOW_DURATION_DAYS = 28
+SHADOW_MIN_TRADES = 30
+SHADOW_MIN_SHARPE = 0.8
 
 
 class StrategyCreate(BaseModel):

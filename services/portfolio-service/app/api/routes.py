@@ -1,7 +1,3 @@
-import hmac
-import time
-from hashlib import sha256
-
 from fastapi import APIRouter, Header, HTTPException, Request, Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
@@ -9,29 +5,9 @@ from app.core.config import settings
 from app.db.repository import portfolio_repository
 from app.models.portfolio import PositionUpdate, PortfolioSnapshot
 from shared.health import check_redis, check_sql, check_tcp, health_payload
+from shared.internal_admin import require_internal_admin
 
 router = APIRouter()
-
-
-def _require_internal_admin(
-    request: Request,
-    x_internal_actor_user_id: str | None,
-    x_internal_admin_timestamp: str | None,
-    x_internal_admin_signature: str | None,
-) -> str:
-    if not x_internal_actor_user_id or not x_internal_admin_timestamp or not x_internal_admin_signature:
-        raise HTTPException(status_code=403, detail="missing_internal_admin_headers")
-    try:
-        timestamp = int(x_internal_admin_timestamp)
-    except ValueError as exc:
-        raise HTTPException(status_code=403, detail="invalid_internal_admin_timestamp") from exc
-    if abs(int(time.time()) - timestamp) > settings.admin_header_ttl_seconds:
-        raise HTTPException(status_code=403, detail="expired_internal_admin_signature")
-    message = f"{x_internal_actor_user_id}:{x_internal_admin_timestamp}:{request.url.path}"
-    expected = hmac.new(settings.internal_admin_secret.encode("utf-8"), message.encode("utf-8"), sha256).hexdigest()
-    if not hmac.compare_digest(expected, x_internal_admin_signature):
-        raise HTTPException(status_code=403, detail="invalid_internal_admin_signature")
-    return x_internal_actor_user_id
 
 
 @router.get("/health")
@@ -59,14 +35,57 @@ def apply_fill(
     x_internal_admin_timestamp: str | None = Header(default=None),
     x_internal_admin_signature: str | None = Header(default=None),
 ) -> PortfolioSnapshot:
-    _require_internal_admin(request, x_internal_actor_user_id, x_internal_admin_timestamp, x_internal_admin_signature)
+    require_internal_admin(
+        request=request,
+        secret=settings.internal_admin_secret,
+        actor_user_id=x_internal_actor_user_id,
+        timestamp=x_internal_admin_timestamp,
+        signature=x_internal_admin_signature,
+        ttl_seconds=settings.admin_header_ttl_seconds,
+    )
     return portfolio_repository.apply(payload)
 
 
 @router.get("/portfolio/aggregate")
-def get_aggregate_portfolio() -> dict:
-    """Aggregate portfolio across all users — internal orchestrator endpoint, no auth."""
+def get_aggregate_portfolio(
+    request: Request,
+    x_internal_actor_user_id: str | None = Header(default=None),
+    x_internal_admin_timestamp: str | None = Header(default=None),
+    x_internal_admin_signature: str | None = Header(default=None),
+) -> dict:
+    """Aggregate portfolio across all users — internal orchestrator endpoint."""
+    require_internal_admin(
+        request=request,
+        secret=settings.internal_admin_secret,
+        actor_user_id=x_internal_actor_user_id,
+        timestamp=x_internal_admin_timestamp,
+        signature=x_internal_admin_signature,
+        ttl_seconds=settings.admin_header_ttl_seconds,
+    )
     return portfolio_repository.get_aggregate()
+
+
+@router.get("/portfolio/summary")
+def get_portfolio_summary(
+    request: Request,
+    x_internal_actor_user_id: str | None = Header(default=None),
+    x_internal_admin_timestamp: str | None = Header(default=None),
+    x_internal_admin_signature: str | None = Header(default=None),
+) -> dict:
+    """Compliance-shaped summary: {equity, positions, kill_switch}.
+
+    Consumed by signal-service's compliance provider for pre-trade checks.
+    Internal endpoint, read-only but still authenticated.
+    """
+    require_internal_admin(
+        request=request,
+        secret=settings.internal_admin_secret,
+        actor_user_id=x_internal_actor_user_id,
+        timestamp=x_internal_admin_timestamp,
+        signature=x_internal_admin_signature,
+        ttl_seconds=settings.admin_header_ttl_seconds,
+    )
+    return portfolio_repository.get_summary()
 
 
 @router.get("/portfolio/{user_id}", response_model=PortfolioSnapshot)

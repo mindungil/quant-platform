@@ -2,6 +2,7 @@
 from unittest.mock import patch, MagicMock
 
 from fastapi.testclient import TestClient
+from shared.internal_admin import build_internal_admin_headers
 
 
 def _make_strategy(strategy_id: str, user_id: str, status: str = "ACTIVE"):
@@ -72,3 +73,26 @@ def test_delete_strategy_wrong_user(mock_repo):
     mock_repo.get.return_value = _make_strategy("s-1", "user-B")
     resp = _client.delete("/strategies/s-1", headers={"x-user-id": "user-A"})
     assert resp.status_code == 404
+
+
+@patch("app.api.routes.strategy_repository")
+def test_update_status_requires_owner_or_internal(mock_repo, monkeypatch):
+    monkeypatch.setenv("INTERNAL_ADMIN_SECRET", "test-secret")
+    mock_repo.get.return_value = _make_strategy("s-1", "user-B", status="TESTED")
+    resp = _client.patch("/strategies/s-1/status", json={"status": "SHADOW"})
+    assert resp.status_code == 403
+
+
+def test_list_all_subscriptions_requires_internal(monkeypatch):
+    monkeypatch.setenv("INTERNAL_ADMIN_SECRET", "test-secret")
+    resp = _client.get("/templates/subscriptions/all")
+    assert resp.status_code == 403
+
+
+@patch("app.api.routes.subscription_repository")
+def test_list_all_subscriptions_allows_signed_internal(mock_repo, monkeypatch):
+    monkeypatch.setenv("INTERNAL_ADMIN_SECRET", "test-secret")
+    mock_repo.list_all_enabled.return_value = []
+    headers = build_internal_admin_headers("test-secret", "crypto-agent", "/templates/subscriptions/all")
+    resp = _client.get("/templates/subscriptions/all", headers=headers)
+    assert resp.status_code == 200

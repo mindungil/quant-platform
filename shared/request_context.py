@@ -44,8 +44,11 @@ def current_request_headers() -> dict[str, str]:
     headers: dict[str, str] = {}
     request_id = current_request_id()
     correlation_id = current_correlation_id()
+    user_id = current_user_id()
     if request_id is not None:
         headers["X-Request-ID"] = request_id
     if correlation_id is not None:
         headers["X-Correlation-ID"] = correlation_id
+    if user_id is not None:
+        headers["X-User-ID"] = user_id
     return headers

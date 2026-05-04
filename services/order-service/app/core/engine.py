@@ -16,6 +16,7 @@ from app.services.credential_client import CredentialClient
 from app.services.event_publisher import publisher
 from app.services.portfolio_client import PortfolioClient
 from app.services.statistics_client import StatisticsClient
+from shared.internal_admin import build_internal_admin_headers
 from shared.logging import get_logger
 
 orders_total = Counter(
@@ -47,6 +48,182 @@ statistics_client = StatisticsClient(settings.statistics_service_base_url)
 logger = get_logger("order-service")
 
 
+_compliance_gateway = None
+
+
+def _is_filled_status(status: str | None) -> bool:
+    normalized = (status or "").upper()
+    return normalized in {"FILLED", "SIMULATED_FILLED", "PARTIALLY_FILLED"}
+
+
+def _is_rejected_status(status: str | None) -> bool:
+    normalized = (status or "").upper()
+    return normalized.startswith("REJECTED") or normalized == "FAILED"
+
+
+def _extract_fill_details(payload: OrderRequest, exchange_result: dict) -> tuple[float, float, float]:
+    filled_quantity = float(exchange_result.get("filled_quantity", 0.0) or 0.0)
+    fill_price = float(exchange_result.get("average_fill_price", 0.0) or 0.0)
+    fees = float(exchange_result.get("fees", 0.0) or 0.0)
+    status = (exchange_result.get("status") or "").upper()
+    if status in {"FILLED", "SIMULATED_FILLED"} and filled_quantity <= 0:
+        filled_quantity = float(payload.quantity or 0.0)
+    if filled_quantity > 0 and fill_price <= 0:
+        fill_price = float(payload.price or 0.0)
+        if fill_price <= 0 and payload.quantity > 0 and payload.requested_notional > 0:
+            fill_price = float(payload.requested_notional) / float(payload.quantity)
+    return filled_quantity, fill_price, fees
+
+
+def _get_compliance_gateway():
+    """Lazy gateway init so tests can monkey-patch and so unreachable
+    portfolio-service doesn't block module import."""
+    global _compliance_gateway
+    if _compliance_gateway is not None:
+        return _compliance_gateway
+    try:
+        from shared.execution.compliance import (
+            ComplianceGateway, ComplianceLimits, StateProvider,
+        )
+
+        portfolio_url = settings.portfolio_service_base_url
+
+        class _Provider(StateProvider):
+            def __init__(self):
+                self._ttl = 5.0
+                self._ts = 0.0
+                self._eq = float(os.getenv("FALLBACK_EQUITY_USD", "10000"))
+                self._eq_stale = False  # track whether equity is from fallback
+                self._pos: dict[str, float] = {}
+                self._kill = False
+
+            def _refresh(self):
+                now = time.monotonic()
+                if now - self._ts < self._ttl:
+                    return
+                try:
+                    r = _httpx.get(
+                        f"{portfolio_url}/portfolio/summary",
+                        headers=build_internal_admin_headers(
+                            settings.internal_admin_secret,
+                            "order-service",
+                            "/portfolio/summary",
+                        ),
+                        timeout=2.0,
+                    )
+                    if r.status_code == 200:
+                        data = r.json()
+                        self._eq = float(data.get("equity", self._eq))
+                        self._pos = {k: float(v) for k, v in (data.get("positions") or {}).items()}
+                        self._kill = bool(data.get("kill_switch", False))
+                except Exception:
+                    pass
+                self._ts = now
+
+            def get_equity(self):
+                self._refresh(); return self._eq
+
+            def get_positions(self):
+                self._refresh(); return dict(self._pos)
+
+            def is_kill_switch_active(self):
+                self._refresh(); return self._kill
+
+        def _f(k, d): return float(os.getenv(k, d))
+        limits = ComplianceLimits(
+            max_gross_leverage=_f("COMPLIANCE_MAX_GROSS_LEV", 3.0),
+            max_net_exposure=_f("COMPLIANCE_MAX_NET_EXP", 1.0),
+            max_symbol_weight=_f("COMPLIANCE_MAX_SYMBOL_W", 0.30),
+            max_rolling_turnover=_f("COMPLIANCE_MAX_TURNOVER", 5.0),
+            max_order_notional=_f("COMPLIANCE_MAX_ORDER_USD", 100_000.0),
+            min_order_notional=_f("COMPLIANCE_MIN_ORDER_USD", 10.0),
+            max_order_qty_pct=_f("COMPLIANCE_MAX_ORDER_PCT", 0.10),
+        )
+        _compliance_gateway = ComplianceGateway(limits=limits, state_provider=_Provider())
+    except Exception as exc:
+        logger.warning("compliance_gateway_init_failed", extra={"error": str(exc)[:200]})
+        _compliance_gateway = False
+    return _compliance_gateway
+
+
+def _compliance_check(payload: OrderRequest) -> dict | None:
+    """Run compliance gateway.
+
+    Fail-closed by default in live mode: if the gateway cannot be initialised
+    or the check throws, the order is **blocked** (not silently passed).
+    Shadow-mode orders are always fail-open so observation is not disrupted.
+
+    Set COMPLIANCE_FAIL_CLOSED=false to revert to legacy fail-open behaviour.
+    """
+    if os.getenv("COMPLIANCE_ENABLED", "true").lower() != "true":
+        return None
+
+    fail_closed = os.getenv("COMPLIANCE_FAIL_CLOSED", "true").lower() == "true"
+
+    gw = _get_compliance_gateway()
+    if not gw:
+        if fail_closed and not payload.shadow_mode:
+            logger.error(
+                "compliance_gateway_unavailable_blocking",
+                extra={"service": "order-service", "asset": payload.asset,
+                       "event_type": "order.compliance.fail_closed"},
+            )
+            return {"approved": False, "reason": "compliance_gateway_unavailable",
+                    "warnings": [], "checks": {}}
+        return None
+    try:
+        d = gw.check(
+            symbol=payload.asset,
+            side=payload.side,
+            order_notional=float(payload.requested_notional),
+        )
+        return {
+            "approved": d.approved,
+            "reason": d.reason,
+            "warnings": list(d.warnings),
+            "checks": dict(d.checks),
+        }
+    except Exception as exc:
+        logger.warning(
+            "compliance_check_error",
+            extra={"service": "order-service", "error": str(exc)[:200],
+                   "asset": payload.asset, "event_type": "order.compliance.error"},
+        )
+        if fail_closed and not payload.shadow_mode:
+            return {"approved": False, "reason": "compliance_check_exception",
+                    "warnings": [], "checks": {"error": str(exc)[:200]}}
+        return None
+
+
+def _notify_drift_monitor(asset: str, response, intended_price: float | None = None) -> None:
+    """Fire-and-forget: POST realized bar return to signal-service drift."""
+    signal_url = os.getenv("SIGNAL_SERVICE_BASE_URL", getattr(settings, "signal_service_base_url", ""))
+    if not signal_url:
+        return
+    try:
+        fill = response.fill
+        fill_price = float(fill.filled_price or 0)
+        side_sign = 1.0 if response.side.upper() == "BUY" else -1.0
+        # Use fill price vs intended (payload.price) as normalized return proxy.
+        # This feeds drift monitor's z-score — needs return-like magnitude.
+        # Full bar return requires prev_close which we don't have here; the
+        # drift_feeder cron handles bar-level returns; this provides a
+        # real-time tick for intra-bar awareness.
+        if fill_price > 0 and intended_price and float(intended_price) > 0:
+            intended = float(intended_price)
+            price_move = (fill_price - intended) / intended
+            trade_return = side_sign * price_move
+        else:
+            trade_return = 0.0
+        _httpx.post(
+            f"{signal_url}/signals/meta/drift/{asset}/observe",
+            json={"trade_return": trade_return},
+            timeout=2.0,
+        )
+    except Exception:
+        pass  # Non-blocking: drift is observational
+
+
 def _record_lifecycle(order_id: str, user_id: str, status: str, detail: dict) -> None:
     order_lifecycle_total.labels(status=status).inc()
     if hasattr(order_repository, "record_lifecycle"):
@@ -56,7 +233,7 @@ def _record_lifecycle(order_id: str, user_id: str, status: str, detail: dict) ->
 def _record_order_metrics(status: str, shadow_mode: bool, start: float, exchange: str = "", asset: str = "") -> None:
     orders_total.labels(status=status, shadow_mode=str(shadow_mode).lower()).inc()
     order_fill_latency_seconds.observe(time.monotonic() - start)
-    if status == "FILLED":
+    if _is_filled_status(status):
         order_fills_total.labels(exchange=exchange, asset=asset).inc()
 
 
@@ -116,7 +293,20 @@ def _process_order_impl(payload: OrderRequest) -> OrderResponse:
     payload.correlation_id = payload.correlation_id or local_order_id
     execution_config = order_repository.get_execution_config()
     payload.shadow_mode = payload.shadow_mode or execution_config.default_shadow_mode
-    _record_lifecycle(local_order_id, payload.user_id, "PENDING", {"stage": "received"})
+    _record_lifecycle(
+        local_order_id,
+        payload.user_id,
+        "PENDING",
+        {
+            "stage": "received",
+            "strategy_id": payload.strategy_id,
+            "agent_name": payload.agent_name,
+            "lane": payload.lane,
+            "lane_budget_pct": payload.lane_budget_pct,
+            "subscription_id": payload.subscription_id,
+            "template_id": payload.template_id,
+        },
+    )
 
     if payload.strategy_status.upper() != "ACTIVE":
         response = OrderResponse(
@@ -169,6 +359,63 @@ def _process_order_impl(payload: OrderRequest) -> OrderResponse:
         _record_order_metrics(response.status, payload.shadow_mode, _start)
         return response
     _record_lifecycle(local_order_id, payload.user_id, "APPROVED", {"stage": "risk", "approval": approval})
+
+    # Compliance gate — institutional pre-trade limits (leverage, concentration,
+    # turnover, kill-switch). Only binding in live mode; shadow orders log but
+    # do not block so we can observe what the gate would have done.
+    compliance_decision = _compliance_check(payload)
+    if compliance_decision is not None and not compliance_decision["approved"]:
+        if payload.shadow_mode:
+            logger.warning(
+                "compliance_would_block_shadow",
+                extra={
+                    "service": "order-service",
+                    "order_id": local_order_id,
+                    "user_id": payload.user_id,
+                    "asset": payload.asset,
+                    "reason": compliance_decision["reason"],
+                    "checks": compliance_decision.get("checks", {}),
+                    "event_type": "order.compliance.shadow_block",
+                },
+            )
+        else:
+            response = OrderResponse(
+                order_id=local_order_id,
+                user_id=payload.user_id,
+                asset=payload.asset,
+                side=payload.side,
+                quantity=payload.quantity,
+                status="REJECTED",
+                risk_reason=f"compliance:{compliance_decision['reason']}",
+                exchange="",
+                shadow_mode=payload.shadow_mode,
+                credential=CredentialSnapshot(user_id=payload.user_id, exchange=payload.exchange, loaded=False),
+            )
+            order_repository.save(
+                payload.user_id, response,
+                detail={"stage": "compliance", "decision": compliance_decision},
+                idempotency_key=payload.idempotency_key,
+            )
+            publisher.publish_risk_triggered(
+                payload=payload,
+                reason=f"compliance:{compliance_decision['reason']}",
+                level="REJECTED",
+                requested_notional=payload.requested_notional,
+            )
+            logger.warning(
+                "compliance_blocked",
+                extra={
+                    "service": "order-service",
+                    "order_id": local_order_id,
+                    "user_id": payload.user_id,
+                    "asset": payload.asset,
+                    "reason": compliance_decision["reason"],
+                    "checks": compliance_decision.get("checks", {}),
+                    "event_type": "order.compliance.rejected",
+                },
+            )
+            _record_order_metrics(response.status, payload.shadow_mode, _start)
+            return response
 
     credential = credential_client.get(payload.user_id, payload.exchange)
     if credential is None and not payload.shadow_mode:
@@ -349,26 +596,65 @@ def _process_order_impl(payload: OrderRequest) -> OrderResponse:
         },
     )
 
-    portfolio = None
+    pre_fill_portfolio = None
     try:
-        portfolio = portfolio_client.apply_fill(payload, order_id=local_order_id, status=exchange_result["status"])
+        pre_fill_portfolio = portfolio_client.get_snapshot(payload.user_id)
     except Exception:
         logger.exception(
-            "portfolio_apply_failed",
+            "portfolio_snapshot_prefetch_failed",
             extra={
                 "service": "order-service",
                 "correlation_id": payload.correlation_id,
                 "user_id": payload.user_id,
-                "event_type": "portfolio.updated",
+                "event_type": "portfolio.prefetch.failed",
             },
         )
 
+    exchange_status = exchange_result["status"]
+    filled_quantity, fill_price, fill_fees = _extract_fill_details(payload, exchange_result)
+    fill_recorded = _is_filled_status(exchange_status) and filled_quantity > 0
+
+    portfolio = None
+    if fill_recorded:
+        try:
+            portfolio = portfolio_client.apply_fill(
+                payload,
+                order_id=local_order_id,
+                status=exchange_status,
+                fill_quantity=filled_quantity,
+                fill_price=fill_price,
+                filled_notional=filled_quantity * fill_price,
+            )
+        except Exception:
+            logger.exception(
+                "portfolio_apply_failed",
+                extra={
+                    "service": "order-service",
+                    "correlation_id": payload.correlation_id,
+                    "user_id": payload.user_id,
+                    "event_type": "portfolio.updated",
+                },
+            )
+
     statistics = None
     try:
-        statistics = statistics_client.record_trade(payload, order_status=exchange_result["status"], order_id=local_order_id)
+        statistics = statistics_client.record_trade(
+            payload,
+            order_status=exchange_status,
+            order_id=local_order_id,
+            pre_fill_portfolio=pre_fill_portfolio,
+            fill_quantity=filled_quantity,
+            fill_price=fill_price,
+        )
     except TypeError:
         try:
-            statistics = statistics_client.record_trade(payload, order_status=exchange_result["status"])
+            statistics = statistics_client.record_trade(
+                payload,
+                order_status=exchange_result["status"],
+                pre_fill_portfolio=pre_fill_portfolio,
+                fill_quantity=filled_quantity,
+                fill_price=fill_price,
+            )
         except Exception:
             logger.exception(
                 "statistics_record_failed",
@@ -396,8 +682,8 @@ def _process_order_impl(payload: OrderRequest) -> OrderResponse:
         asset=payload.asset,
         side=payload.side,
         quantity=payload.quantity,
-        status=exchange_result["status"],
-        risk_reason=approval["reason"],
+        status=exchange_status,
+        risk_reason=approval["reason"] if not _is_rejected_status(exchange_status) else exchange_status.lower(),
         exchange=payload.exchange,
         shadow_mode=payload.shadow_mode,
         credential=CredentialSnapshot(
@@ -409,10 +695,12 @@ def _process_order_impl(payload: OrderRequest) -> OrderResponse:
         ),
         fill=FillSnapshot(
             order_id=local_order_id,
-            status=exchange_result["status"],
-            filled_quantity=payload.quantity,
-            filled_price=payload.price,
-        ),
+            status=exchange_status,
+            filled_quantity=filled_quantity,
+            filled_price=fill_price,
+            exchange_order_id=exchange_result.get("exchange_order_id") or exchange_result.get("order_id"),
+            fees=fill_fees,
+        ) if fill_recorded else None,
         portfolio=PortfolioSnapshot.model_validate(portfolio) if portfolio is not None else None,
         statistics=StatisticsSnapshot.model_validate(statistics) if statistics is not None else None,
     )
@@ -422,21 +710,26 @@ def _process_order_impl(payload: OrderRequest) -> OrderResponse:
         detail={
             "stage": "exchange",
             "external_order_id": exchange_result.get("order_id"),
-            "exchange_status": exchange_result["status"],
+            "exchange_status": exchange_status,
             "circuit_state": exchange_result.get("circuit_state"),
+            "fill_recorded": fill_recorded,
             "portfolio_recorded": portfolio is not None,
             "statistics_recorded": statistics is not None,
         },
         idempotency_key=payload.idempotency_key,
     )
-    publisher.publish_order_filled(payload, response)
+    if fill_recorded:
+        if response.status == "PARTIALLY_FILLED":
+            publisher.publish_order_partially_filled(payload, response)
+        else:
+            publisher.publish_order_filled(payload, response)
 
     # Shadow ledger: when a strategy is in shadow/paper mode, every "fill" is
     # a paper trade. Record it so the strategy-registry's promotion gate has
     # real metrics to evaluate. This closes the SHADOW → ACTIVE loop.
     if (
         payload.shadow_mode
-        and response.status == "FILLED"
+        and response.status in {"FILLED", "SIMULATED_FILLED", "PARTIALLY_FILLED"}
         and payload.strategy_id
         and response.fill is not None
     ):
@@ -497,7 +790,7 @@ def _process_order_impl(payload: OrderRequest) -> OrderResponse:
             )
 
     # Create protective orders (stop-loss, take-profit, trailing stop) for filled orders
-    if response.status == "FILLED" and response.fill is not None:
+    if response.status in {"FILLED", "SIMULATED_FILLED", "PARTIALLY_FILLED"} and response.fill is not None:
         try:
             protections = protection_manager.create_protections(response, payload)
             if protections:
@@ -520,6 +813,12 @@ def _process_order_impl(payload: OrderRequest) -> OrderResponse:
                     "user_id": response.user_id,
                 },
             )
+
+    # Post-fill: feed realized return to signal-service drift monitor.
+    # Non-blocking fire-and-forget — drift monitor is observational,
+    # failure here must never block order flow.
+    if response.status in {"FILLED", "SIMULATED_FILLED", "PARTIALLY_FILLED"} and response.fill is not None:
+        _notify_drift_monitor(payload.asset, response, intended_price=payload.price)
 
     _record_order_metrics(response.status, payload.shadow_mode, _start, exchange=payload.exchange, asset=payload.asset)
     return response

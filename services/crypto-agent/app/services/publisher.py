@@ -41,10 +41,39 @@ async def publish_action(state: AgentState, nc=None) -> None:
         "decided_at": state.decision.decided_at.isoformat(),
     }
 
+    # Include dual-lane tags so consumers (frontend stream, performance svc)
+    # can group by lane.
+    payload["lane"] = getattr(state, "lane", "agent_core")
+    payload["subscription_id"] = getattr(state, "subscription_id", None)
+    payload["lane_budget_pct"] = getattr(state, "lane_budget_pct", 1.0)
+
     subject = settings.nats_publish_subject
     try:
         data = json.dumps(payload).encode("utf-8")
         await nc.publish(subject, data)
-        logger.info("Published action to '%s' for %s", subject, state.asset)
+        logger.info("Published action[%s] to '%s' for %s",
+                    payload["lane"], subject, state.asset)
     except Exception:
         logger.exception("Failed to publish to '%s'", subject)
+
+
+async def publish_lane_event(event_type: str, payload: dict) -> None:
+    """Publish a lane.* collision/risk event so frontend and risk-service
+    can consume. Event subjects: lane.signal_collision | lane.opposite_collision
+    | lane.risk_rejection. Uses a standalone NATS connection (best-effort)."""
+    try:
+        from nats.aio.client import Client as NATS
+    except Exception:
+        return
+    try:
+        nc = NATS()
+        await nc.connect(settings.nats_url)
+        try:
+            subject = f"agent.crypto.{event_type}"
+            data = json.dumps({"event": event_type, **payload}).encode("utf-8")
+            await nc.publish(subject, data)
+        finally:
+            await nc.drain()
+        logger.info("Published lane event %s payload=%s", event_type, payload)
+    except Exception:
+        logger.exception("Failed to publish lane event %s", event_type)

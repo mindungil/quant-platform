@@ -94,6 +94,8 @@ def gather_node(state: AgentState) -> dict:
     duration = round((time.monotonic() - t0) * 1000, 2)
     timings = dict(state.get("phase_timings") or {})
     timings["gather"] = duration
+    details = dict(state.get("phase_details") or {})
+    details["gather"] = f"signal_score={signal.signal_score:.4f} age={round(age)}s"
 
     logger.info("graph_gather", extra={
         "asset": state["asset"],
@@ -131,6 +133,10 @@ def gather_node(state: AgentState) -> dict:
                 "action": "HOLD",
                 "threshold_crossed": False,
                 "phase_timings": timings,
+                "phase_details": {
+                    **details,
+                    "check": f"signal is stale ({age:.0f}s old, limit {SIGNAL_STALENESS_SECONDS}s)",
+                },
                 "errors": errors,
             }
 
@@ -138,6 +144,7 @@ def gather_node(state: AgentState) -> dict:
         "signal": signal_dict,
         "signal_age_seconds": age,
         "phase_timings": timings,
+        "phase_details": details,
         "errors": errors,
     }
 
@@ -276,6 +283,8 @@ def detect_node(state: AgentState) -> dict:
     duration = round((time.monotonic() - t0) * 1000, 2)
     timings = dict(state.get("phase_timings") or {})
     timings["detect"] = duration
+    details = dict(state.get("phase_details") or {})
+    details["detect"] = f"regime={regime_label} suggest={suggested_type}"
 
     logger.info("graph_detect", extra={
         "regime": regime_label, "suggested": suggested_type,
@@ -287,6 +296,7 @@ def detect_node(state: AgentState) -> dict:
         "suggested_formula_type": suggested_type,
         "features": features,
         "phase_timings": timings,
+        "phase_details": details,
         "errors": errors,
     }
 
@@ -360,6 +370,8 @@ def recall_node(state: AgentState) -> dict:
     duration = round((time.monotonic() - t0) * 1000, 2)
     timings = dict(state.get("phase_timings") or {})
     timings["recall"] = duration
+    details = dict(state.get("phase_details") or {})
+    details["recall"] = f"formulas_found={len(formula_scores)}"
 
     logger.info("graph_recall", extra={"formulas_found": len(formula_scores)})
 
@@ -367,6 +379,7 @@ def recall_node(state: AgentState) -> dict:
         "formula_scores": formula_scores,
         "mab_stats": mab_stats,
         "phase_timings": timings,
+        "phase_details": details,
         "errors": errors,
     }
 
@@ -417,8 +430,10 @@ def select_node(state: AgentState) -> dict:
     duration = round((time.monotonic() - t0) * 1000, 2)
     timings = dict(state.get("phase_timings") or {})
     timings["select"] = duration
+    details = dict(state.get("phase_details") or {})
 
     status_label = "SHADOW" if is_shadow else "ACTIVE"
+    details["select"] = f"strategy={strategy.name} status={status_label} action={action}"
     logger.info("graph_select", extra={
         "strategy": strategy.name, "status": status_label, "action": action,
     })
@@ -430,6 +445,7 @@ def select_node(state: AgentState) -> dict:
         "action": action,
         "threshold_crossed": signal.threshold_crossed,
         "phase_timings": timings,
+        "phase_details": details,
         "errors": errors,
     }
 
@@ -669,6 +685,11 @@ def score_node(state: AgentState) -> dict:
     duration = round((time.monotonic() - t0) * 1000, 2)
     timings = dict(state.get("phase_timings") or {})
     timings["score"] = duration
+    details = dict(state.get("phase_details") or {})
+    details["score"] = (
+        f"formula={formula_name} score={round(formula_score, 4)} "
+        f"confidence={round(formula_confidence, 2)} action={action}"
+    )
 
     logger.info("graph_score", extra={
         "formula": formula_name,
@@ -686,6 +707,7 @@ def score_node(state: AgentState) -> dict:
         "action": action,
         "threshold_crossed": threshold_crossed,
         "phase_timings": timings,
+        "phase_details": details,
         "errors": errors,
     }
 
@@ -726,12 +748,15 @@ def check_node(state: AgentState) -> dict:
     duration = round((time.monotonic() - t0) * 1000, 2)
     timings = dict(state.get("phase_timings") or {})
     timings["check"] = duration
+    details = dict(state.get("phase_details") or {})
+    details["check"] = "; ".join(risk_issues) if risk_issues else "all checks passed"
 
     return {
         "risk_issues": risk_issues,
         "action": result_action,
         "threshold_crossed": result_threshold,
         "phase_timings": timings,
+        "phase_details": details,
         "errors": errors,
     }
 
@@ -751,8 +776,8 @@ def execute_node(state: AgentState) -> dict:
     correlation_id = state.get("correlation_id")
     is_shadow = state.get("is_shadow", False)
     formula_name = state.get("selected_formula", "unknown")
-    formula_confidence = state.get("formula_confidence", 0.0)
-    formula_score = state.get("formula_score", 0.0)
+    formula_confidence = state.get("formula_confidence") or 0.0
+    formula_score = state.get("formula_score")
     regime_label = state.get("regime", "unknown")
     threshold_crossed = state.get("threshold_crossed", False)
 
@@ -786,7 +811,7 @@ def execute_node(state: AgentState) -> dict:
     try:
         reasoning = llm_gateway_client.generate_reasoning(
             asset=asset,
-            signal_score=formula_score,
+            signal_score=formula_score if formula_score is not None else signal.signal_score,
             strategy_name=strategy.name,
             memory_count=len(memory_response.items),
             components=signal.components,
@@ -858,6 +883,8 @@ def execute_node(state: AgentState) -> dict:
     duration = round((time.monotonic() - t0) * 1000, 2)
     timings = dict(state.get("phase_timings") or {})
     timings["execute"] = duration
+    details = dict(state.get("phase_details") or {})
+    details["execute"] = f"action={action} order_submitted={order_submitted}"
 
     return {
         "decision_id": decision_id,
@@ -868,6 +895,7 @@ def execute_node(state: AgentState) -> dict:
         "threshold_crossed": threshold_crossed,
         "escalated": escalated,
         "phase_timings": timings,
+        "phase_details": details,
         "errors": errors,
     }
 
@@ -886,11 +914,11 @@ def record_node(state: AgentState) -> dict:
     effective_user_id = state.get("effective_user_id") or settings.default_user_id
     decision_id = state.get("decision_id") or str(uuid4())
     reasoning = state.get("reasoning") or ""
-    formula_score = state.get("formula_score", 0.0)
+    formula_score = state.get("formula_score")
     threshold_crossed = state.get("threshold_crossed", False)
     correlation_id = state.get("correlation_id") or decision_id
     formula_name = state.get("selected_formula", "unknown")
-    formula_confidence = state.get("formula_confidence", 0.0)
+    formula_confidence = state.get("formula_confidence") or 0.0
     regime_label = state.get("regime", "unknown")
     is_shadow = state.get("is_shadow", False)
 
@@ -903,7 +931,7 @@ def record_node(state: AgentState) -> dict:
         user_id=effective_user_id,
         asset=asset,
         asset_type="crypto",
-        signal_score=formula_score,
+        signal_score=formula_score if formula_score is not None else signal.signal_score,
         strategy_id=strategy_dict.get("id", "unknown"),
         strategy_name=strategy_dict.get("name", "unknown"),
         action=action,
@@ -951,6 +979,8 @@ def record_node(state: AgentState) -> dict:
     duration = round((time.monotonic() - t0) * 1000, 2)
     timings = dict(state.get("phase_timings") or {})
     timings["record"] = duration
+    details = dict(state.get("phase_details") or {})
+    details["record"] = f"recorded=True action={action}"
 
     logger.info("graph_record", extra={
         "decision_id": decision_id, "asset": asset, "action": action,
@@ -959,6 +989,7 @@ def record_node(state: AgentState) -> dict:
     return {
         "recorded": True,
         "phase_timings": timings,
+        "phase_details": details,
         "errors": errors,
     }
 
@@ -984,18 +1015,17 @@ def build_agent_graph() -> StateGraph:
     workflow.add_conditional_edges(
         "gather",
         lambda s: "abort" if s.get("abort") else "detect",
-        {"abort": END, "detect": "detect"},
+        {"abort": "record", "detect": "detect"},
     )
     workflow.add_edge("detect", "recall")
     workflow.add_edge("recall", "select")
     workflow.add_edge("select", "score")
-    # After score: if HOLD with no threshold → skip to record
+    workflow.add_edge("score", "check")
     workflow.add_conditional_edges(
-        "score",
-        lambda s: "abort" if s.get("action") == "HOLD" and not s.get("threshold_crossed") else "check",
-        {"abort": "record", "check": "check"},
+        "check",
+        lambda s: "record" if s.get("action") == "HOLD" and not s.get("threshold_crossed") else "execute",
+        {"record": "record", "execute": "execute"},
     )
-    workflow.add_edge("check", "execute")
     workflow.add_edge("execute", "record")
     workflow.add_edge("record", END)
 

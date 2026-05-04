@@ -8,11 +8,6 @@ from app.models.memory import FormulaOutcomeSearchRequest, MemoryRecord, MemoryS
 router = APIRouter()
 
 
-@router.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
-
-
 @router.post("/memory/record", response_model=MemoryRecord)
 def record_memory(record: MemoryRecord, x_user_id: str | None = Header(default=None)) -> MemoryRecord:
     if x_user_id is not None:

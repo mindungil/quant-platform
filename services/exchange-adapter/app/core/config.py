@@ -10,6 +10,8 @@ class Settings:
     binance_api_base_url: str = os.getenv("BINANCE_API_BASE_URL", "https://api.binance.com")
     upbit_api_base_url: str = os.getenv("UPBIT_API_BASE_URL", "https://api.upbit.com")
     alpaca_api_base_url: str = os.getenv("ALPACA_API_BASE_URL", "https://paper-api.alpaca.markets")
+    internal_admin_secret: str = os.getenv("INTERNAL_ADMIN_SECRET", "dev-internal-admin-secret")
+    admin_header_ttl_seconds: int = int(os.getenv("ADMIN_HEADER_TTL_SECONDS", "300"))
     strict_runtime: bool = env_bool("STRICT_RUNTIME", False)
 
 

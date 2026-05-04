@@ -193,6 +193,20 @@ class AuthRepository:
         self._persist_user(record)
         return self._profile(record)
 
+    def update_automation_enabled(self, user_id: str, enabled: bool) -> UserProfile | None:
+        """Per-user automation flag. Used by signal_to_order_bridge to
+        decide which users to fan out signals to. Default is False — opt-in
+        only, never on by accident.
+        """
+        record = self._get_record_by_user_id(user_id)
+        if record is None:
+            return None
+        record["automation_enabled"] = bool(enabled)
+        self._users_by_email[record["email"]] = record
+        self._users_by_id[record["user_id"]] = record
+        self._persist_user(record)
+        return self._profile(record)
+
     def bootstrap_admin(self) -> tuple[UserProfile, bool] | None:
         if not settings.bootstrap_admin_email or not settings.bootstrap_admin_password:
             return None

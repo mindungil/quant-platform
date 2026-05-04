@@ -1,7 +1,11 @@
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from shared.runtime import env_bool
+
+
+_REPO_ROOT = Path(__file__).resolve().parents[4]
 
 
 @dataclass(frozen=True)
@@ -15,6 +19,7 @@ class Settings:
     crypto_agent_base_url: str = os.getenv("CRYPTO_AGENT_BASE_URL", "http://localhost:8006")
     backtest_service_base_url: str = os.getenv("BACKTEST_SERVICE_BASE_URL", "http://localhost:8007")
     order_service_base_url: str = os.getenv("ORDER_SERVICE_BASE_URL", "http://localhost:8011")
+    exchange_adapter_base_url: str = os.getenv("EXCHANGE_ADAPTER_BASE_URL", "http://localhost:8008")
     credential_store_base_url: str = os.getenv("CREDENTIAL_STORE_BASE_URL", "http://localhost:8010")
     risk_service_base_url: str = os.getenv("RISK_SERVICE_BASE_URL", "http://localhost:8009")
     portfolio_service_base_url: str = os.getenv("PORTFOLIO_SERVICE_BASE_URL", "http://localhost:8012")
@@ -31,6 +36,7 @@ class Settings:
     cors_origins: list[str] = field(default_factory=lambda: list(filter(None, os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:8018").split(","))))
     strict_runtime: bool = env_bool("STRICT_RUNTIME", False)
     live_trading_enabled: bool = env_bool("LIVE_TRADING_ENABLED", False)
+    evaluation_data_dir: str = os.getenv("EVALUATION_DATA_DIR", str(_REPO_ROOT / "data" / "cycles"))
     default_shadow_mode: bool = env_bool("DEFAULT_SHADOW_MODE", True)
     allowed_live_exchanges: tuple[str, ...] = tuple(
         item.strip().lower() for item in os.getenv("ALLOWED_LIVE_EXCHANGES", "binance").split(",") if item.strip()

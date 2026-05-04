@@ -1,9 +1,12 @@
 import os
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Response
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+
 from app.db.repository import credential_repository
 from app.models.credential import CredentialCreate, CredentialMaskedResponse, CredentialResponse
 from shared.health import check_sql, health_payload
+from shared.internal_admin import verify_internal_admin_headers
 
 router = APIRouter()
 
@@ -19,6 +22,11 @@ def health() -> dict:
             )
         },
     )
+
+
+@router.get("/metrics")
+def metrics() -> Response:
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @router.post("/credentials", response_model=CredentialMaskedResponse)
@@ -63,10 +71,35 @@ def get_audit_log(user_id: str, limit: int = 50, x_user_id: str | None = Header(
 
 
 @router.get("/credentials/{user_id}/{exchange}/reveal", response_model=CredentialResponse)
-def reveal_credential(user_id: str, exchange: str, x_user_id: str | None = Header(default=None)) -> CredentialResponse:
-    # Only allow the credential owner or internal services to reveal
-    if x_user_id and x_user_id != user_id:
-        raise HTTPException(status_code=403, detail="credential_access_denied")
+def reveal_credential(
+    user_id: str,
+    exchange: str,
+    x_user_id: str | None = Header(default=None),
+    x_internal_actor_user_id: str | None = Header(default=None),
+    x_internal_admin_timestamp: str | None = Header(default=None),
+    x_internal_admin_signature: str | None = Header(default=None),
+) -> CredentialResponse:
+    """Reveal decrypted credentials. Restricted to:
+    - Internal services with valid INTERNAL_ADMIN_SECRET header, OR
+    - The credential owner (x_user_id matches user_id)
+    External callers without proper auth are rejected.
+    """
+    internal_secret = os.getenv("INTERNAL_ADMIN_SECRET", "")
+    is_internal = bool(verify_internal_admin_headers(
+        secret=internal_secret,
+        path=f"/credentials/{user_id}/{exchange}/reveal",
+        actor_user_id=x_internal_actor_user_id,
+        timestamp=x_internal_admin_timestamp,
+        signature=x_internal_admin_signature,
+    ))
+
+    if not is_internal:
+        # External caller: must be the credential owner
+        if not x_user_id:
+            raise HTTPException(status_code=401, detail="authentication_required")
+        if x_user_id != user_id:
+            raise HTTPException(status_code=403, detail="credential_access_denied")
+
     credential = credential_repository.get(user_id, exchange)
     if credential is None:
         raise HTTPException(status_code=404, detail="credential_not_found")

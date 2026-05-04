@@ -1017,6 +1017,7 @@ def run_decision_loop(asset: str, *, user_id: str | None = None, correlation_id:
         "recorded": False,
         "errors": [],
         "phase_timings": {},
+        "phase_details": {},
         "abort": False,
     }
 
@@ -1066,12 +1067,29 @@ def run_decision_loop(asset: str, *, user_id: str | None = None, correlation_id:
     )
 
     # Build phase results from timings
+    phase_timings = final_state.get("phase_timings") or {}
+    phase_details = final_state.get("phase_details") or {}
+    phase_order = [
+        ("gather", "gather"),
+        ("detect", "detect"),
+        ("retrieve", "recall"),
+        ("select", "select"),
+        ("score", "score"),
+        ("check", "check"),
+        ("execute", "execute"),
+        ("record", "record"),
+    ]
     phases: list[PhaseResult] = []
-    for phase_name, duration_ms in (final_state.get("phase_timings") or {}).items():
+    for phase_name, source_name in phase_order:
+        duration_ms = phase_timings.get(source_name)
+        detail = phase_details.get(source_name)
+        if duration_ms is None and detail is None:
+            continue
         phases.append(PhaseResult(
             name=phase_name,
             status="completed",
-            duration_ms=duration_ms,
+            duration_ms=duration_ms if duration_ms is not None else 0.0,
+            detail=detail,
         ))
     decision.decision_phases = phases
 

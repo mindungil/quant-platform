@@ -16,6 +16,9 @@ class CandleRepository:
     def get(self, asset: str) -> list[CandlePayload]:
         return self._items[asset]
 
+    def list_assets(self) -> list[str]:
+        return sorted(self._items.keys())
+
 
 class FeatureRepository:
     def __init__(self) -> None:

@@ -52,4 +52,5 @@ class AgentState(TypedDict):
     # Error tracking
     errors: List[str]
     phase_timings: Dict[str, float]   # {phase_name: duration_ms}
+    phase_details: Dict[str, str]     # {phase_name: detail}
     abort: bool                       # if True, skip remaining phases

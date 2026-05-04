@@ -18,8 +18,9 @@ UTC = timezone.utc
 logger = get_logger("orchestrator-loop")
 
 STRATEGY_REGISTRY_BASE_URL = os.getenv("STRATEGY_REGISTRY_BASE_URL", "http://localhost:8005")
-PORTFOLIO_SERVICE_BASE_URL = os.getenv("PORTFOLIO_SERVICE_BASE_URL", "http://localhost:8009")
+PORTFOLIO_SERVICE_BASE_URL = os.getenv("PORTFOLIO_SERVICE_BASE_URL", "http://localhost:8012")
 NATS_URL = os.getenv("NATS_URL", "nats://localhost:4222")
+ORCHESTRATOR_BASE_URL = os.getenv("ORCHESTRATOR_BASE_URL", "http://localhost:8014")
 LOOP_ENABLED = os.getenv("ORCHESTRATOR_LOOP_ENABLED", "true").lower() == "true"
 LOOP_INTERVAL = int(os.getenv("ORCHESTRATOR_LOOP_INTERVAL_SECONDS", "300"))
 
@@ -138,8 +139,11 @@ class AutonomousLoop:
     # ------------------------------------------------------------------
 
     async def _check_pipeline(self, client: httpx.AsyncClient) -> dict:
+        # Hit our own /pipeline/health — same process, so localhost:8014 is the
+        # orchestrator's own port. Pre-consolidation this pointed at :8000
+        # which never existed in the new topology.
         try:
-            resp = await client.get("http://localhost:8000/pipeline/health")
+            resp = await client.get(f"{ORCHESTRATOR_BASE_URL}/pipeline/health")
             if resp.status_code == 200:
                 return resp.json()
         except Exception as exc:
@@ -195,10 +199,44 @@ class AutonomousLoop:
                         "total_drawdown": total_drawdown,
                         "threshold": DRAWDOWN_ALERT_THRESHOLD,
                     })
+                    # Send Telegram alert
+                    self._send_drawdown_alert(total_drawdown)
+                    # Auto-halt at 1.5× threshold (15%)
+                    if total_drawdown > DRAWDOWN_ALERT_THRESHOLD * 1.5:
+                        await self._activate_kill_switch(total_drawdown, client)
                     return True
         except Exception as exc:
             logger.warning("drawdown_check_failed", extra={"error": str(exc)[:100]})
         return False
+
+    def _send_drawdown_alert(self, drawdown: float) -> None:
+        """Send Telegram notification for drawdown breach."""
+        try:
+            from shared.notifications.telegram import TelegramNotifier
+            notifier = TelegramNotifier()
+            if notifier.enabled:
+                notifier.send(
+                    f"DRAWDOWN ALERT: {drawdown:.1%} "
+                    f"(threshold: {DRAWDOWN_ALERT_THRESHOLD:.0%}). "
+                    f"Kill switch at {DRAWDOWN_ALERT_THRESHOLD * 1.5:.0%}."
+                )
+        except Exception:
+            logger.debug("drawdown_telegram_alert_failed")
+
+    async def _activate_kill_switch(self, drawdown: float, client: httpx.AsyncClient) -> None:
+        """Activate kill switch to halt all trading on severe drawdown."""
+        try:
+            resp = await client.post(
+                f"{PORTFOLIO_SERVICE_BASE_URL}/portfolio/kill-switch",
+                json={"active": True, "reason": f"auto_drawdown_{drawdown:.1%}"},
+            )
+            logger.critical("kill_switch_activated", extra={
+                "drawdown": drawdown,
+                "response_status": resp.status_code,
+            })
+            self._send_drawdown_alert(drawdown)
+        except Exception as exc:
+            logger.error("kill_switch_activation_failed", extra={"error": str(exc)[:200]})
 
     async def _publish_nats_tick(self, summary: dict) -> None:
         try:

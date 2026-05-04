@@ -51,13 +51,18 @@ def verify_access_token(token: str) -> TokenVerificationResponse:
         algorithms=[settings.jwt_algorithm],
         issuer=settings.jwt_issuer,
     )
-    # Check if token has been revoked (blacklisted)
+    # Check if token has been revoked (blacklisted).
+    # NOTE: must hash the FULL token. The first 32 chars are mostly the
+    # JWT header which is identical across all tokens — keying by prefix
+    # would mean one logout invalidates every future login.
     try:
+        import hashlib
         import os
         import redis as _redis
         url = getattr(settings, "redis_url", None) or os.getenv("REDIS_URL", "redis://redis:6379/0")
         r = _redis.Redis.from_url(url, decode_responses=True)
-        if r.exists(f"token_blacklist:{token[:32]}"):
+        token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+        if r.exists(f"token_blacklist:{token_hash}"):
             raise jwt.InvalidTokenError("token_revoked")
     except jwt.InvalidTokenError:
         raise

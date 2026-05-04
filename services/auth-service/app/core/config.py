@@ -15,6 +15,8 @@ class Settings:
     bootstrap_admin_token: str = os.getenv("BOOTSTRAP_ADMIN_TOKEN", "dev-bootstrap-token")
     internal_admin_secret: str = os.getenv("INTERNAL_ADMIN_SECRET", "dev-internal-admin-secret")
     admin_header_ttl_seconds: int = int(os.getenv("INTERNAL_ADMIN_HEADER_TTL_SECONDS", "300"))
+    order_service_base_url: str = os.getenv("ORDER_SERVICE_BASE_URL", "http://order-service:8000")
+    logout_cancel_timeout_seconds: float = float(os.getenv("LOGOUT_CANCEL_TIMEOUT_SECONDS", "5"))
 
 
 settings = Settings()

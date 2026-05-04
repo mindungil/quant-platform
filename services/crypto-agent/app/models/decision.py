@@ -56,6 +56,9 @@ class StrategyData(BaseModel):
     thresholds: dict
     version: str
     status: str
+    lane: str = "agent_core"  # agent_core | user_template
+    subscription_id: str | None = None  # set when lane == user_template
+    template_id: str | None = None      # set when lane == user_template
 
 
 class MemorySearchRequest(BaseModel):
@@ -75,6 +78,7 @@ class MemoryRecord(BaseModel):
     strategy_id: str | None = None
     reasoning: str | None = None
     metadata: dict = Field(default_factory=dict)
+    user_id: str | None = None  # required by memory-service client for scoping
 
 
 class MemorySearchResult(BaseModel):
@@ -119,6 +123,8 @@ class OrderResult(BaseModel):
 
 class AgentState(BaseModel):
     asset: str
+    user_id: str | None = None
+    correlation_id: str | None = None
     signal: Optional[SignalData] = None
     features: Optional[dict] = None
     memories: list = Field(default_factory=list)
@@ -134,6 +140,11 @@ class AgentState(BaseModel):
     strategy_weighted_score: float | None = None
     memory_refs: list = Field(default_factory=list)
     memory_insight: str | None = None
+    # Dual-lane fields
+    lane: str = "agent_core"              # agent_core | user_template
+    lane_budget_pct: float = 1.0          # fraction of equity this lane run may use
+    subscription_id: str | None = None    # when lane == user_template
+    template_id: str | None = None
 
 
 class DecisionRecord(BaseModel):
@@ -151,6 +162,16 @@ class DecisionRecord(BaseModel):
     outcome: str | None = None
     order_id: str | None = None
     decided_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    # Compatibility aliases for older persistence/consumer code paths that
+    # expect the `decision_id` / `timestamp` field names.
+    @property
+    def decision_id(self) -> str:
+        return self.id
+
+    @property
+    def timestamp(self) -> datetime:
+        return self.decided_at
     shadow_mode: bool | None = None
     metadata: dict = Field(default_factory=dict)
 

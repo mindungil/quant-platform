@@ -27,6 +27,11 @@ INFLIGHT_REQUESTS = Gauge(
     ["service"],
 )
 
+# Paths whose successful hits are noise for operators (healthchecks, scrapes).
+# Metrics still count them; only the structured "request_complete" log line is
+# suppressed to keep per-service logs focused on real traffic.
+_QUIET_LOG_PATHS = frozenset({"/health", "/live", "/ready", "/metrics"})
+
 
 def install_http_observability(app: FastAPI, service_name: str) -> None:
     logger = get_logger(service_name)
@@ -84,18 +89,19 @@ def install_http_observability(app: FastAPI, service_name: str) -> None:
         REQUEST_LATENCY.labels(service=service_name, method=method, path=path).observe(duration_ms / 1000)
         response.headers["X-Request-ID"] = request_id
         response.headers["X-Correlation-ID"] = correlation_id
-        logger.info(
-            "request_complete",
-            extra={
-                "service": service_name,
-                "request_id": request_id,
-                "correlation_id": correlation_id,
-                "user_id": user_id,
-                "path": path,
-                "status_code": status_code,
-                "duration_ms": duration_ms,
-            },
-        )
+        if not (path in _QUIET_LOG_PATHS and 200 <= status_code < 400):
+            logger.info(
+                "request_complete",
+                extra={
+                    "service": service_name,
+                    "request_id": request_id,
+                    "correlation_id": correlation_id,
+                    "user_id": user_id,
+                    "path": path,
+                    "status_code": status_code,
+                    "duration_ms": duration_ms,
+                },
+            )
         return response
 
 

@@ -117,10 +117,12 @@ def _patch_engine(monkeypatch, *, signal_client=None, strategy_client=None):
 
 def test_run_decision_loop_records_decision(monkeypatch) -> None:
     stub_memory = _patch_engine(monkeypatch)
+    import uuid
+    unique_asset = f"DECIDE_{uuid.uuid4().hex[:8].upper()}"
 
-    decision = engine.run_decision_loop("BTCUSDT")
+    decision = engine.run_decision_loop(unique_asset)
 
-    assert decision.asset == "BTCUSDT"
+    assert decision.asset == unique_asset
     assert decision.action == "BUY"
     assert decision.reasoning == "LLM reasoning"
     assert decision.user_id
@@ -131,7 +133,9 @@ def test_decision_phases_are_tracked(monkeypatch) -> None:
     """All 6 phases should be recorded on the decision."""
     _patch_engine(monkeypatch)
 
-    decision = engine.run_decision_loop("BTCUSDT")
+    import uuid
+    unique_asset = f"TRACK_{uuid.uuid4().hex[:8].upper()}"
+    decision = engine.run_decision_loop(unique_asset)
 
     phase_names = [p.name for p in decision.decision_phases]
     assert "gather" in phase_names

@@ -141,5 +141,30 @@ class RiskRepository:
             for row in rows
         ]
 
+    def list_recent(self, *, limit: int = 50) -> list[RiskIncident]:
+        rows = self._store.fetch_all(
+            """
+            SELECT user_id, asset, level, approved, reason, requested_notional, exposure_ratio, payload, created_at
+            FROM risk_incidents
+            ORDER BY created_at DESC, id DESC
+            LIMIT :limit
+            """,
+            {"limit": limit},
+        )
+        return [
+            RiskIncident(
+                user_id=row["user_id"],
+                asset=row["asset"],
+                level=row["level"],
+                approved=bool(row["approved"]),
+                reason=row["reason"],
+                requested_notional=row["requested_notional"],
+                exposure_ratio=row["exposure_ratio"],
+                payload=deserialize_json(row["payload"]) or {},
+                created_at=row["created_at"],
+            )
+            for row in rows
+        ]
+
 
 risk_repository = RiskRepository()

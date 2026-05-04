@@ -20,10 +20,16 @@ from sqlalchemy.engine import Connection
 def set_rls_user(conn: Connection, user_id: str) -> None:
     """Set ``app.current_user_id`` for the current transaction.
 
-    This must be called inside an open transaction before any queries
-    that rely on RLS policies.
+    Must be called inside an open transaction before any queries that
+    rely on RLS policies.
+
+    Uses Postgres ``set_config(name, value, is_local=true)`` instead of
+    ``SET LOCAL`` because the latter does NOT accept bind parameters via
+    the prepared-statement protocol (psycopg fails with
+    ``syntax error at or near "$1"``). ``set_config`` is the documented
+    parameter-bindable equivalent.
     """
     conn.execute(
-        text("SET LOCAL app.current_user_id = :uid"),
+        text("SELECT set_config('app.current_user_id', :uid, true)"),
         {"uid": user_id},
     )

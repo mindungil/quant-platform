@@ -49,7 +49,7 @@ class SignalClient:
                     # No cached signal — trigger evaluation first
                     try:
                         eval_resp = httpx.post(
-                            f"{self._base_url}/signals/{asset}/evaluate",
+                            f"{self._base_url}/signals/evaluate/{asset}",
                             headers=headers,
                             timeout=10.0,
                         )

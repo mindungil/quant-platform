@@ -30,7 +30,7 @@ def detect_gaps(candles: list[CandlePayload], expected_interval_minutes: int = 6
 
 
 def validate_candle_transition(
-    previous: CandlePayload | None, current: CandlePayload
+    previous: CandlePayload | None, current: CandlePayload, asset: str | None = None
 ) -> ValidationResult:
     if current.high < current.low:
         return ValidationResult(accepted=False, anomaly_detected=True, reason="high_below_low")
@@ -45,6 +45,22 @@ def validate_candle_transition(
         return ValidationResult(accepted=False, anomaly_detected=True, reason="non_monotonic_timestamp")
 
     price_delta = abs(current.close - previous.close) / previous.close
-    anomaly_detected = price_delta > 0.10
-    reason = "spike_detected" if anomaly_detected else "ok"
-    return ValidationResult(accepted=True, anomaly_detected=anomaly_detected, reason=reason)
+    # Per-asset spike thresholds: stablecoins are strict, crypto volatile assets lenient
+    asset_name = (asset or getattr(current, "asset", "")).upper()
+    if any(s in asset_name for s in ("USDT", "USDC", "DAI", "BUSD")):
+        spike_threshold = 0.02   # 2% for stablecoins — a 2% move is crisis-level
+    elif any(s in asset_name for s in ("BTC", "ETH")):
+        spike_threshold = 0.15   # 15% for majors
+    else:
+        spike_threshold = 0.20   # 20% for alts (SOL, etc.)
+
+    anomaly_detected = price_delta > spike_threshold
+    if anomaly_detected:
+        # Quarantine: reject the bar so it doesn't propagate to alphas.
+        # Downstream should request a re-fetch or wait for the next bar.
+        return ValidationResult(
+            accepted=False,
+            anomaly_detected=True,
+            reason=f"spike_quarantined:{price_delta:.1%}>{spike_threshold:.0%}",
+        )
+    return ValidationResult(accepted=True, anomaly_detected=False, reason="ok")

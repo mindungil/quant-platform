@@ -23,11 +23,6 @@ from app.models.chat import (
 router = APIRouter()
 
 
-@router.get("/health")
-def health() -> dict:
-    return {"status": "ok", "service": "llm-gateway", "providers": list(PROVIDERS.keys())}
-
-
 # ── Chat (에이전트 대화) ──────────────────────────────────────────────
 
 @router.post("/chat", response_model=ChatResponse)

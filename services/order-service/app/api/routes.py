@@ -1,9 +1,6 @@
-import hmac
-import time
 from datetime import datetime, timezone
 
 UTC = timezone.utc
-from hashlib import sha256
 
 import httpx
 from fastapi import APIRouter, Header, HTTPException, Request, Response
@@ -25,6 +22,7 @@ from app.models.order import (
 )
 from app.services.event_publisher import publisher
 from shared.health import check_redis, check_sql, check_tcp, health_payload
+from shared.internal_admin import require_internal_admin
 from shared.logging import get_logger
 
 _logger = get_logger("order-service")
@@ -32,25 +30,22 @@ _logger = get_logger("order-service")
 router = APIRouter()
 
 
-def _require_internal_admin(
-    request: Request,
-    x_internal_actor_user_id: str | None,
-    x_internal_admin_timestamp: str | None,
-    x_internal_admin_signature: str | None,
-) -> str:
-    if not x_internal_actor_user_id or not x_internal_admin_timestamp or not x_internal_admin_signature:
-        raise HTTPException(status_code=403, detail="missing_internal_admin_headers")
-    try:
-        timestamp = int(x_internal_admin_timestamp)
-    except ValueError as exc:
-        raise HTTPException(status_code=403, detail="invalid_internal_admin_timestamp") from exc
-    if abs(int(time.time()) - timestamp) > settings.admin_header_ttl_seconds:
-        raise HTTPException(status_code=403, detail="expired_internal_admin_signature")
-    message = f"{x_internal_actor_user_id}:{x_internal_admin_timestamp}:{request.url.path}"
-    expected = hmac.new(settings.internal_admin_secret.encode("utf-8"), message.encode("utf-8"), sha256).hexdigest()
-    if not hmac.compare_digest(expected, x_internal_admin_signature):
-        raise HTTPException(status_code=403, detail="invalid_internal_admin_signature")
-    return x_internal_actor_user_id
+def _require_internal_admin(request, actor_user_id, timestamp, signature) -> str:
+    """Positional wrapper around shared.require_internal_admin.
+
+    Several admin endpoints (pre_flight_checks, enable_live_trading,
+    logout_cancel, emergency_stop) call this with positional args.
+    Without this wrapper they would NameError on first call — keep
+    a thin shim so the calling sites can stay terse.
+    """
+    return require_internal_admin(
+        request=request,
+        secret=settings.internal_admin_secret,
+        actor_user_id=actor_user_id,
+        timestamp=timestamp,
+        signature=signature,
+        ttl_seconds=getattr(settings, "admin_header_ttl_seconds", 300),
+    )
 
 
 @router.get("/health")
@@ -78,7 +73,14 @@ def create_order(
     x_internal_admin_timestamp: str | None = Header(default=None),
     x_internal_admin_signature: str | None = Header(default=None),
 ) -> OrderResponse:
-    _require_internal_admin(request, x_internal_actor_user_id, x_internal_admin_timestamp, x_internal_admin_signature)
+    require_internal_admin(
+        request=request,
+        secret=settings.internal_admin_secret,
+        actor_user_id=x_internal_actor_user_id,
+        timestamp=x_internal_admin_timestamp,
+        signature=x_internal_admin_signature,
+        ttl_seconds=settings.admin_header_ttl_seconds,
+    )
     return process_order(payload)
 
 
@@ -175,8 +177,50 @@ def get_execution_config(
     x_internal_admin_timestamp: str | None = Header(default=None),
     x_internal_admin_signature: str | None = Header(default=None),
 ) -> ExecutionConfig:
-    _require_internal_admin(request, x_internal_actor_user_id, x_internal_admin_timestamp, x_internal_admin_signature)
+    require_internal_admin(
+        request=request,
+        secret=settings.internal_admin_secret,
+        actor_user_id=x_internal_actor_user_id,
+        timestamp=x_internal_admin_timestamp,
+        signature=x_internal_admin_signature,
+        ttl_seconds=settings.admin_header_ttl_seconds,
+    )
     return order_repository.get_execution_config()
+
+
+@router.get("/admin/execution/posture")
+def get_execution_posture(
+    request: Request,
+    x_internal_actor_user_id: str | None = Header(default=None),
+    x_internal_admin_timestamp: str | None = Header(default=None),
+    x_internal_admin_signature: str | None = Header(default=None),
+) -> dict:
+    require_internal_admin(
+        request=request,
+        secret=settings.internal_admin_secret,
+        actor_user_id=x_internal_actor_user_id,
+        timestamp=x_internal_admin_timestamp,
+        signature=x_internal_admin_signature,
+        ttl_seconds=settings.admin_header_ttl_seconds,
+    )
+    config = order_repository.get_execution_config()
+    active_counts = order_repository.active_status_counts()
+    active_total = sum(active_counts.values())
+    return {
+        "live_trading_enabled": config.live_trading_enabled,
+        "default_shadow_mode": config.default_shadow_mode,
+        "strict_runtime": config.strict_runtime,
+        "allowed_exchanges": config.allowed_exchanges,
+        "updated_by": config.updated_by,
+        "updated_at": config.updated_at,
+        "preflight_passed_at": config.preflight_passed_at,
+        "preflight_recent": bool(
+            config.preflight_passed_at
+            and (datetime.now(UTC) - config.preflight_passed_at).total_seconds() <= _PREFLIGHT_TTL_SECONDS
+        ),
+        "active_orders_total": active_total,
+        "active_orders_by_status": active_counts,
+    }
 
 
 @router.patch("/admin/execution/config", response_model=ExecutionConfig)
@@ -187,7 +231,14 @@ def update_execution_config(
     x_internal_admin_timestamp: str | None = Header(default=None),
     x_internal_admin_signature: str | None = Header(default=None),
 ) -> ExecutionConfig:
-    actor = _require_internal_admin(request, x_internal_actor_user_id, x_internal_admin_timestamp, x_internal_admin_signature)
+    actor = require_internal_admin(
+        request=request,
+        secret=settings.internal_admin_secret,
+        actor_user_id=x_internal_actor_user_id,
+        timestamp=x_internal_admin_timestamp,
+        signature=x_internal_admin_signature,
+        ttl_seconds=settings.admin_header_ttl_seconds,
+    )
     return order_repository.update_execution_config(
         live_trading_enabled=payload.live_trading_enabled,
         allowed_exchanges=payload.allowed_exchanges,
@@ -355,6 +406,60 @@ def enable_live_trading(
         },
     )
     return updated
+
+
+@router.post("/orders/{user_id}/logout-cancel", response_model=EmergencyStopResult)
+def logout_cancel(
+    user_id: str,
+    request: Request,
+    x_internal_actor_user_id: str | None = Header(default=None),
+    x_internal_admin_timestamp: str | None = Header(default=None),
+    x_internal_admin_signature: str | None = Header(default=None),
+) -> EmergencyStopResult:
+    """Cancel all of one user's active non-filled orders.
+
+    Called by auth-service on logout. The user's session is gone, so they
+    can't manually intervene; leaving live orders open with no UI to
+    cancel them is unsafe. Idempotent — repeated calls just find zero
+    active orders the second time.
+
+    NOT a kill switch — only this user is affected. Per-user execution
+    mode/automation flags are managed elsewhere (PATCH /auth/me/automation).
+    """
+    actor = _require_internal_admin(
+        request, x_internal_actor_user_id, x_internal_admin_timestamp, x_internal_admin_signature
+    )
+    user_orders = [
+        o for o in order_repository.list_for_user(user_id)
+        if o.status in ("PENDING", "APPROVED", "SUBMITTED", "ACCEPTED", "PARTIALLY_FILLED")
+    ]
+    cancelled = 0
+    for order in user_orders:
+        try:
+            try:
+                exchange_client.cancel(order.order_id, order.user_id, order.exchange)
+            except Exception:
+                _logger.warning(
+                    "logout_cancel_exchange_failed",
+                    extra={"order_id": order.order_id, "user_id": user_id, "actor": actor},
+                )
+            order_repository.update_status(order.order_id, "CANCELLED", detail="user_logout")
+            publisher.publish_order_cancelled(order.order_id, user_id)
+            cancelled += 1
+        except Exception:
+            _logger.exception(
+                "logout_cancel_error",
+                extra={"order_id": order.order_id, "user_id": user_id},
+            )
+    _logger.info(
+        "logout_cancel_executed",
+        extra={"user_id": user_id, "actor": actor, "cancelled_orders": cancelled},
+    )
+    return EmergencyStopResult(
+        stopped=True,
+        cancelled_orders=cancelled,
+        detail=f"User {user_id}: {cancelled} order(s) cancelled on logout",
+    )
 
 
 @router.post("/admin/execution/emergency-stop", response_model=EmergencyStopResult)

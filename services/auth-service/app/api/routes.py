@@ -1,8 +1,7 @@
-import hmac
 import os
+import logging
 import time
 from collections import defaultdict
-from hashlib import sha256
 
 import redis
 from fastapi import APIRouter, Header, HTTPException, Request, Response
@@ -12,6 +11,7 @@ from app.core.config import settings
 from app.core.tokens import issue_access_token, issue_for_profile, refresh_access_token, verify_access_token
 from app.db.repository import auth_repository
 from app.models.auth import (
+    AutomationUpdateRequest,
     BootstrapAdminResponse,
     RefreshTokenRequest,
     RoleUpdateRequest,
@@ -24,6 +24,7 @@ from app.models.auth import (
     UserRegistrationRequest,
 )
 from shared.health import check_sql, health_payload
+from shared.internal_admin import require_internal_admin
 
 router = APIRouter()
 
@@ -37,6 +38,10 @@ _LOGIN_WINDOW = 300  # 5 minutes
 _register_attempts: dict[str, list[float]] = defaultdict(list)
 _MAX_REGISTER_ATTEMPTS = 3
 _REGISTER_WINDOW = 3600  # 1 hour
+
+_automation_toggle_attempts: dict[str, list[float]] = defaultdict(list)
+_MAX_AUTOMATION_TOGGLES = 20
+_AUTOMATION_WINDOW = 3600  # 20 toggles per hour per user is plenty
 
 
 def _check_rate(store: dict[str, list[float]], key: str, max_attempts: int, window: int) -> bool:
@@ -67,35 +72,6 @@ def _require_bootstrap_token(x_bootstrap_token: str | None) -> None:
         raise HTTPException(status_code=403, detail="forbidden")
 
 
-def _require_internal_admin(
-    request: Request,
-    x_internal_actor_user_id: str | None,
-    x_internal_admin_timestamp: str | None,
-    x_internal_admin_signature: str | None,
-) -> str:
-    if not x_internal_actor_user_id or not x_internal_admin_timestamp or not x_internal_admin_signature:
-        raise HTTPException(status_code=403, detail="missing_internal_admin_headers")
-
-    try:
-        timestamp = int(x_internal_admin_timestamp)
-    except ValueError as exc:
-        raise HTTPException(status_code=403, detail="invalid_internal_admin_timestamp") from exc
-
-    now = int(time.time())
-    if abs(now - timestamp) > settings.admin_header_ttl_seconds:
-        raise HTTPException(status_code=403, detail="expired_internal_admin_signature")
-
-    message = f"{x_internal_actor_user_id}:{x_internal_admin_timestamp}:{request.url.path}"
-    expected = hmac.new(
-        settings.internal_admin_secret.encode("utf-8"),
-        message.encode("utf-8"),
-        sha256,
-    ).hexdigest()
-    if not hmac.compare_digest(expected, x_internal_admin_signature):
-        raise HTTPException(status_code=403, detail="invalid_internal_admin_signature")
-    return x_internal_actor_user_id
-
-
 @router.get("/health")
 def health() -> dict:
     return health_payload(
@@ -112,10 +88,21 @@ def metrics() -> Response:
 
 
 @router.post("/auth/token", response_model=TokenIssueResponse)
-def create_token(payload: TokenIssueRequest, x_internal_actor_user_id: str | None = Header(default=None)) -> TokenIssueResponse:
-    # Only allow from internal services with admin context
-    if not x_internal_actor_user_id:
-        raise HTTPException(status_code=403, detail="internal_only")
+def create_token(
+    payload: TokenIssueRequest,
+    request: Request,
+    x_internal_actor_user_id: str | None = Header(default=None),
+    x_internal_admin_timestamp: str | None = Header(default=None),
+    x_internal_admin_signature: str | None = Header(default=None),
+) -> TokenIssueResponse:
+    require_internal_admin(
+        request=request,
+        secret=settings.internal_admin_secret,
+        actor_user_id=x_internal_actor_user_id,
+        timestamp=x_internal_admin_timestamp,
+        signature=x_internal_admin_signature,
+        ttl_seconds=settings.admin_header_ttl_seconds,
+    )
     return issue_access_token(payload)
 
 
@@ -151,18 +138,66 @@ def refresh(payload: RefreshTokenRequest) -> TokenIssueResponse:
 
 @router.post("/auth/logout")
 def logout(authorization: str | None = Header(default=None)):
-    """Revoke access token by adding to Redis blacklist."""
+    """Revoke access token + halt this user's automation.
+
+    Three actions, all idempotent:
+      1. Token → Redis blacklist (TTL matches token expiry)
+      2. automation_enabled → False (next bridge tick won't fan out signals to them)
+      3. order-service POST /orders/{user_id}/logout-cancel (cancel any
+         live orders — user can't manually intervene without a session)
+
+    Failures in 2/3 are logged but do NOT block the logout response.
+    The blacklist alone (1) is the correctness-critical step.
+    """
     if not authorization:
         raise HTTPException(status_code=401, detail="missing_token")
     token = authorization.removeprefix("Bearer ").strip()
+    user_id: str | None = None
     try:
+        import hashlib
         result = verify_access_token(token)
-        # Add to Redis blacklist with TTL matching token expiry
+        user_id = result.claims.sub
         ttl = max(int(result.claims.exp - time.time()), 0) if result.claims.exp else 3600
-        _get_redis().setex(f"token_blacklist:{token[:32]}", ttl, "revoked")
-        return {"status": "logged_out"}
+        token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+        _get_redis().setex(f"token_blacklist:{token_hash}", ttl, "revoked")
     except Exception:
         return {"status": "logged_out"}  # graceful even if token invalid
+
+    # Best-effort halt of the user's automation footprint.
+    if user_id:
+        try:
+            auth_repository.update_automation_enabled(user_id, False)
+            logging.getLogger("auth-service.audit").info(
+                "automation_toggle user_id=%s enabled=False source=logout",
+                user_id,
+            )
+        except Exception:
+            pass  # logged via repository; don't block logout
+        _trigger_logout_cancel(user_id)
+    return {"status": "logged_out"}
+
+
+def _trigger_logout_cancel(user_id: str) -> None:
+    """Call order-service to cancel this user's open orders. Best-effort.
+
+    Internal-admin signed call so order-service trusts us. Short timeout
+    so a slow/down order-service can't block the logout HTTP response.
+    """
+    import httpx
+    from shared.internal_admin import build_internal_admin_headers
+    path = f"/orders/{user_id}/logout-cancel"
+    try:
+        headers = build_internal_admin_headers(
+            settings.internal_admin_secret,
+            actor_user_id="auth-service",
+            path=path,
+        )
+        with httpx.Client(timeout=settings.logout_cancel_timeout_seconds) as client:
+            client.post(f"{settings.order_service_base_url.rstrip('/')}{path}", headers=headers)
+    except Exception:
+        # Not fatal — user is logged out, automation_enabled is false. Worst
+        # case: previously-submitted orders complete naturally on the exchange.
+        pass
 
 
 @router.post("/auth/verify", response_model=TokenVerificationResponse)
@@ -191,6 +226,60 @@ def me(
     return profile
 
 
+@router.patch("/auth/me/automation", response_model=UserProfile)
+def update_my_automation(
+    payload: AutomationUpdateRequest,
+    request: Request,
+    x_user_id: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
+) -> UserProfile:
+    """User-self toggle for automated trading.
+
+    Auth: prefer JWT (verified). X-User-ID accepted only as fallback for
+    api-gateway forwarding (gateway already validated upstream).
+
+    Rate-limited to 20 toggles/hour per user — automated trading flag
+    flapping has no legitimate use case at high frequency, and unbounded
+    toggling would write-storm the DB.
+
+    Every successful toggle is logged at INFO with user_id + new state +
+    actor source for compliance / forensics.
+    """
+    # Prefer the verified JWT subject — only fall back to X-User-ID when no
+    # token is supplied (e.g. an internal-admin signed call from another
+    # service that has already verified the user).
+    auth_source = "unknown"
+    user_id: str | None = None
+    if authorization:
+        token = authorization.removeprefix("Bearer ").strip()
+        try:
+            result = verify_access_token(token)
+            user_id = result.claims.sub
+            auth_source = "jwt"
+        except Exception:
+            raise HTTPException(status_code=401, detail="invalid_token")
+    elif x_user_id:
+        user_id = x_user_id
+        auth_source = "header"
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="missing_user_context")
+
+    if not _check_rate(_automation_toggle_attempts, user_id, _MAX_AUTOMATION_TOGGLES, _AUTOMATION_WINDOW):
+        raise HTTPException(status_code=429, detail="too_many_automation_toggles")
+    _record_attempt(_automation_toggle_attempts, user_id)
+
+    profile = auth_repository.update_automation_enabled(user_id, payload.enabled)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="user_not_found")
+    # Compliance audit: who flipped what, from where.
+    logging.getLogger("auth-service.audit").info(
+        "automation_toggle user_id=%s enabled=%s source=%s ip=%s",
+        user_id, payload.enabled, auth_source,
+        request.client.host if request.client else "unknown",
+    )
+    return profile
+
+
 @router.post("/admin/bootstrap", response_model=BootstrapAdminResponse)
 def bootstrap_admin(x_bootstrap_token: str | None = Header(default=None)) -> BootstrapAdminResponse:
     _require_bootstrap_token(x_bootstrap_token)
@@ -208,7 +297,14 @@ def list_users(
     x_internal_admin_timestamp: str | None = Header(default=None),
     x_internal_admin_signature: str | None = Header(default=None),
 ) -> list[UserProfile]:
-    _require_internal_admin(request, x_internal_actor_user_id, x_internal_admin_timestamp, x_internal_admin_signature)
+    require_internal_admin(
+        request=request,
+        secret=settings.internal_admin_secret,
+        actor_user_id=x_internal_actor_user_id,
+        timestamp=x_internal_admin_timestamp,
+        signature=x_internal_admin_signature,
+        ttl_seconds=settings.admin_header_ttl_seconds,
+    )
     return auth_repository.list_users()
 
 
@@ -221,7 +317,14 @@ def update_user_roles(
     x_internal_admin_timestamp: str | None = Header(default=None),
     x_internal_admin_signature: str | None = Header(default=None),
 ) -> UserProfile:
-    _require_internal_admin(request, x_internal_actor_user_id, x_internal_admin_timestamp, x_internal_admin_signature)
+    require_internal_admin(
+        request=request,
+        secret=settings.internal_admin_secret,
+        actor_user_id=x_internal_actor_user_id,
+        timestamp=x_internal_admin_timestamp,
+        signature=x_internal_admin_signature,
+        ttl_seconds=settings.admin_header_ttl_seconds,
+    )
     profile = auth_repository.update_roles(user_id, payload.roles)
     if profile is None:
         raise HTTPException(status_code=404, detail="user_not_found")

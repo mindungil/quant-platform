@@ -4,12 +4,12 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 import httpx
-import jwt
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from app.core.auth import build_internal_admin_headers, check_feature, get_tier_features, require_principal, require_role
 from app.core.config import settings
 from app.core.dashboard import build_dashboard_summary
+from app.core.evaluation_store import EvaluationStore
 from app.core.summary import gateway_summary
 from app.models.auth import GatewayPrincipal
 from app.services.gateway_client import GatewayClient
@@ -18,22 +18,37 @@ from shared.persistence import RedisStore
 from shared.realtime import RealtimeBus
 
 router = APIRouter()
+
+_RISK_DEFAULTS_BY_PLAN = {
+    "FREE": {"max_notional": 1000, "exposure_limit": 5000, "warning_drawdown": 0.05, "liquidate_drawdown": 0.10},
+    "STARTER": {"max_notional": 5000, "exposure_limit": 25000, "warning_drawdown": 0.05, "liquidate_drawdown": 0.10},
+    "PRO": {"max_notional": 50000, "exposure_limit": 250000, "warning_drawdown": 0.07, "liquidate_drawdown": 0.15},
+    "ENTERPRISE": {"max_notional": 500000, "exposure_limit": 2500000, "warning_drawdown": 0.10, "liquidate_drawdown": 0.20},
+}
+
+
+def _get_risk_defaults(plan: str) -> dict:
+    return _RISK_DEFAULTS_BY_PLAN.get(plan.upper(), _RISK_DEFAULTS_BY_PLAN["FREE"])
+
+
 market_data_client = GatewayClient(settings.market_data_base_url)
 auth_client = GatewayClient(settings.auth_service_base_url)
 memory_client = GatewayClient(settings.memory_service_base_url)
 strategy_client = GatewayClient(settings.strategy_registry_base_url)
 signal_client = GatewayClient(settings.signal_service_base_url)
 order_client = GatewayClient(settings.order_service_base_url)
+exchange_client = GatewayClient(settings.exchange_adapter_base_url)
 credential_client = GatewayClient(settings.credential_store_base_url)
 risk_client = GatewayClient(settings.risk_service_base_url)
 backtest_client = GatewayClient(settings.backtest_service_base_url)
-agent_client = GatewayClient(settings.crypto_agent_base_url)
+agent_client = GatewayClient(settings.crypto_agent_base_url, timeout=10.0)
 llm_client = GatewayClient(settings.llm_gateway_base_url, timeout=120.0)
 orchestrator_client = GatewayClient(settings.orchestrator_agent_base_url)
 portfolio_client = GatewayClient(settings.portfolio_service_base_url)
 statistics_client = GatewayClient(settings.statistics_service_base_url)
 _redis_store = RedisStore(settings.redis_url)
 realtime_bus = RealtimeBus(_redis_store, replay_limit=settings.realtime_replay_limit)
+evaluation_store = EvaluationStore(settings.evaluation_data_dir)
 
 
 def _proxy_json(response: httpx.Response) -> JSONResponse:
@@ -127,6 +142,101 @@ def gateway_signals_public(principal: GatewayPrincipal = Depends(require_princip
     return JSONResponse(signal_client.get("/signals", headers=principal.forwarded_headers))
 
 
+# Phase K — proxy the meta-ensemble endpoints so external callers can
+# A/B test the new scoring path through the same authenticated gateway.
+
+
+@router.post("/signals/meta/evaluate/{asset}")
+def gateway_meta_evaluate(
+    asset: str,
+    principal: GatewayPrincipal = Depends(require_principal),
+) -> JSONResponse:
+    return JSONResponse(
+        signal_client.post(
+            f"/signals/meta/evaluate/{asset}",
+            headers=principal.forwarded_headers,
+        )
+    )
+
+
+@router.get("/signals/meta/status")
+def gateway_meta_status(principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    return JSONResponse(signal_client.get("/signals/meta/status", headers=principal.forwarded_headers))
+
+
+@router.get("/alpha/catalog")
+def gateway_alpha_catalog(principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    return JSONResponse(signal_client.get("/alpha/catalog", headers=principal.forwarded_headers))
+
+
+@router.get("/alpha/incubator")
+def gateway_alpha_incubator(
+    status: str | None = None,
+    principal: GatewayPrincipal = Depends(require_principal),
+) -> JSONResponse:
+    path = "/alpha/incubator" + (f"?status={status}" if status else "")
+    return JSONResponse(signal_client.get(path, headers=principal.forwarded_headers))
+
+
+# ── Monitoring endpoints (proxy to signal-service) ─────────────────────
+# Backs the /monitoring frontend page: per-alpha health, feature IC
+# rankings, mining history, and aggregate system metrics. Read-only
+# but still gated by auth so ensemble health isn't leaked publicly.
+
+
+@router.get("/monitoring/alphas/health")
+def gateway_monitoring_alpha_health(
+    request: Request,
+    principal: GatewayPrincipal = Depends(require_principal),
+) -> JSONResponse:
+    params = dict(request.query_params)
+    result = signal_client.get(
+        "/monitoring/alphas/health",
+        headers=principal.forwarded_headers,
+        params=params,
+    )
+    return JSONResponse(result)
+
+
+@router.get("/monitoring/features/importance")
+def gateway_monitoring_feature_importance(
+    request: Request,
+    principal: GatewayPrincipal = Depends(require_principal),
+) -> JSONResponse:
+    params = dict(request.query_params)
+    result = signal_client.get(
+        "/monitoring/features/importance",
+        headers=principal.forwarded_headers,
+        params=params,
+    )
+    return JSONResponse(result)
+
+
+@router.get("/monitoring/mining/history")
+def gateway_monitoring_mining_history(
+    request: Request,
+    principal: GatewayPrincipal = Depends(require_principal),
+) -> JSONResponse:
+    params = dict(request.query_params)
+    result = signal_client.get(
+        "/monitoring/mining/history",
+        headers=principal.forwarded_headers,
+        params=params,
+    )
+    return JSONResponse(result)
+
+
+@router.get("/monitoring/system/metrics")
+def gateway_monitoring_system_metrics(
+    principal: GatewayPrincipal = Depends(require_principal),
+) -> JSONResponse:
+    result = signal_client.get(
+        "/monitoring/system/metrics",
+        headers=principal.forwarded_headers,
+    )
+    return JSONResponse(result)
+
+
 @router.get("/gateway/feed")
 def gateway_feed(principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
     result = memory_client.post(
@@ -206,6 +316,113 @@ def activate_strategy_template(
     return JSONResponse(result)
 
 
+# ---------------------------------------------------------------------------
+# Template subscriptions (Template lane)
+# ---------------------------------------------------------------------------
+
+@router.get("/templates/subscriptions")
+def list_template_subscriptions(
+    request: Request,
+    principal: GatewayPrincipal = Depends(require_principal),
+) -> JSONResponse:
+    params = dict(request.query_params)
+    result = strategy_client.get(
+        "/templates/subscriptions",
+        headers=principal.forwarded_headers,
+        params=params,
+    )
+    return JSONResponse(result)
+
+
+@router.post("/templates/subscriptions")
+def create_template_subscription(
+    payload: dict,
+    principal: GatewayPrincipal = Depends(require_principal),
+) -> JSONResponse:
+    result = strategy_client.post(
+        "/templates/subscriptions",
+        headers=principal.forwarded_headers,
+        json=payload,
+    )
+    return JSONResponse(result)
+
+
+@router.patch("/templates/subscriptions/{subscription_id}")
+def patch_template_subscription(
+    subscription_id: str,
+    payload: dict,
+    principal: GatewayPrincipal = Depends(require_principal),
+) -> JSONResponse:
+    response = strategy_client.request(
+        "PATCH",
+        f"/templates/subscriptions/{subscription_id}",
+        headers=principal.forwarded_headers,
+        json=payload,
+    )
+    return _proxy_json(response)
+
+
+@router.delete("/templates/subscriptions/{subscription_id}")
+def delete_template_subscription(
+    subscription_id: str,
+    principal: GatewayPrincipal = Depends(require_principal),
+) -> JSONResponse:
+    response = strategy_client.request(
+        "DELETE",
+        f"/templates/subscriptions/{subscription_id}",
+        headers=principal.forwarded_headers,
+    )
+    return _proxy_json(response)
+
+
+@router.get("/settings/lane-allocation")
+def get_lane_allocation(
+    request: Request,
+    principal: GatewayPrincipal = Depends(require_principal),
+) -> JSONResponse:
+    params = dict(request.query_params)
+    result = strategy_client.get(
+        "/settings/lane-allocation",
+        headers=principal.forwarded_headers,
+        params=params,
+    )
+    return JSONResponse(result)
+
+
+@router.patch("/settings/lane-allocation")
+def patch_lane_allocation(
+    payload: dict,
+    principal: GatewayPrincipal = Depends(require_principal),
+) -> JSONResponse:
+    response = strategy_client.request(
+        "PATCH",
+        "/settings/lane-allocation",
+        headers=principal.forwarded_headers,
+        json=payload,
+    )
+    return _proxy_json(response)
+
+
+@router.patch("/settings/automation")
+def patch_automation(
+    payload: dict,
+    principal: GatewayPrincipal = Depends(require_principal),
+) -> JSONResponse:
+    """User-self toggle for live automated trading. Proxies to auth-service.
+
+    The signal_to_order_bridge fan-out filters by the user's
+    automation_enabled flag, so flipping false halts execution starting
+    next bridge tick (active orders remain — use logout-cancel for that).
+    """
+    response = auth_client.request(
+        "PATCH",
+        "/auth/me/automation",
+        headers=principal.forwarded_headers,
+        json=payload,
+    )
+    return _proxy_json(response)
+
+
 @router.get("/strategies/{strategy_id}")
 def get_strategy(strategy_id: str, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
     result = strategy_client.get(f"/strategies/{strategy_id}", headers=principal.forwarded_headers)
@@ -275,14 +492,10 @@ def gateway_settings(principal: GatewayPrincipal = Depends(require_principal)) -
             )
         except Exception:
             continue
+    plan = getattr(principal, "plan", "FREE") or "FREE"
     payload = {
         "credentials": credentials,
-        "risk_defaults": {
-            "max_notional": 10000,
-            "exposure_limit": 50000,
-            "warning_drawdown": 0.05,
-            "liquidate_drawdown": 0.10,
-        },
+        "risk_defaults": _get_risk_defaults(plan),
         "execution": {
             "live_trading_enabled": settings.live_trading_enabled,
             "default_shadow_mode": settings.default_shadow_mode,
@@ -411,6 +624,17 @@ def delete_credentials(exchange: str, principal: GatewayPrincipal = Depends(requ
     return _proxy_json(response)
 
 
+@router.post("/settings/credentials/{exchange}/verify")
+def verify_credentials(exchange: str, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    """Ask exchange-adapter to validate the stored credentials against the exchange."""
+    response = exchange_client.request(
+        "POST",
+        f"/exchange/credentials/{principal.user_id}/{exchange}/verify",
+        headers=principal.forwarded_headers,
+    )
+    return _proxy_json(response)
+
+
 # ── Risk Settings (proxy to risk-service) ─────────────────────────────
 
 
@@ -422,7 +646,12 @@ def get_risk_settings(principal: GatewayPrincipal = Depends(require_principal)) 
 
 @router.put("/settings/risk")
 def update_risk_settings(payload: dict, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
-    response = risk_client.request("PUT", f"/risk/settings/{principal.user_id}", json=payload)
+    response = risk_client.request(
+        "PUT",
+        f"/risk/settings/{principal.user_id}",
+        headers=principal.forwarded_headers,
+        json=payload,
+    )
     return _proxy_json(response)
 
 
@@ -448,6 +677,11 @@ def optimize_portfolio(payload: dict = {}, principal: GatewayPrincipal = Depends
 def get_statistics(principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
     response = statistics_client.request("GET", f"/statistics/{principal.user_id}", headers=principal.forwarded_headers)
     return _proxy_json(response)
+
+
+@router.get("/performance")
+def get_performance(principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
+    return get_statistics(principal)
 
 
 @router.get("/statistics/hindsight/{asset}")
@@ -546,13 +780,19 @@ def run_decision(asset: str, payload: dict, principal: GatewayPrincipal = Depend
 
 @router.get("/decisions/latest/{asset}")
 def get_latest_decision(asset: str, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
-    result = agent_client.get(f"/decisions/latest/{asset}", headers=principal.forwarded_headers)
+    try:
+        result = agent_client.get(f"/decisions/latest/{asset}", headers=principal.forwarded_headers)
+    except (httpx.HTTPError, httpx.TimeoutException):
+        return JSONResponse(None)
     return JSONResponse(result)
 
 
 @router.get("/decisions/history/{asset}")
 def get_decision_history(asset: str, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
-    result = agent_client.get(f"/decisions/history/{asset}", headers=principal.forwarded_headers)
+    try:
+        result = agent_client.get(f"/decisions/history/{asset}", headers=principal.forwarded_headers)
+    except (httpx.HTTPError, httpx.TimeoutException):
+        return JSONResponse([])
     # Apply tier-based decisions limit
     plan = getattr(principal, "plan", "FREE") or "FREE"
     features = get_tier_features(plan)
@@ -564,13 +804,21 @@ def get_decision_history(asset: str, principal: GatewayPrincipal = Depends(requi
 
 @router.get("/agent/status")
 def get_agent_status(principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
-    result = agent_client.get("/agent/status", headers=principal.forwarded_headers)
+    try:
+        result = agent_client.get("/agent/status", headers=principal.forwarded_headers)
+    except (httpx.HTTPError, httpx.TimeoutException):
+        return JSONResponse({"status": "unavailable"})
     return JSONResponse(result)
 
 
 @router.get("/recommendations/{asset}")
 def get_recommendations(asset: str, principal: GatewayPrincipal = Depends(require_principal)) -> JSONResponse:
-    result = agent_client.get(f"/recommendations/{asset}", headers=principal.forwarded_headers)
+    # Recommendations are non-critical UI hints — degrade to empty list when the
+    # crypto-agent is slow or down, instead of bubbling a 500 + noisy stack trace.
+    try:
+        result = agent_client.get(f"/recommendations/{asset}", headers=principal.forwarded_headers)
+    except (httpx.HTTPError, httpx.TimeoutException):
+        return JSONResponse([])
     return JSONResponse(result)
 
 
@@ -704,6 +952,13 @@ def admin_pre_flight(
     return _proxy_json(response)
 
 
+@router.post("/admin/execution/preflight")
+def admin_preflight_alias(
+    payload: dict, principal: GatewayPrincipal = Depends(require_role("admin"))
+) -> JSONResponse:
+    return admin_pre_flight(payload=payload, principal=principal)
+
+
 @router.post("/admin/execution/enable-live")
 def admin_enable_live(
     payload: dict, principal: GatewayPrincipal = Depends(require_role("admin"))
@@ -802,6 +1057,25 @@ def admin_execution_config(principal: GatewayPrincipal = Depends(require_role("a
     return JSONResponse(result)
 
 
+@router.get("/admin/execution/posture")
+def admin_execution_posture(principal: GatewayPrincipal = Depends(require_role("admin"))) -> JSONResponse:
+    order_result = order_client.get(
+        "/admin/execution/posture",
+        headers=build_internal_admin_headers(principal, "/admin/execution/posture"),
+    )
+    incidents = risk_client.get(
+        "/risk/incidents/recent",
+        headers=build_internal_admin_headers(principal, "/risk/incidents/recent"),
+        params={"limit": 10},
+    )
+    posture = {
+        **order_result,
+        "recent_risk_incidents": incidents,
+        "recent_rejects": len([item for item in incidents if not item.get("approved", False)]),
+    }
+    return JSONResponse(posture)
+
+
 @router.patch("/admin/execution/config")
 def admin_update_execution_config(
     payload: dict,
@@ -815,16 +1089,66 @@ def admin_update_execution_config(
     return JSONResponse(result)
 
 
-def _principal_from_websocket(websocket: WebSocket) -> GatewayPrincipal:
+@router.get("/admin/evaluation/posture")
+def admin_evaluation_posture(principal: GatewayPrincipal = Depends(require_role("admin"))) -> dict:
+    return {
+        **evaluation_store.build_posture(),
+        "autonomous_loop": evaluation_store.load_autonomous_status(),
+        "requested_by": principal.user_id,
+    }
+
+
+@router.get("/admin/evaluation/realtime-summary")
+def admin_evaluation_realtime_summary(principal: GatewayPrincipal = Depends(require_role("admin"))) -> dict:
+    return evaluation_store.latest_realtime_summary()
+
+
+@router.get("/admin/evaluation/historical-summary")
+def admin_evaluation_historical_summary(principal: GatewayPrincipal = Depends(require_role("admin"))) -> dict:
+    return evaluation_store.latest_historical_summary()
+
+
+@router.get("/admin/evaluation/blended-score")
+def admin_evaluation_blended_score(principal: GatewayPrincipal = Depends(require_role("admin"))) -> dict:
+    return evaluation_store.latest_blended_score()
+
+
+@router.get("/admin/evaluation/failures")
+def admin_evaluation_failures(principal: GatewayPrincipal = Depends(require_role("admin"))) -> dict:
+    failures = evaluation_store.latest_failures()
+    return {
+        "count": len(failures),
+        "items": failures,
+    }
+
+
+@router.get("/admin/evaluation/cycle/{cycle_id}")
+def admin_evaluation_cycle(
+    cycle_id: str,
+    principal: GatewayPrincipal = Depends(require_role("admin")),
+) -> dict:
+    payload = evaluation_store.load_cycle(cycle_id)
+    if payload.get("cycle_id") is None:
+        raise HTTPException(status_code=404, detail="cycle_not_found")
+    return payload
+
+
+async def _principal_from_websocket(websocket: WebSocket) -> GatewayPrincipal:
     token = websocket.query_params.get("token")
     if token is None:
-        raise jwt.InvalidTokenError("missing_token")
-    payload = jwt.decode(
-        token,
-        settings.jwt_secret,
-        algorithms=[settings.jwt_algorithm],
-        issuer=settings.jwt_issuer,
-    )
+        raise HTTPException(status_code=401, detail="missing_token")
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.post(
+                f"{settings.auth_service_base_url.rstrip('/')}/auth/verify",
+                json={"token": token},
+            )
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=503, detail="auth_service_unavailable") from exc
+    if response.status_code == 401:
+        raise HTTPException(status_code=401, detail="invalid_token")
+    response.raise_for_status()
+    payload = response.json().get("claims") or {}
     return GatewayPrincipal(
         user_id=payload["sub"],
         email=payload.get("email"),
@@ -836,8 +1160,11 @@ def _principal_from_websocket(websocket: WebSocket) -> GatewayPrincipal:
 @router.websocket("/gateway/ws")
 async def gateway_ws(websocket: WebSocket) -> None:
     try:
-        principal = _principal_from_websocket(websocket)
-    except jwt.InvalidTokenError:
+        principal = await _principal_from_websocket(websocket)
+    except HTTPException as exc:
+        await websocket.close(code=4401 if exc.status_code == 401 else 1011)
+        return
+    except httpx.HTTPError:
         await websocket.close(code=4401)
         return
 

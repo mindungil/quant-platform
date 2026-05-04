@@ -21,6 +21,11 @@ class OrderRequest(BaseModel):
     automation_enabled: bool = True
     shadow_mode: bool = False
     strategy_id: str | None = None
+    agent_name: str | None = None
+    lane: str | None = None
+    lane_budget_pct: float | None = None
+    subscription_id: str | None = None
+    template_id: str | None = None
     strategy_status: str = "ACTIVE"
     live_trading_requested: bool = False
     correlation_id: str | None = None
@@ -47,6 +52,8 @@ class FillSnapshot(BaseModel):
     status: str
     filled_quantity: float
     filled_price: float
+    exchange_order_id: str | None = None
+    fees: float = 0.0
 
 
 class PortfolioSnapshot(BaseModel):

@@ -16,7 +16,13 @@ def _safe_float(value: float | None) -> float | None:
 
 
 def interpolate_gaps(candles: list[CandlePayload], interval_minutes: int = 60) -> list[CandlePayload]:
-    """Fill gaps with linear interpolation between surrounding candles."""
+    """Fill small gaps (<=2 bars) with forward-fill; reject larger gaps.
+
+    Linear interpolation of OHLCV fabricates fake price action that
+    misleads indicators. Forward-fill is honest — signals the pause
+    without creating fictional trades. Large gaps (>2 bars) indicate
+    data quality issues and should be investigated, not papered over.
+    """
     if len(candles) < 2:
         return list(candles)
 
@@ -31,17 +37,19 @@ def interpolate_gaps(candles: list[CandlePayload], interval_minutes: int = 60) -
 
         if diff > interval * 1.5:
             missing_count = int(diff / interval) - 1
+            if missing_count > 2:
+                raise ValueError(f"data gap of {missing_count} bars exceeds max 2")
             for step in range(1, missing_count + 1):
-                ratio = step / (missing_count + 1)
                 interp_ts = prev.timestamp + interval * step
+                # Forward-fill: pause bar carries prior close; volume=0 signals no trade.
                 result.append(
                     CandlePayload(
                         timestamp=interp_ts,
-                        open=prev.open + (curr.open - prev.open) * ratio,
-                        high=prev.high + (curr.high - prev.high) * ratio,
-                        low=prev.low + (curr.low - prev.low) * ratio,
-                        close=prev.close + (curr.close - prev.close) * ratio,
-                        volume=prev.volume + (curr.volume - prev.volume) * ratio,
+                        open=prev.close,
+                        high=prev.close,
+                        low=prev.close,
+                        close=prev.close,
+                        volume=0.0,
                     )
                 )
 
@@ -83,6 +91,27 @@ def resample_candles(candles: list[CandlePayload], target_interval: str) -> list
     return result
 
 
+def _last(series) -> float | None:
+    """Safe last-value extraction from an indicator series. Returns None if
+    the series is empty or the last value is NaN."""
+    try:
+        if series is None or len(series) == 0:
+            return None
+        val = series.iloc[-1]
+        return _safe_float(val)
+    except Exception:
+        return None
+
+
+def _try(fn):
+    """Run an indicator closure; return None on any failure (e.g. IndexError
+    when candle history is shorter than the indicator's window)."""
+    try:
+        return fn()
+    except Exception:
+        return None
+
+
 def calculate_features(asset: str, candles: list[CandlePayload]) -> FeatureResponse:
     df = pd.DataFrame([candle.model_dump(mode="python") for candle in candles]).sort_values("timestamp")
     close = df["close"]
@@ -91,77 +120,64 @@ def calculate_features(asset: str, candles: list[CandlePayload]) -> FeatureRespo
     volume = df["volume"]
 
     # --- ta library: production-grade indicator calculations ---
+    # Each indicator is guarded individually so that a short candle history
+    # (e.g. first few candles after service start, before the 200-period EMA
+    # window is reached) yields a partial FeatureResponse instead of crashing
+    # the consumer and pushing the message to DLQ. Missing values are None.
 
-    # RSI (14)
-    rsi_ind = RSIIndicator(close=close, window=14)
-    rsi = rsi_ind.rsi()
+    rsi = _try(lambda: RSIIndicator(close=close, window=14).rsi())
 
-    # MACD (12, 26, 9)
-    macd_ind = MACD(close=close, window_fast=12, window_slow=26, window_sign=9)
-    macd_line = macd_ind.macd()
-    macd_signal_line = macd_ind.macd_signal()
+    macd_line = _try(lambda: MACD(close=close, window_fast=12, window_slow=26, window_sign=9).macd())
+    macd_signal_line = _try(lambda: MACD(close=close, window_fast=12, window_slow=26, window_sign=9).macd_signal())
 
-    # Bollinger Bands (20, 2.0)
-    bb_ind = BollingerBands(close=close, window=20, window_dev=2)
-    bb_upper = bb_ind.bollinger_hband()
-    bb_lower = bb_ind.bollinger_lband()
+    bb = _try(lambda: BollingerBands(close=close, window=20, window_dev=2))
+    bb_upper = _try(lambda: bb.bollinger_hband()) if bb is not None else None
+    bb_lower = _try(lambda: bb.bollinger_lband()) if bb is not None else None
 
-    # EMAs
-    ema_9 = EMAIndicator(close=close, window=9).ema_indicator()
-    ema_21 = EMAIndicator(close=close, window=21).ema_indicator()
-    ema_50 = EMAIndicator(close=close, window=50).ema_indicator()
-    ema_200 = EMAIndicator(close=close, window=200).ema_indicator()
+    ema_9 = _try(lambda: EMAIndicator(close=close, window=9).ema_indicator())
+    ema_21 = _try(lambda: EMAIndicator(close=close, window=21).ema_indicator())
+    ema_50 = _try(lambda: EMAIndicator(close=close, window=50).ema_indicator())
+    ema_200 = _try(lambda: EMAIndicator(close=close, window=200).ema_indicator())
 
-    # SMAs
-    sma_20 = SMAIndicator(close=close, window=20).sma_indicator()
-    sma_50 = SMAIndicator(close=close, window=50).sma_indicator()
+    sma_20 = _try(lambda: SMAIndicator(close=close, window=20).sma_indicator())
+    sma_50 = _try(lambda: SMAIndicator(close=close, window=50).sma_indicator())
 
-    # Stochastic (14, 3)
-    stoch_ind = StochasticOscillator(high=high, low=low, close=close, window=14, smooth_window=3)
-    stoch_k = stoch_ind.stoch()
-    stoch_d = stoch_ind.stoch_signal()
+    stoch_ind = _try(lambda: StochasticOscillator(high=high, low=low, close=close, window=14, smooth_window=3))
+    stoch_k = _try(lambda: stoch_ind.stoch()) if stoch_ind is not None else None
+    stoch_d = _try(lambda: stoch_ind.stoch_signal()) if stoch_ind is not None else None
 
-    # VWAP
+    # VWAP — cumulative, tolerant of single candle
     try:
         vwap_ind = VolumeWeightedAveragePrice(high=high, low=low, close=close, volume=volume)
         vwap = vwap_ind.volume_weighted_average_price()
     except Exception:
-        # VWAP may fail with insufficient data
         typical_price = (high + low + close) / 3
-        vwap = (typical_price * volume).cumsum() / volume.cumsum()
+        vwap = _try(lambda: (typical_price * volume).cumsum() / volume.cumsum())
 
-    # ATR (14)
-    atr_ind = AverageTrueRange(high=high, low=low, close=close, window=14)
-    atr_14 = atr_ind.average_true_range()
-
-    # ADX (14)
-    adx_ind = ADXIndicator(high=high, low=low, close=close, window=14)
-    adx_14 = adx_ind.adx()
-
-    # OBV
-    obv_ind = OnBalanceVolumeIndicator(close=close, volume=volume)
-    obv = obv_ind.on_balance_volume()
+    atr_14 = _try(lambda: AverageTrueRange(high=high, low=low, close=close, window=14).average_true_range())
+    adx_14 = _try(lambda: ADXIndicator(high=high, low=low, close=close, window=14).adx())
+    obv = _try(lambda: OnBalanceVolumeIndicator(close=close, volume=volume).on_balance_volume())
 
     return FeatureResponse(
         asset=asset,
         timestamp=df["timestamp"].iloc[-1],
         close=_safe_float(close.iloc[-1]),
         volume=_safe_float(volume.iloc[-1]),
-        rsi_14=_safe_float(rsi.iloc[-1]),
-        macd=_safe_float(macd_line.iloc[-1]),
-        macd_signal=_safe_float(macd_signal_line.iloc[-1]),
-        bb_upper=_safe_float(bb_upper.iloc[-1]),
-        bb_lower=_safe_float(bb_lower.iloc[-1]),
-        ema_9=_safe_float(ema_9.iloc[-1]),
-        ema_21=_safe_float(ema_21.iloc[-1]),
-        ema_50=_safe_float(ema_50.iloc[-1]),
-        ema_200=_safe_float(ema_200.iloc[-1]),
-        sma_20=_safe_float(sma_20.iloc[-1]),
-        sma_50=_safe_float(sma_50.iloc[-1]),
-        stochastic_k=_safe_float(stoch_k.iloc[-1]),
-        stochastic_d=_safe_float(stoch_d.iloc[-1]),
-        vwap=_safe_float(vwap.iloc[-1]),
-        atr_14=_safe_float(atr_14.iloc[-1]),
-        adx_14=_safe_float(adx_14.iloc[-1]),
-        obv=_safe_float(obv.iloc[-1]),
+        rsi_14=_last(rsi),
+        macd=_last(macd_line),
+        macd_signal=_last(macd_signal_line),
+        bb_upper=_last(bb_upper),
+        bb_lower=_last(bb_lower),
+        ema_9=_last(ema_9),
+        ema_21=_last(ema_21),
+        ema_50=_last(ema_50),
+        ema_200=_last(ema_200),
+        sma_20=_last(sma_20),
+        sma_50=_last(sma_50),
+        stochastic_k=_last(stoch_k),
+        stochastic_d=_last(stoch_d),
+        vwap=_last(vwap),
+        atr_14=_last(atr_14),
+        adx_14=_last(adx_14),
+        obv=_last(obv),
     )

@@ -17,14 +17,22 @@ import httpx
 logger = logging.getLogger("api-gateway")
 router = APIRouter(prefix="/api/v1", tags=["Public API"])
 
+SIGNAL_SERVICE_URL = os.getenv("SIGNAL_SERVICE_BASE_URL", "http://localhost:8003")
+CRYPTO_AGENT_URL = os.getenv("CRYPTO_AGENT_BASE_URL", "http://localhost:8006")
+FEATURE_STORE_URL = os.getenv("FEATURE_STORE_BASE_URL", "http://localhost:8002")
+MARKET_DATA_URL = os.getenv("MARKET_DATA_BASE_URL", "http://localhost:8001")
+
 # Simple API key validation (in production, this would be a DB lookup)
 VALID_API_KEYS = set(filter(None, os.getenv("PUBLIC_API_KEYS", "").split(",")))
 
 
 def _require_api_key(x_api_key: str | None = Header(default=None)):
+    if not VALID_API_KEYS:
+        logger.error("public_api_keys_not_configured")
+        raise HTTPException(status_code=503, detail="public_api_disabled")
     if not x_api_key:
         raise HTTPException(status_code=401, detail="API key required. Pass X-API-Key header.")
-    if VALID_API_KEYS and x_api_key not in VALID_API_KEYS:
+    if x_api_key not in VALID_API_KEYS:
         raise HTTPException(status_code=403, detail="Invalid API key")
     return x_api_key
 
@@ -34,7 +42,7 @@ def get_signal(asset: str, x_api_key: str = Header(default=None)):
     """Get latest signal evaluation for an asset."""
     _require_api_key(x_api_key)
     try:
-        resp = httpx.get(f"http://localhost:8003/signals/{asset}/latest", timeout=5)
+        resp = httpx.get(f"{SIGNAL_SERVICE_URL}/signals/{asset}/latest", timeout=5)
         if resp.status_code == 200:
             return resp.json()
         return {"error": "signal_not_found", "asset": asset}
@@ -48,7 +56,7 @@ def get_decisions(asset: str, limit: int = 10, x_api_key: str = Header(default=N
     _require_api_key(x_api_key)
     try:
         resp = httpx.get(
-            f"http://localhost:8006/decisions/history/{asset}?limit={min(limit, 50)}",
+            f"{CRYPTO_AGENT_URL}/decisions/history/{asset}?limit={min(limit, 50)}",
             timeout=5,
         )
         if resp.status_code == 200:
@@ -64,7 +72,7 @@ def get_factors(asset: str, x_api_key: str = Header(default=None)):
     _require_api_key(x_api_key)
     try:
         # Compute factors from latest features
-        resp = httpx.get(f"http://localhost:8002/features/{asset}/latest", timeout=5)
+        resp = httpx.get(f"{FEATURE_STORE_URL}/features/{asset}/latest", timeout=5)
         if resp.status_code != 200:
             return {"error": "features_not_found"}
         features = resp.json()
@@ -99,9 +107,15 @@ def get_status(x_api_key: str = Header(default=None)):
     """Get system health status."""
     _require_api_key(x_api_key)
     services = {}
-    for name, port in [("signal", 8003), ("agent", 8006), ("market-data", 8001), ("features", 8002)]:
+    service_urls = {
+        "signal": SIGNAL_SERVICE_URL,
+        "agent": CRYPTO_AGENT_URL,
+        "market-data": MARKET_DATA_URL,
+        "features": FEATURE_STORE_URL,
+    }
+    for name, base_url in service_urls.items():
         try:
-            resp = httpx.get(f"http://localhost:{port}/health", timeout=3)
+            resp = httpx.get(f"{base_url}/health", timeout=3)
             services[name] = "ok" if resp.status_code == 200 else "error"
         except Exception:
             services[name] = "unreachable"

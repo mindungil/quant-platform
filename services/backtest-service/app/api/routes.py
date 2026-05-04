@@ -1,13 +1,8 @@
 from fastapi import APIRouter, Header, HTTPException
-from app.core.evaluator import evaluate_strategy, get_job, submit_job
+from app.core import evaluator
 from app.models.backtest import BacktestJob, BacktestRequest, BacktestResult
 
 router = APIRouter()
-
-
-@router.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
 
 
 @router.post("/backtests/run", response_model=BacktestJob)
@@ -16,13 +11,13 @@ async def run_backtest(
     x_user_id: str | None = Header(default=None),
 ) -> BacktestJob:
     """Submit a backtest job. Returns immediately with a job_id to poll."""
-    return submit_job(payload, user_id=x_user_id or "system")
+    return evaluator.submit_job(payload, user_id=x_user_id or "system")
 
 
 @router.get("/backtests/{job_id}", response_model=BacktestJob)
 def get_backtest(job_id: str, x_user_id: str | None = Header(default=None)) -> BacktestJob:
     """Poll for backtest job status and results."""
-    job = get_job(job_id)
+    job = evaluator.get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
     if x_user_id is not None and job.user_id != x_user_id:

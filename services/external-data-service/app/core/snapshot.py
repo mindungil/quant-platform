@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 import httpx
 
+from app.db.snapshot_repo import snapshot_repository
 from app.core.sentiment import _keyword_score, CACHE_TTL as _NEWS_CACHE_TTL
 from app.models.external_data import ExternalContextSnapshot
 
@@ -445,6 +446,13 @@ def _fetch_news_sentiment(asset: str) -> float:
 
 def build_external_context(asset: str) -> ExternalContextSnapshot:
     missing: list[str] = []
+    live_source_failures = 0
+
+    def _mark_missing(name: str) -> None:
+        nonlocal live_source_failures
+        if name not in missing:
+            missing.append(name)
+        live_source_failures += 1
 
     # 1. Fear & Greed
     try:
@@ -452,7 +460,7 @@ def build_external_context(asset: str) -> ExternalContextSnapshot:
     except Exception as exc:
         logger.warning("fear_greed source failed: %s", exc)
         fear_greed_int, fear_greed_norm = 50, 0.0
-        missing.append("fear_greed")
+        _mark_missing("fear_greed")
 
     # 2. CoinGecko Sentiment
     try:
@@ -460,7 +468,7 @@ def build_external_context(asset: str) -> ExternalContextSnapshot:
     except Exception as exc:
         logger.warning("coingecko_sentiment source failed: %s", exc)
         coingecko_sentiment, price_change_24h = 0.0, None
-        missing.append("coingecko_sentiment")
+        _mark_missing("coingecko_sentiment")
 
     # 3. CoinGecko Global Dominance
     try:
@@ -468,7 +476,7 @@ def build_external_context(asset: str) -> ExternalContextSnapshot:
     except Exception as exc:
         logger.warning("global_dominance source failed: %s", exc)
         btc_dominance, market_cap_change_24h, altcoin_season = None, None, None
-        missing.append("global_dominance")
+        _mark_missing("global_dominance")
 
     # 4. On-chain
     symbol = _extract_symbol(asset)
@@ -478,7 +486,7 @@ def build_external_context(asset: str) -> ExternalContextSnapshot:
         except Exception as exc:
             logger.warning("onchain_btc source failed: %s", exc)
             n_tx_score, hash_rate_score, fee_score = 0.0, 0.0, 0.0
-            missing.append("onchain_btc")
+            _mark_missing("onchain_btc")
     else:
         n_tx_score, hash_rate_score, fee_score = 0.0, 0.0, 0.0
 
@@ -488,7 +496,7 @@ def build_external_context(asset: str) -> ExternalContextSnapshot:
     except Exception as exc:
         logger.warning("coinpaprika source failed: %s", exc)
         volume_score, paprika_pct_chg = 0.0, None
-        missing.append("coinpaprika")
+        _mark_missing("coinpaprika")
 
     # 6. Binance Futures derivatives data
     funding_rate_raw, funding_rate_score = None, None
@@ -501,25 +509,25 @@ def build_external_context(asset: str) -> ExternalContextSnapshot:
         funding_rate_raw, funding_rate_score = _fetch_funding_rate(asset)
     except Exception as exc:
         logger.warning("binance_funding_rate source failed: %s", exc)
-        missing.append("binance_funding_rate")
+        _mark_missing("binance_funding_rate")
 
     try:
         oi_score = _fetch_open_interest(asset)
     except Exception as exc:
         logger.warning("binance_open_interest source failed: %s", exc)
-        missing.append("binance_open_interest")
+        _mark_missing("binance_open_interest")
 
     try:
         ls_ratio_raw, ls_score = _fetch_long_short_ratio(asset)
     except Exception as exc:
         logger.warning("binance_long_short source failed: %s", exc)
-        missing.append("binance_long_short")
+        _mark_missing("binance_long_short")
 
     try:
         taker_ratio_raw, taker_score = _fetch_taker_buy_sell_ratio(asset)
     except Exception as exc:
         logger.warning("binance_taker source failed: %s", exc)
-        missing.append("binance_taker")
+        _mark_missing("binance_taker")
 
     derivatives_sentiment = _derivatives_weighted_avg([
         (funding_rate_score, 0.3),
@@ -534,7 +542,7 @@ def build_external_context(asset: str) -> ExternalContextSnapshot:
     except Exception as exc:
         logger.warning("news_sentiment source failed: %s", exc)
         news_sentiment_score = 0.0
-        missing.append("news_sentiment")
+        _mark_missing("news_sentiment")
 
     # --- Composite scores ---
 
@@ -564,9 +572,10 @@ def build_external_context(asset: str) -> ExternalContextSnapshot:
         macro_risk_score += 0.2  # overleveraged longs = higher risk
     macro_risk_score = _clamp(macro_risk_score)
 
-    return ExternalContextSnapshot(
+    snapshot = ExternalContextSnapshot(
         asset=asset,
         timestamp=datetime.now(timezone.utc),
+        source_timestamp=datetime.now(timezone.utc),
         news_sentiment=round(sentiment_composite, 4),
         onchain_score=round(onchain_composite, 4),
         macro_risk_score=round(macro_risk_score, 4),
@@ -601,4 +610,19 @@ def build_external_context(asset: str) -> ExternalContextSnapshot:
             "derivatives_sentiment": round(derivatives_sentiment, 4) if derivatives_sentiment is not None else 0.0,
         },
         missing_fields=missing,
+        degraded_mode=bool(missing),
+        stale=False,
+        source="live",
     )
+    if live_source_failures >= 4:
+        cached = snapshot_repository.get_latest(asset)
+        if cached is not None:
+            cached.degraded_mode = True
+            cached.stale = True
+            cached.source = "cached"
+            cached.timestamp = datetime.now(timezone.utc)
+            missing_union = list(dict.fromkeys([*cached.missing_fields, *missing]))
+            cached.missing_fields = missing_union
+            return cached
+    snapshot_repository.upsert(snapshot)
+    return snapshot

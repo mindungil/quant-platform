@@ -18,6 +18,7 @@ from prometheus_client import Counter
 from app.core.graph_state import AgentState
 from app.models.agent import DecisionRecord, SignalSnapshot, StrategySnapshot
 from shared.formulas import formula_registry
+from shared.internal_admin import build_internal_admin_headers
 from shared.logging import get_logger
 from shared.regime import detect_regime, suggest_formula_type
 
@@ -37,8 +38,14 @@ SIGNAL_SERVICE_BASE_URL = os.getenv("SIGNAL_SERVICE_BASE_URL", "http://localhost
 MEMORY_SERVICE_BASE_URL = os.getenv("MEMORY_SERVICE_BASE_URL", "http://localhost:8004")
 STRATEGY_REGISTRY_BASE_URL = os.getenv("STRATEGY_REGISTRY_BASE_URL", "http://localhost:8005")
 ORDER_SERVICE_BASE_URL = os.getenv("ORDER_SERVICE_BASE_URL", "http://localhost:8011")
-RISK_SERVICE_BASE_URL = os.getenv("RISK_SERVICE_BASE_URL", "http://localhost:8012")
+RISK_SERVICE_BASE_URL = os.getenv("RISK_SERVICE_BASE_URL", "http://localhost:8009")
 DEFAULT_USER_ID = os.getenv("DEFAULT_USER_ID", "system")
+DEFAULT_QUANTITY = float(os.getenv("DEFAULT_QUANTITY", "1.0"))
+DEFAULT_NOTIONAL = float(os.getenv("DEFAULT_NOTIONAL", "1000.0"))
+MAX_NOTIONAL = float(os.getenv("MAX_NOTIONAL", "10000.0"))
+CURRENT_DRAWDOWN = float(os.getenv("CURRENT_DRAWDOWN", "0.0"))
+SHADOW_MODE = os.getenv("SHADOW_MODE", "true").lower() == "true"
+INTERNAL_ADMIN_SECRET = os.getenv("INTERNAL_ADMIN_SECRET", "dev-internal-admin-secret")
 
 SIGNAL_STALENESS_SECONDS = 300
 
@@ -477,21 +484,29 @@ def execute_node(state: AgentState) -> dict:
 
     if threshold_crossed and action in ("BUY", "SELL"):
         order_request = {
-            "asset": asset,
-            "asset_type": "stock",
-            "side": action,
-            "exchange": "alpaca",
             "user_id": effective_user_id,
+            "exchange": "alpaca",
+            "asset": asset,
+            "side": action,
+            "quantity": DEFAULT_QUANTITY,
+            "requested_notional": DEFAULT_NOTIONAL,
+            "max_notional": MAX_NOTIONAL,
+            "current_drawdown": CURRENT_DRAWDOWN,
+            "shadow_mode": SHADOW_MODE,
             "strategy_id": strategy_dict.get("id", "unknown"),
-            "decision_id": decision_id,
-            "signal_score": formula_score,
-            "reference_price": signal.reference_price,
+            "agent_name": "stock-agent",
+            "lane": "agent_core",
             "correlation_id": correlation_id or decision_id,
         }
         try:
             resp = httpx.post(
                 f"{ORDER_SERVICE_BASE_URL}/orders",
                 json=order_request,
+                headers=build_internal_admin_headers(
+                    INTERNAL_ADMIN_SECRET,
+                    effective_user_id,
+                    "/orders",
+                ),
                 timeout=10.0,
             )
             if resp.status_code in (200, 201, 202):

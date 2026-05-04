@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import threading
 
 from app.models.order import OrderRequest, OrderResponse, ProtectiveOrder
@@ -7,13 +8,58 @@ from shared.logging import get_logger
 
 logger = get_logger("order-service")
 
+_REDIS_KEY = "protection:active_orders"
+
 
 class ProtectionManager:
-    """Manages stop-loss, take-profit, and trailing-stop protective orders."""
+    """Manages stop-loss, take-profit, and trailing-stop protective orders.
 
-    def __init__(self) -> None:
+    Protections are held in-memory for fast access and mirrored to Redis
+    so they survive service restarts.
+    """
+
+    def __init__(self, redis_store=None) -> None:
         self._active_orders: dict[str, list[ProtectiveOrder]] = {}  # order_id -> protections
         self._lock = threading.Lock()
+        self._redis = redis_store
+        self._restore_from_redis()
+
+    # ------------------------------------------------------------------
+    # Redis persistence
+    # ------------------------------------------------------------------
+
+    def _persist_to_redis(self) -> None:
+        """Mirror active orders to Redis for crash recovery."""
+        if self._redis is None:
+            return
+        try:
+            data: dict[str, list[dict]] = {}
+            for oid, protections in self._active_orders.items():
+                data[oid] = [p.model_dump(mode="json") for p in protections]
+            self._redis.set(_REDIS_KEY, json.dumps(data, default=str))
+        except Exception:
+            logger.warning("protection_redis_persist_failed")
+
+    def _restore_from_redis(self) -> None:
+        """Restore active protections from Redis on startup."""
+        if self._redis is None:
+            return
+        try:
+            raw = self._redis.get(_REDIS_KEY)
+            if raw is None:
+                return
+            data = json.loads(raw)
+            restored = 0
+            for oid, items in data.items():
+                protections = [ProtectiveOrder.model_validate(p) for p in items]
+                active = [p for p in protections if p.status == "ACTIVE"]
+                if active:
+                    self._active_orders[oid] = active
+                    restored += len(active)
+            if restored:
+                logger.info("protection_restored_from_redis", extra={"count": restored})
+        except Exception:
+            logger.warning("protection_redis_restore_failed")
 
     # ------------------------------------------------------------------
     # Creation
@@ -93,6 +139,7 @@ class ProtectionManager:
         if protections:
             with self._lock:
                 self._active_orders.setdefault(parent_order.order_id, []).extend(protections)
+                self._persist_to_redis()
             logger.info(
                 "protective_orders_created",
                 extra={
@@ -151,6 +198,9 @@ class ProtectionManager:
                         if p.status == "ACTIVE":
                             p.status = "CANCELLED"
 
+            if triggered:
+                self._persist_to_redis()
+
         return triggered
 
     # ------------------------------------------------------------------
@@ -180,7 +230,22 @@ class ProtectionManager:
                 if p.status == "ACTIVE":
                     p.status = "CANCELLED"
                     cancelled.append(p)
+            if cancelled:
+                self._persist_to_redis()
         return cancelled
 
 
-protection_manager = ProtectionManager()
+def _init_protection_manager() -> ProtectionManager:
+    """Initialize with Redis if available."""
+    try:
+        from app.core.config import settings
+        from shared.persistence import RedisStore
+        rs = RedisStore(settings.redis_url)
+        if rs.ping():
+            return ProtectionManager(redis_store=rs)
+    except Exception:
+        pass
+    return ProtectionManager()
+
+
+protection_manager = _init_protection_manager()

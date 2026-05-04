@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.api.monitoring_routes import router as monitoring_router
 from app.api.routes import router
 from app.core.config import settings
 from app.services.event_publisher import publisher
@@ -32,3 +33,4 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title="signal-service", version="0.1.0", lifespan=lifespan)
 install_http_observability(app, "signal-service")
 app.include_router(router)
+app.include_router(monitoring_router)

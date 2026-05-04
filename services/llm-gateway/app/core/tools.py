@@ -61,15 +61,10 @@ TOOL_DEFINITIONS: list[dict] = [
     },
     {
         "name": "get_portfolio",
-        "description": "현재 포트폴리오 상태를 조회합니다. 보유 포지션, 평균 진입가, 미실현/실현 PnL, 집중도, 총 익스포져를 반환합니다.",
+        "description": "현재 유저 본인의 포트폴리오 상태를 조회합니다. 보유 포지션, 평균 진입가, 미실현/실현 PnL, 집중도, 총 익스포져를 반환합니다.",
         "input_schema": {
             "type": "object",
-            "properties": {
-                "user_id": {
-                    "type": "string",
-                    "description": "유저 ID (기본: 현재 유저)",
-                },
-            },
+            "properties": {},
             "required": [],
         },
     },
@@ -423,6 +418,54 @@ TOOL_DEFINITIONS: list[dict] = [
             "type": "object",
             "properties": {
                 "asset": {"type": "string", "description": "자산 심볼 필터 (선택)"},
+            },
+            "required": [],
+        },
+    },
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # Operational: 자율 모니터링 루프 / 주문 이력 조회
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    {
+        "name": "get_loop_state",
+        "description": (
+            "자율 모니터링 루프의 현재 상태(paper vs virtual 자본, 일별 수익률 차이, 심볼별 SR, 최대 낙폭, "
+            "anomaly 이력, 진행 중인 deployment, baseline 대비 변화)를 조회합니다. "
+            "유저가 'soak 어떻게 돼가?', '어제 paper 수익률은?', 'anomaly 뭐 떴어?' 같이 물을 때 사용."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "snapshot_count": {
+                    "type": "integer",
+                    "description": "반환할 최근 snapshot 수 (기본 10, 최대 50)",
+                    "default": 10,
+                },
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "get_recent_orders",
+        "description": (
+            "현재 유저의 최근 주문 이력을 조회합니다. 주문 ID, 자산, 방향(BUY/SELL), 수량, 상태, "
+            "shadow/live 모드, 생성 시각을 반환. '어제 어떤 주문 났어?', '내 BTC 포지션 언제 진입했어?' 류 질문에 사용."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "limit": {
+                    "type": "integer",
+                    "description": "반환할 주문 수 (기본 20, 최대 100)",
+                    "default": 20,
+                },
+                "asset": {
+                    "type": "string",
+                    "description": "특정 자산만 필터 (선택, 예: BTCUSDT)",
+                },
+                "status": {
+                    "type": "string",
+                    "description": "주문 상태 필터 (선택, 예: FILLED, REJECTED, PENDING)",
+                },
             },
             "required": [],
         },

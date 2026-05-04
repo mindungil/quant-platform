@@ -102,6 +102,7 @@ class OrderRepository:
             ORDER BY created_at ASC, id ASC
             """,
             {"order_id": row["order_id"]},
+            scope_user_id=row["user_id"],
         )
         return OrderResponse.model_validate(
             {
@@ -176,6 +177,7 @@ class OrderRepository:
                 "statistics": serialize_json(response.statistics.model_dump(mode="json")) if response.statistics is not None else None,
                 "idempotency_key": idempotency_key,
             },
+            scope_user_id=user_id,
         )
         self.record_lifecycle(response.order_id, user_id, response.status, detail=detail or {})
 
@@ -192,6 +194,7 @@ class OrderRepository:
                 "detail": serialize_json(detail),
                 "created_at": datetime.now(UTC),
             },
+            scope_user_id=user_id,
         )
 
     def get_by_id(self, order_id: str) -> OrderResponse | None:
@@ -208,16 +211,22 @@ class OrderRepository:
         return None
 
     def update_status(self, order_id: str, status: str, *, detail: str | None = None) -> None:
+        row = self._store.fetch_one(
+            "SELECT user_id FROM order_events WHERE order_id = :order_id",
+            {"order_id": order_id},
+        )
+        user_id = row["user_id"] if row is not None else ""
         self._store.execute(
             "UPDATE order_events SET status = :status WHERE order_id = :order_id",
             {"order_id": order_id, "status": status},
+            scope_user_id=user_id or None,
         )
         for orders in self._orders.values():
             for order in orders:
                 if order.order_id == order_id:
                     order.status = status
         if detail:
-            self.record_lifecycle(order_id, "", status, detail={"reason": detail})
+            self.record_lifecycle(order_id, user_id, status, detail={"reason": detail})
 
     def get_by_idempotency_key(self, key: str) -> OrderResponse | None:
         row = self._store.fetch_one(
@@ -233,7 +242,7 @@ class OrderRepository:
         rows = self._store.fetch_all(
             """
             SELECT * FROM order_events
-            WHERE status IN ('PENDING', 'APPROVED', 'SUBMITTED')
+            WHERE status IN ('PENDING', 'APPROVED', 'SUBMITTED', 'ACCEPTED', 'PARTIALLY_FILLED')
               AND created_at < :cutoff
             ORDER BY created_at ASC
             """,
@@ -245,11 +254,22 @@ class OrderRepository:
         rows = self._store.fetch_all(
             """
             SELECT * FROM order_events
-            WHERE status IN ('PENDING', 'APPROVED', 'SUBMITTED')
+            WHERE status IN ('PENDING', 'APPROVED', 'SUBMITTED', 'ACCEPTED', 'PARTIALLY_FILLED')
             ORDER BY created_at ASC
             """,
         )
         return [self._hydrate(row) for row in rows]
+
+    def active_status_counts(self) -> dict[str, int]:
+        rows = self._store.fetch_all(
+            """
+            SELECT status, COUNT(*) AS count
+            FROM order_events
+            WHERE status IN ('PENDING', 'APPROVED', 'SUBMITTED', 'ACCEPTED', 'PARTIALLY_FILLED')
+            GROUP BY status
+            """
+        )
+        return {str(row["status"]): int(row["count"]) for row in rows}
 
     def list_for_user(self, user_id: str) -> list[OrderResponse]:
         rows = self._store.fetch_all(
@@ -259,6 +279,7 @@ class OrderRepository:
             ORDER BY created_at ASC
             """,
             {"user_id": user_id},
+            scope_user_id=user_id,
         )
         if rows:
             return [self._hydrate(row) for row in rows]

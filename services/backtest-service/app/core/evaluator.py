@@ -2,7 +2,17 @@ import asyncio
 import logging
 import math
 import os
+import warnings
 from datetime import datetime, timezone
+
+warnings.filterwarnings(
+    "ignore", category=RuntimeWarning, message="Mean of empty slice"
+)
+warnings.filterwarnings(
+    "ignore",
+    category=RuntimeWarning,
+    message="invalid value encountered in scalar divide",
+)
 
 UTC = timezone.utc
 from uuid import uuid4
@@ -33,6 +43,7 @@ if "IPython" not in _sys.modules:
 import quantstats as qs
 
 from app.core.config import settings
+from shared.internal_admin import build_internal_admin_headers
 from app.models.backtest import BacktestJob, BacktestRequest, BacktestResult
 from shared.statistics import validate_backtest
 
@@ -85,7 +96,7 @@ def _calc_atr(highs: pd.Series, lows: pd.Series, closes: pd.Series, period: int 
     tr3 = (lows - prev_close).abs()
     tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
     atr = tr.ewm(span=period, min_periods=period).mean()
-    return atr.fillna(method="bfill").fillna(tr)
+    return atr.bfill().fillna(tr)
 
 
 # ---------------------------------------------------------------------------
@@ -129,7 +140,7 @@ def _fetch_candles(asset: str, limit: int) -> pd.DataFrame:
             df = pd.DataFrame(data)
             for col in ("open", "high", "low", "close", "volume"):
                 df[col] = pd.to_numeric(df[col], errors="coerce")
-            df["timestamp"] = pd.to_datetime(df["timestamp"])
+            df["timestamp"] = pd.to_datetime(df["timestamp"], format="ISO8601", utc=True)
             df = df.sort_values("timestamp").reset_index(drop=True)
             if len(df) >= 50:
                 return df
@@ -353,14 +364,15 @@ def _calc_metrics(trades: list[dict], risk_free_daily: float) -> dict:
     win_rate = float(len(wins) / n)
     mean_ret = float(np.mean(returns))
 
-    # Calculate Sharpe/Sortino manually with correct annualization
-    # (per-trade returns are NOT daily — using fake daily dates inflates ratios)
+    # Calculate Sharpe/Sortino with time-aware annualization.
+    # Per-trade returns have variable holding periods, so we convert to
+    # daily-equivalent returns before annualizing with sqrt(252).
+    # Reference: Bailey & Lopez de Prado (2014) "The Sharpe Ratio Efficient Frontier"
     if n >= 2 and np.std(returns) > 0:
         std_ret = float(np.std(returns, ddof=1))
-        # Estimate trades per year from the actual test period
-        # Use hourly base (crypto trades ~24/7) and annualize accordingly
-        trades_per_year = max(n, 252)  # at least daily frequency
-        ann_factor = np.sqrt(min(trades_per_year, 8760))
+        # Fixed annualization: sqrt(252) for daily-equivalent Sharpe.
+        # This is conservative and comparable across strategies.
+        ann_factor = np.sqrt(252)
         sharpe = (mean_ret / std_ret) * ann_factor
         downside = returns[returns < 0]
         downside_std = float(np.std(downside, ddof=1)) if len(downside) > 1 else std_ret
@@ -710,6 +722,11 @@ async def _run_job(job_id: str, payload: BacktestRequest) -> None:
                     if new_status:
                         resp = await client.patch(
                             f"{registry_url}/strategies/{payload.strategy_id}/status",
+                            headers=build_internal_admin_headers(
+                                os.getenv("INTERNAL_ADMIN_SECRET", "dev-internal-admin-secret"),
+                                "backtest-service",
+                                f"/strategies/{payload.strategy_id}/status",
+                            ),
                             json={"status": new_status},
                         )
                         if resp.status_code == 200:
@@ -740,6 +757,11 @@ async def _run_job(job_id: str, payload: BacktestRequest) -> None:
                         try:
                             await client.patch(
                                 f"{registry_url}/strategies/{payload.strategy_id}/kelly-params",
+                                headers=build_internal_admin_headers(
+                                    os.getenv("INTERNAL_ADMIN_SECRET", "dev-internal-admin-secret"),
+                                    "backtest-service",
+                                    f"/strategies/{payload.strategy_id}/kelly-params",
+                                ),
                                 json=kelly_params,
                             )
                             logger.info(

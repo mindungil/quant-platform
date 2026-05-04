@@ -39,6 +39,34 @@ REACTIVATION_THRESHOLD = float(os.getenv("RETRAIN_REACTIVATION_THRESHOLD", "0.80
 LOOKBACK_BARS = int(os.getenv("RETRAIN_LOOKBACK_BARS", "4500"))
 
 
+def _run_alpha_gate() -> dict | None:
+    """Best-effort alpha_gate evaluation for the meta-ensemble's live config.
+
+    Returns gate report dict or None if alpha_gate isn't importable (e.g.,
+    shared.alpha not on this container's path). Non-blocking by design.
+    """
+    gate_asset = os.getenv("ALPHA_GATE_ASSET", "ETHUSDT")
+    gate_alphas = os.getenv(
+        "ALPHA_GATE_ALPHAS", "momentum_ensemble,range_reversion,vol_breakout"
+    ).split(",")
+    gate_execution = os.getenv("ALPHA_GATE_EXECUTION", "maker")
+    try:
+        from scripts.alpha_gate import evaluate
+        return evaluate(
+            gate_asset,
+            [a.strip() for a in gate_alphas],
+            gate_execution,
+            folds=6,
+            min_dsr_verdict="marginal",
+            max_pbo=0.30,
+        )
+    except ImportError:
+        return None
+    except Exception as exc:
+        logger.debug("alpha_gate_evaluate_error: %s", str(exc)[:100])
+        return None
+
+
 def _load_recent_ohlcv(symbol: str = "BTCUSDT", interval: str = "1h"):
     """Best-effort load of recent OHLCV. Returns None if unavailable."""
     if not DATA_DIR.exists():
@@ -171,6 +199,24 @@ async def retrain_pass() -> dict[str, Any]:
                     "id": s["id"], "name": s.get("name"),
                     "oos_sharpe": result["oos_sharpe"],
                 })
+
+    # DSR/PBO institutional gate (López de Prado) — runs alpha_gate on the
+    # meta-ensemble config if available. Failure here is non-blocking: we
+    # log a warning but don't demote (the canary cron handles escalation).
+    try:
+        gate_report = _run_alpha_gate()
+        if gate_report is not None:
+            summary["alpha_gate"] = gate_report
+            if not gate_report.get("passed", True):
+                logger.warning(
+                    "alpha_gate_fail_in_retrain",
+                    extra={
+                        "dsr_verdict": gate_report.get("measured", {}).get("dsr_verdict"),
+                        "pbo": gate_report.get("measured", {}).get("pbo"),
+                    },
+                )
+    except Exception as exc:
+        logger.debug("alpha_gate_skipped: %s", str(exc)[:100])
 
     # Evaluate PAUSED strategies — reactivate if recovered
     paused_list = await _list_strategies(status="PAUSED")

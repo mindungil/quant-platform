@@ -7,11 +7,6 @@ from app.db.repository import orchestrator_repository
 router = APIRouter()
 
 
-@router.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
-
-
 @router.get("/metrics")
 def metrics() -> Response:
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)

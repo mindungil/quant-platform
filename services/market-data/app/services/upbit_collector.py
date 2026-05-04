@@ -169,24 +169,9 @@ async def _post_candle(asset: str, candle: CandlePayload) -> None:
             if response.status_code < 300:
                 logger.info("Ingested Upbit candle %s at %s", asset, candle.timestamp.isoformat())
                 candle_ingest_total.labels(asset=asset, status="success").inc()
-                # Publish NATS event for downstream consumers
-                if _event_bus is not None:
-                    try:
-                        await _event_bus.publish(
-                            "market.candle.ingested",
-                            EventEnvelope(
-                                event_type="market.candle.ingested",
-                                source="upbit-collector",
-                                data={
-                                    "asset": asset,
-                                    "timestamp": candle.timestamp.isoformat(),
-                                    "close": candle.close,
-                                    "volume": candle.volume,
-                                },
-                            ),
-                        )
-                    except Exception as pub_exc:
-                        logger.warning("Failed to publish Upbit candle event: %s", pub_exc)
+                # Redundant market.candle.ingested publish removed — see
+                # binance_collector for rationale. The HTTP ingest route
+                # owns the canonical market.candle.updated.{asset} publish.
             else:
                 logger.warning("Upbit ingest rejected %s (status=%d)", asset, response.status_code)
                 candle_ingest_total.labels(asset=asset, status="failed").inc()
@@ -294,19 +279,8 @@ async def start() -> None:
     if _task is not None:
         logger.warning("Upbit collector already running")
         return
-    # Initialize NATS event bus for publishing candle events
-    try:
-        _event_bus = JetStreamBus(
-            nats_url=NATS_URL,
-            redis_store=RedisStore(REDIS_URL),
-            enabled=True,
-        )
-        await _event_bus.connect()
-        await _event_bus.ensure_stream("MARKET", ["market.>"])
-        logger.info("Upbit collector NATS event bus connected")
-    except Exception as exc:
-        logger.warning("Upbit collector NATS init failed (events disabled): %s", exc)
-        _event_bus = None
+    # See binance_collector: HTTP ingest route owns the NATS publish.
+    _event_bus = None
     logger.info("Starting Upbit WebSocket collector background task")
     _task = asyncio.create_task(_run_ws_loop())
 

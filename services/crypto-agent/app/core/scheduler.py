@@ -23,6 +23,7 @@ UTC = timezone.utc
 import httpx
 
 from app.core.config import settings
+from shared.internal_admin import build_internal_admin_headers
 from app.core.engine import run_decision_loop
 from app.core.recommender import recommend_strategies
 from app.core.graph import agent_graph
@@ -220,7 +221,7 @@ class AgentScheduler:
         await asyncio.gather(*crypto_tasks, return_exceptions=True)
 
         # --- ETF agent decisions ---
-        etf_base_url = os.getenv("ETF_AGENT_BASE_URL", "http://localhost:8021")
+        etf_base_url = os.getenv("ETF_AGENT_BASE_URL", "http://localhost:8015")
         etf_tasks = [
             self._call_agent_decide(etf_base_url, asset, "etf-agent")
             for asset in MONITORED_ETF_ASSETS
@@ -229,7 +230,7 @@ class AgentScheduler:
             await asyncio.gather(*etf_tasks, return_exceptions=True)
 
         # --- Stock agent decisions ---
-        stock_base_url = os.getenv("STOCK_AGENT_BASE_URL", "http://localhost:8022")
+        stock_base_url = os.getenv("STOCK_AGENT_BASE_URL", "http://localhost:8016")
         stock_tasks = [
             self._call_agent_decide(stock_base_url, asset, "stock-agent")
             for asset in MONITORED_STOCK_ASSETS
@@ -270,7 +271,14 @@ class AgentScheduler:
             registry_url = settings.strategy_registry_base_url.rstrip("/")
             async with httpx.AsyncClient(timeout=10.0) as client:
                 # Fetch all shadow strategies
-                resp = await client.get(f"{registry_url}/strategies/shadow")
+                resp = await client.get(
+                    f"{registry_url}/strategies/shadow",
+                    headers=build_internal_admin_headers(
+                        settings.internal_admin_secret,
+                        "crypto-agent",
+                        "/strategies/shadow",
+                    ),
+                )
                 if resp.status_code != 200:
                     return
                 shadow_strategies = resp.json()
@@ -289,7 +297,12 @@ class AgentScheduler:
                         continue
                     try:
                         resp = await client.post(
-                            f"{registry_url}/strategies/{strategy_id}/shadow/promote"
+                            f"{registry_url}/strategies/{strategy_id}/shadow/promote",
+                            headers=build_internal_admin_headers(
+                                settings.internal_admin_secret,
+                                "crypto-agent",
+                                f"/strategies/{strategy_id}/shadow/promote",
+                            ),
                         )
                         if resp.status_code == 200:
                             result = resp.json()

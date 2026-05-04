@@ -29,6 +29,8 @@ class EventPublisher:
                 "risk.triggered.dlq",
                 "order.created",
                 "order.created.dlq",
+                "order.partially_filled",
+                "order.partially_filled.dlq",
                 "order.filled",
                 "order.filled.dlq",
                 "order.cancelled",
@@ -74,6 +76,38 @@ class EventPublisher:
 
     def publish_order_created(self, payload: OrderRequest, order_id: str) -> None:
         run_coro(self.publish_order_created_async(payload, order_id))
+
+    async def publish_order_partially_filled_async(self, payload: OrderRequest, response: OrderResponse) -> None:
+        event = response.model_dump(mode="json")
+        await self._bus.publish(
+            "order.partially_filled",
+            EventEnvelope(
+                event_type="order.partially_filled",
+                source="order-service",
+                correlation_id=payload.correlation_id,
+                user_id=payload.user_id,
+                data=event,
+            ),
+        )
+        self._realtime.publish(
+            event_type="order.partially_filled",
+            source="order-service",
+            user_id=payload.user_id,
+            correlation_id=payload.correlation_id,
+            data=event,
+        )
+        logger.info(
+            "order_partially_filled",
+            extra={
+                "service": "order-service",
+                "correlation_id": payload.correlation_id,
+                "user_id": payload.user_id,
+                "event_type": "order.partially_filled",
+            },
+        )
+
+    def publish_order_partially_filled(self, payload: OrderRequest, response: OrderResponse) -> None:
+        run_coro(self.publish_order_partially_filled_async(payload, response))
 
     async def publish_order_filled_async(self, payload: OrderRequest, response: OrderResponse) -> None:
         event = response.model_dump(mode="json")

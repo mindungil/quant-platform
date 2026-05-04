@@ -11,7 +11,7 @@ class Settings:
     credential_store_base_url: str = os.getenv("CREDENTIAL_STORE_BASE_URL", "http://localhost:8010")
     portfolio_service_base_url: str = os.getenv("PORTFOLIO_SERVICE_BASE_URL", "http://localhost:8012")
     statistics_service_base_url: str = os.getenv("STATISTICS_SERVICE_BASE_URL", "http://localhost:8013")
-    strategy_registry_base_url: str = os.getenv("STRATEGY_REGISTRY_BASE_URL", "http://localhost:8006")
+    strategy_registry_base_url: str = os.getenv("STRATEGY_REGISTRY_BASE_URL", "http://localhost:8005")
     postgres_url: str = os.getenv("POSTGRES_URL", "postgresql+psycopg://postgres:postgres@localhost:5432/platform")
     redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     nats_url: str = os.getenv("NATS_URL", "nats://localhost:4222")
@@ -21,7 +21,7 @@ class Settings:
     strict_runtime: bool = env_bool("STRICT_RUNTIME", False)
     live_trading_enabled: bool = env_bool("LIVE_TRADING_ENABLED", False)
     allowed_live_exchanges: tuple[str, ...] = tuple(
-        item.strip().lower() for item in os.getenv("ALLOWED_LIVE_EXCHANGES", "binance").split(",") if item.strip()
+        item.strip().lower() for item in os.getenv("ALLOWED_LIVE_EXCHANGES", "binance,upbit").split(",") if item.strip()
     )
     default_shadow_mode: bool = env_bool("DEFAULT_SHADOW_MODE", True)
     internal_admin_secret: str = os.getenv("INTERNAL_ADMIN_SECRET", "dev-internal-admin-secret")

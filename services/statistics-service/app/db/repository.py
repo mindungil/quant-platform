@@ -33,12 +33,26 @@ class StatisticsRepository:
                 user_id TEXT NOT NULL,
                 order_id TEXT,
                 asset TEXT,
+                strategy_id TEXT,
+                agent_name TEXT,
+                lane TEXT,
+                side TEXT,
+                quantity DOUBLE PRECISION,
+                fill_price DOUBLE PRECISION,
+                correlation_id TEXT,
                 pnl DOUBLE PRECISION NOT NULL,
                 expected_return DOUBLE PRECISION NOT NULL DEFAULT 0.0,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
             """
         )
+        self._store.execute("ALTER TABLE statistics_trades ADD COLUMN IF NOT EXISTS strategy_id TEXT")
+        self._store.execute("ALTER TABLE statistics_trades ADD COLUMN IF NOT EXISTS agent_name TEXT")
+        self._store.execute("ALTER TABLE statistics_trades ADD COLUMN IF NOT EXISTS lane TEXT")
+        self._store.execute("ALTER TABLE statistics_trades ADD COLUMN IF NOT EXISTS side TEXT")
+        self._store.execute("ALTER TABLE statistics_trades ADD COLUMN IF NOT EXISTS quantity DOUBLE PRECISION")
+        self._store.execute("ALTER TABLE statistics_trades ADD COLUMN IF NOT EXISTS fill_price DOUBLE PRECISION")
+        self._store.execute("ALTER TABLE statistics_trades ADD COLUMN IF NOT EXISTS correlation_id TEXT")
 
     def record_trade(
         self,
@@ -48,22 +62,42 @@ class StatisticsRepository:
         *,
         order_id: str | None = None,
         asset: str | None = None,
+        strategy_id: str | None = None,
+        lane: str | None = None,
+        agent_name: str | None = None,
+        side: str | None = None,
+        quantity: float | None = None,
+        fill_price: float | None = None,
         correlation_id: str | None = None,
     ) -> StatisticsSnapshot:
         self._trade_pnls.setdefault(user_id, []).append(pnl)
         self._expected_returns[user_id] = expected_return
         self._store.execute(
             """
-            INSERT INTO statistics_trades (user_id, order_id, asset, pnl, expected_return)
-            VALUES (:user_id, :order_id, :asset, :pnl, :expected_return)
+            INSERT INTO statistics_trades (
+                user_id, order_id, asset, strategy_id, agent_name, lane, side,
+                quantity, fill_price, correlation_id, pnl, expected_return
+            )
+            VALUES (
+                :user_id, :order_id, :asset, :strategy_id, :agent_name, :lane, :side,
+                :quantity, :fill_price, :correlation_id, :pnl, :expected_return
+            )
             """,
             {
                 "user_id": user_id,
                 "order_id": order_id,
                 "asset": asset,
+                "strategy_id": strategy_id,
+                "agent_name": agent_name,
+                "lane": lane,
+                "side": side,
+                "quantity": quantity,
+                "fill_price": fill_price,
+                "correlation_id": correlation_id,
                 "pnl": pnl,
                 "expected_return": expected_return,
             },
+            scope_user_id=user_id,
         )
         snapshot = self.get(user_id)
         self._realtime.publish(
@@ -119,6 +153,7 @@ class StatisticsRepository:
             ORDER BY created_at ASC
             """,
             {"user_id": user_id},
+            scope_user_id=user_id,
         )
         if rows:
             snapshot = compute_statistics(
@@ -143,13 +178,15 @@ class StatisticsRepository:
         """Return raw trade PnL rows for equity curve generation."""
         rows = self._store.fetch_all(
             """
-            SELECT pnl, expected_return, created_at, order_id, asset
+            SELECT pnl, expected_return, created_at, order_id, asset, strategy_id, agent_name, lane, side, quantity, fill_price
             FROM statistics_trades
             WHERE user_id = :user_id
+              AND (:strategy_id IS NULL OR strategy_id = :strategy_id)
             ORDER BY created_at ASC
             LIMIT :limit
             """,
-            {"user_id": user_id, "limit": limit},
+            {"user_id": user_id, "strategy_id": strategy_id, "limit": limit},
+            scope_user_id=user_id,
         )
         return [dict(row) for row in rows]
 
@@ -157,18 +194,18 @@ class StatisticsRepository:
         """Compute per-strategy stats for comparison. Groups by asset as proxy for strategy."""
         rows = self._store.fetch_all(
             """
-            SELECT asset, pnl
+            SELECT strategy_id, asset, pnl
             FROM statistics_trades
             WHERE user_id = :user_id
             ORDER BY created_at ASC
             """,
             {"user_id": user_id},
+            scope_user_id=user_id,
         )
-        # Group by asset (used as strategy proxy)
         from collections import defaultdict
         groups: dict[str, list[float]] = defaultdict(list)
         for row in rows:
-            key = row.get("asset") or "unknown"
+            key = row.get("strategy_id") or row.get("asset") or "unknown"
             groups[key].append(row["pnl"])
 
         import numpy as np
@@ -191,6 +228,38 @@ class StatisticsRepository:
                 "total_return": round(float(np.sum(arr)), 4),
             })
         return result
+
+    def get_agent_stats(self, agent_name: str) -> dict:
+        rows = self._store.fetch_all(
+            """
+            SELECT pnl
+            FROM statistics_trades
+            WHERE agent_name = :agent_name
+            ORDER BY created_at ASC
+            """,
+            {"agent_name": agent_name},
+            scope_user_id=None,
+        )
+        pnls = [float(row["pnl"]) for row in rows]
+        if not pnls:
+            return {
+                "agent_name": agent_name,
+                "trade_count": 0,
+                "win_rate": None,
+                "total_return": 0.0,
+                "sharpe": 0.0,
+            }
+        import numpy as np
+
+        arr = np.array(pnls)
+        std = float(np.std(arr, ddof=1)) if len(arr) > 1 else 0.0
+        return {
+            "agent_name": agent_name,
+            "trade_count": int(len(arr)),
+            "win_rate": round(float((arr > 0).sum() / len(arr)), 4),
+            "total_return": round(float(arr.sum()), 4),
+            "sharpe": round(float(arr.mean()) / std, 4) if std > 0 else 0.0,
+        }
 
 
 statistics_repository = StatisticsRepository()

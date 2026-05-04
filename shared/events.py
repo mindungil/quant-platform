@@ -122,21 +122,58 @@ class JetStreamBus:
             await self._client.drain()
 
     async def ensure_stream(self, name: str, subjects: list[str]) -> None:
+        """Create or reconcile a JetStream stream.
+
+        If the stream does not exist, create it. If it exists but its subject
+        list has drifted from what the caller declared, update it in-place so
+        late-added subjects become live without requiring stream deletion.
+        """
         if self._js is None:
             return
+        desired = set(subjects)
         for attempt in range(1, self._connect_attempts + 1):
             try:
+                # Fast path: try to create. Raises if already exists.
                 await self._js.add_stream(StreamConfig(name=name, subjects=subjects))
                 return
             except Exception:
-                if attempt == self._connect_attempts:
+                # Exists (most common) or transient error. Check current
+                # config and update only if subjects drifted — avoids touching
+                # healthy streams on every startup.
+                try:
+                    info = await self._js.stream_info(name)
+                    existing = set(getattr(info.config, "subjects", None) or [])
+                    if existing == desired:
+                        return  # Already correct
+                    # Merge rather than replace — tolerates multiple services
+                    # declaring overlapping-but-not-identical subject sets for
+                    # the same stream.
+                    merged = sorted(existing | desired)
+                    await self._js.update_stream(
+                        StreamConfig(name=name, subjects=merged)
+                    )
                     return
-                await sleep(self._retry_delay_seconds)
+                except Exception:
+                    if attempt == self._connect_attempts:
+                        return
+                    await sleep(self._retry_delay_seconds)
 
     async def publish(self, subject: str, envelope: EventEnvelope) -> None:
         if self._js is None:
             return
-        await self._js.publish(subject, json.dumps(envelope.model_dump()).encode("utf-8"))
+        payload = json.dumps(envelope.model_dump()).encode("utf-8")
+        last_error: Exception | None = None
+        for attempt in range(1, self._connect_attempts + 1):
+            try:
+                await self._js.publish(subject, payload)
+                return
+            except Exception as exc:
+                last_error = exc
+                if attempt == self._connect_attempts:
+                    raise
+                await sleep(self._retry_delay_seconds)
+        if last_error is not None:
+            raise last_error
 
     async def subscribe(
         self,

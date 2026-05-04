@@ -45,6 +45,10 @@ class RoleUpdateRequest(BaseModel):
     roles: list[str] = Field(default_factory=lambda: ["user"])
 
 
+class AutomationUpdateRequest(BaseModel):
+    enabled: bool
+
+
 class BootstrapAdminResponse(BaseModel):
     user: UserProfile
     created: bool = False

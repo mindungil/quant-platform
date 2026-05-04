@@ -57,7 +57,10 @@ class DecisionRepository:
             {"asset": asset},
         )
         if row is not None:
-            return DecisionRecord.model_validate(deserialize_json(row["payload"]) or {})
+            try:
+                return DecisionRecord.model_validate(deserialize_json(row["payload"]) or {})
+            except Exception:
+                pass
         history = self._items.get(asset, [])
         return history[-1] if history else None
 
@@ -72,7 +75,17 @@ class DecisionRepository:
             {"asset": asset},
         )
         if rows:
-            return [DecisionRecord.model_validate(deserialize_json(row["payload"]) or {}) for row in rows]
+            # Skip malformed/legacy payloads (e.g. rows written before the
+            # DecisionRecord schema change) rather than 500ing the endpoint.
+            result: list[DecisionRecord] = []
+            for row in rows:
+                try:
+                    result.append(
+                        DecisionRecord.model_validate(deserialize_json(row["payload"]) or {})
+                    )
+                except Exception:
+                    continue
+            return result
         return self._items.get(asset, [])
 
 

@@ -185,6 +185,7 @@ class MemoryRepository:
                 "links": serialize_json(record.links),
                 "link_weights": serialize_json(record.link_weights),
             },
+            scope_user_id=record.user_id,
         )
 
         # Compute and store pgvector embedding for semantic search
@@ -193,6 +194,7 @@ class MemoryRepository:
             self._store.execute(
                 "UPDATE memory_records SET embedding_vec = :vec::vector WHERE id = :id",
                 {"vec": str(embedding), "id": record.id},
+                scope_user_id=record.user_id,
             )
         except Exception:
             pass  # vector extension may not be available
@@ -222,6 +224,7 @@ class MemoryRepository:
                 ORDER BY timestamp DESC
                 """,
                 {"user_id": user_id},
+                scope_user_id=user_id,
             )
         if rows:
             return [self._hydrate(row) for row in rows]

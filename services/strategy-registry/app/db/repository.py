@@ -337,7 +337,7 @@ class StrategyRepository:
                 shadow_start_at = EXCLUDED.shadow_start_at
         """
         for table_name in self._table_names():
-            self._store.execute(query.format(table_name=table_name), values)
+            self._store.execute(query.format(table_name=table_name), values, scope_user_id=strategy.user_id)
 
     def _hydrate(self, row: dict) -> Strategy:
         payload = dict(row)
@@ -356,6 +356,7 @@ class StrategyRepository:
             ORDER BY created_at DESC LIMIT 1
             """,
             {"asset_type": asset_type},
+            scope_user_id=None,
         )
         if row is None:
             return None
@@ -390,6 +391,7 @@ class StrategyRepository:
             LIMIT 1
             """,
             {"asset_type": asset_type},
+            scope_user_id=None,
         )
         if row is None:
             return None
@@ -423,6 +425,7 @@ class StrategyRepository:
             ORDER BY created_at DESC LIMIT 1
             """,
             {"user_id": user_id, "asset_type": asset_type},
+            scope_user_id=user_id,
         )
         if row is not None:
             return self._hydrate(row)
@@ -457,6 +460,7 @@ class StrategyRepository:
         rows = self._store.fetch_all(
             f"SELECT * FROM strategy_records WHERE {where} ORDER BY created_at DESC",
             params,
+            scope_user_id=user_id,
         )
         return [self._hydrate(row) for row in rows]
 
@@ -476,6 +480,7 @@ class StrategyRepository:
                 WHERE user_id = :user_id AND asset_type = :asset_type AND id != :strategy_id AND status = 'ACTIVE'
                 """,
                 {"user_id": strategy.user_id, "asset_type": strategy.asset_type, "strategy_id": strategy.id},
+                scope_user_id=strategy.user_id,
             )
             self._store.execute(
                 """
@@ -484,6 +489,7 @@ class StrategyRepository:
                 WHERE user_id = :user_id AND asset_type = :asset_type AND id != :strategy_id AND status = 'ACTIVE'
                 """,
                 {"user_id": strategy.user_id, "asset_type": strategy.asset_type, "strategy_id": strategy.id},
+                scope_user_id=strategy.user_id,
             )
             for item in self._items.values():
                 if (
@@ -518,6 +524,8 @@ class StrategyRepository:
         """Return all strategies currently in SHADOW status."""
         rows = self._store.fetch_all(
             "SELECT * FROM strategy_records WHERE status = 'SHADOW' ORDER BY shadow_start_at ASC"
+            ,
+            scope_user_id=None,
         )
         return [self._hydrate(row) for row in rows]
 

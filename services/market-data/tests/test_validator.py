@@ -31,7 +31,7 @@ def test_rejects_non_monotonic_timestamp() -> None:
     assert result.reason == "non_monotonic_timestamp"
 
 
-def test_flags_large_spike_without_rejecting() -> None:
+def test_quarantines_large_spike() -> None:
     now = datetime.now(UTC)
     previous = CandlePayload(
         timestamp=now,
@@ -50,7 +50,8 @@ def test_flags_large_spike_without_rejecting() -> None:
         volume=1,
     )
 
-    result = validate_candle_transition(previous, current)
+    result = validate_candle_transition(previous, current, asset="BTCUSDT")
 
-    assert result.accepted is True
+    assert result.accepted is False
     assert result.anomaly_detected is True
+    assert result.reason.startswith("spike_quarantined:")

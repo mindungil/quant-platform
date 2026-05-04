@@ -231,6 +231,8 @@ class TestDuplicateDelivery:
     def test_jetstream_idempotency_via_redis(self):
         """JetStreamBus deduplicates events using Redis sismember check."""
         redis_store = RedisStore("redis://localhost:6379")
+        # Clean any leftover state from prior runs (Redis persists across runs)
+        redis_store.delete("events:test-consumer")
 
         # Simulate: first time event_id is NOT in the set
         assert not redis_store.sismember("events:test-consumer", "evt-dup-1")

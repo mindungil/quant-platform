@@ -12,7 +12,7 @@ import logging
 from nats.aio.client import Client as NATS
 
 from app.core.config import settings
-from app.services.pipeline import run_pipeline
+from app.services.pipeline import run_dual_lane_pipeline
 from app.services.publisher import publish_action
 
 logger = logging.getLogger(__name__)
@@ -126,9 +126,12 @@ class CryptoAgentConsumer:
                     await message.ack()
                 return
 
-            logger.info("Processing threshold event for %s", asset)
-            state = await run_pipeline(asset)
-            await publish_action(state, nc=self._nc)
+            logger.info("Processing threshold event for %s (dual-lane)", asset)
+            states = await run_dual_lane_pipeline(asset)
+            # Publish one action event per lane run so downstream (frontend
+            # stream, performance) can attribute by lane.
+            for state in states:
+                await publish_action(state, nc=self._nc)
             if hasattr(message, "ack"):
                 await message.ack()
         except Exception:

@@ -157,7 +157,7 @@ def _get_strategy_client():
 async def gather_context(state: AgentState) -> AgentState:
     """Fetch latest signal and features in parallel."""
     signal_task = asyncio.create_task(
-        asyncio.to_thread(_get_signal_client().get_latest_signal, state.asset)
+        asyncio.to_thread(_get_signal_client().get_latest_signal, state.asset, user_id=state.user_id)
     )
     feature_task = asyncio.create_task(_safe_fetch_features(state.asset))
 
@@ -206,8 +206,41 @@ async def retrieve_memory(state: AgentState) -> AgentState:
 
 
 async def select_strategy(state: AgentState) -> AgentState:
-    """Fetch the active crypto strategy from strategy-registry."""
-    strategy = _get_strategy_client().get_active_strategy("crypto")
+    """Fetch strategy for the current lane.
+
+    - agent_core lane: existing behavior — fetch user's ACTIVE strategy from
+      registry (falls back to bootstrap).
+    - user_template lane: build a synthetic strategy from the subscription's
+      template definition. state.template_id must be set by the caller.
+    """
+    client = _get_strategy_client()
+    if state.lane == "user_template":
+        template = None
+        if state.template_id:
+            template = client.get_template(state.template_id)
+        if template is None:
+            logger.warning("Template %s not found for subscription %s — holding",
+                           state.template_id, state.subscription_id)
+            state.strategy = None
+            state.action = Action.HOLD.value
+            return state
+        # Build synthetic StrategyData for the template lane
+        from app.models.decision import StrategyData
+        state.strategy = StrategyData(
+            name=f"template:{template.get('name', state.template_id)}",
+            asset_type=template.get("asset_type", "crypto"),
+            indicators=list(template.get("factors", [])),
+            weights=dict(template.get("weights", {})),
+            thresholds={"entry": 0.6, "exit": -0.35},
+            version="template-v1",
+            status="ACTIVE",
+            lane="user_template",
+            subscription_id=state.subscription_id,
+            template_id=state.template_id,
+        )
+        return state
+    # agent_core
+    strategy = client.get_active_strategy("crypto", user_id=state.user_id)
     state.strategy = strategy
     return state
 
@@ -305,11 +338,22 @@ async def check_risk(state: AgentState) -> AgentState:
 
 
 async def execute_order(state: AgentState) -> AgentState:
-    """Submit order via order-service (or simulate in shadow mode)."""
+    """Submit order via order-service (or simulate in shadow mode).
+
+    Order notional is scaled by state.lane_budget_pct so each lane trades
+    only its allocated slice of capital.
+    """
     result = await order_client.submit_order(
         asset=state.asset,
         side=state.action,
         shadow_mode=settings.shadow_mode,
+        user_id=state.user_id,
+        lane=state.lane,
+        lane_budget_pct=state.lane_budget_pct,
+        subscription_id=state.subscription_id,
+        template_id=state.template_id,
+        strategy_id=(state.signal.strategy_id if state.signal else None),
+        agent_name="crypto-agent",
     )
     state.order_result = result
 
@@ -331,7 +375,7 @@ async def record_decision(state: AgentState) -> AgentState:
         id=str(uuid.uuid4()),
         asset=state.asset,
         agent_type="crypto",
-        user_id=settings.default_user_id,
+        user_id=state.user_id or settings.default_user_id,
         signal_score=state.signal.signal_score if state.signal else None,
         direction=state.signal.direction if state.signal else None,
         action=state.action,
@@ -363,6 +407,7 @@ async def record_decision(state: AgentState) -> AgentState:
             action=state.action,
             strategy_id=strategy_name,
             reasoning=decision.reasoning,
+            user_id=decision.user_id,
             metadata={
                 "decision_id": decision.id,
                 "risk_approved": decision.risk_approved,
@@ -428,20 +473,157 @@ def build_pipeline() -> StateGraph:
 _pipeline = build_pipeline()
 
 
-async def run_pipeline(asset: str) -> AgentState:
+async def run_pipeline(asset: str, *, lane: str = "agent_core",
+                       lane_budget_pct: float = 1.0,
+                       subscription_id: str | None = None,
+                       template_id: str | None = None,
+                       user_id: str | None = None) -> AgentState:
     """
-    Execute the full decision pipeline for a given asset.
+    Execute the full decision pipeline for a given asset on a given lane.
     Returns the final AgentState with all fields populated.
     """
-    state = AgentState(asset=asset)
+    state = AgentState(
+        asset=asset,
+        lane=lane,
+        lane_budget_pct=lane_budget_pct,
+        subscription_id=subscription_id,
+        template_id=template_id,
+        user_id=user_id,
+    )
     start = time.monotonic()
     state = await _pipeline.run(state)
     elapsed = time.monotonic() - start
     m.PIPELINE_DURATION.observe(elapsed)
     logger.info(
-        "Pipeline completed for %s in %.3fs -> action=%s",
-        state.asset,
-        elapsed,
-        state.action,
+        "Pipeline[%s] completed for %s in %.3fs -> action=%s",
+        lane, state.asset, elapsed, state.action,
     )
     return state
+
+
+async def run_dual_lane_pipeline(asset: str) -> list[AgentState]:
+    """Run both lanes for a single asset, fanning out across users.
+
+    Flow:
+      1. Agent core lane runs ONCE for the platform default user (system
+         account that executes the validated engine).
+      2. Template lane fans out: fetches every enabled subscription across
+         all users, groups by user, and per-user runs one pipeline per
+         subscribed template using that user's lane_allocation and weight.
+
+    Returns a flat list of AgentState (one per lane run). Collision
+    detection is done per-user across agent vs template lanes and publishes
+    alerts but does NOT net orders.
+    """
+    client = _get_strategy_client()
+    results: list[AgentState] = []
+
+    # ----- Agent core lane (platform-level, single run) -----
+    try:
+        default_alloc = client.get_allocation("crypto")
+        default_agent_pct = float(default_alloc.get("agent_pct", 0.70))
+    except Exception:
+        default_agent_pct = 0.70
+
+    if default_agent_pct > 0:
+        try:
+            results.append(await run_pipeline(
+                asset, lane="agent_core", lane_budget_pct=default_agent_pct, user_id=settings.default_user_id,
+            ))
+        except Exception:
+            logger.exception("agent_core lane failed for %s", asset)
+
+    # ----- Template lane (fan-out per user) -----
+    try:
+        all_subs = client.list_all_enabled_subscriptions("crypto")
+    except Exception:
+        all_subs = []
+
+    # Group subs by user
+    subs_by_user: dict[str, list[dict]] = {}
+    for sub in all_subs:
+        user_id = sub.get("user_id") or "anonymous"
+        subs_by_user.setdefault(user_id, []).append(sub)
+
+    for user_id, user_subs in subs_by_user.items():
+        try:
+            alloc = client.get_allocation("crypto", user_id=user_id)
+        except Exception:
+            alloc = {"agent_pct": 0.70, "template_pct": 0.30}
+        template_pct = float(alloc.get("template_pct", 0.30))
+        if template_pct <= 0:
+            continue
+        total_weight = sum(float(s.get("weight", 1.0)) for s in user_subs) or 1.0
+        user_lane_results: list[AgentState] = []
+        for sub in user_subs:
+            sub_weight = float(sub.get("weight", 1.0)) / total_weight
+            sub_budget = template_pct * sub_weight
+            try:
+                state = await run_pipeline(
+                    asset,
+                    lane="user_template",
+                    lane_budget_pct=sub_budget,
+                    subscription_id=sub.get("id"),
+                    template_id=sub.get("template_id"),
+                    user_id=user_id,
+                )
+                results.append(state)
+                user_lane_results.append(state)
+            except Exception:
+                logger.exception(
+                    "user_template lane failed for user=%s sub=%s asset=%s",
+                    user_id, sub.get("id"), asset,
+                )
+        # Collision check against agent_core for THIS user
+        try:
+            agent_core_state = results[0] if results and results[0].lane == "agent_core" else None
+            if agent_core_state and user_lane_results:
+                await _detect_and_publish_collisions(
+                    asset, [agent_core_state, *user_lane_results], user_id=user_id,
+                )
+        except Exception:
+            logger.exception("Collision detection failed for user=%s asset=%s", user_id, asset)
+
+    return results
+
+
+async def _detect_and_publish_collisions(
+    asset: str, results: list[AgentState], user_id: str | None = None,
+) -> None:
+    """Emit NATS events when lanes agree (duplicate) or disagree (opposite)."""
+    if len(results) < 2:
+        return
+    actionable = [r for r in results if r.action in ("BUY", "SELL")]
+    if len(actionable) < 2:
+        return
+    by_lane: dict[str, list[str]] = {}
+    for r in actionable:
+        by_lane.setdefault(r.lane, []).append(r.action)
+
+    # Only meaningful if agent_core and user_template both have actionable decisions
+    agent_actions = set(by_lane.get("agent_core", []))
+    tpl_actions = set(by_lane.get("user_template", []))
+    if not agent_actions or not tpl_actions:
+        return
+
+    try:
+        from app.services.publisher import publish_lane_event
+    except Exception:
+        return
+
+    base_payload: dict = {"asset": asset}
+    if user_id:
+        base_payload["user_id"] = user_id
+
+    if agent_actions == tpl_actions:
+        await publish_lane_event("lane.signal_collision", {
+            **base_payload,
+            "direction": next(iter(agent_actions)),
+            "lanes": ["agent_core", "user_template"],
+        })
+    elif (agent_actions | tpl_actions) == {"BUY", "SELL"}:
+        await publish_lane_event("lane.opposite_collision", {
+            **base_payload,
+            "agent_action": next(iter(agent_actions)),
+            "template_action": next(iter(tpl_actions)),
+        })

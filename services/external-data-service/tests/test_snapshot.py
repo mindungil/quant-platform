@@ -8,7 +8,7 @@ from app.core.snapshot import (
     _cache,
     _fetch_fear_greed,
     _fetch_news_sentiment,
-    _fetch_onchain_score,
+    _fetch_onchain_btc,
     build_external_context,
 )
 
@@ -36,7 +36,7 @@ class TestFetchFearGreed:
         })
         value, norm = _fetch_fear_greed()
         assert value == 11
-        assert norm == -0.8
+        assert norm == pytest.approx(-0.78)
 
     @patch("app.core.snapshot.httpx.get")
     def test_cache_hit(self, mock_get):
@@ -89,36 +89,80 @@ class TestFetchNewsSentiment:
 class TestFetchOnchainScore:
     @patch("app.core.snapshot.httpx.get")
     def test_btc_normal_tx_count(self, mock_get):
-        mock_get.return_value = _mock_response({"n_tx": 400_000})
-        score = _fetch_onchain_score("BTCUSDT")
-        # min(400000/400000, 1.0) * 2 - 1 = 1.0
-        assert score == pytest.approx(1.0)
+        mock_get.return_value = _mock_response({"n_tx": 400_000, "hash_rate": 500_000_000_000_000, "total_fees_btc": 50})
+        n_tx_score, hash_rate_score, fee_score = _fetch_onchain_btc()
+        assert n_tx_score == pytest.approx(1.0)
+        assert hash_rate_score == pytest.approx(1.0)
+        assert fee_score == pytest.approx(1.0)
 
     @patch("app.core.snapshot.httpx.get")
     def test_btc_low_tx_count(self, mock_get):
-        mock_get.return_value = _mock_response({"n_tx": 200_000})
-        score = _fetch_onchain_score("BTCUSDT")
-        # min(200000/400000, 1.0) * 2 - 1 = 0.0
-        assert score == pytest.approx(0.0)
-
-    def test_non_btc_returns_zero(self):
-        assert _fetch_onchain_score("ETHUSDT") == 0.0
+        mock_get.return_value = _mock_response({"n_tx": 200_000, "hash_rate": 250_000_000_000_000, "total_fees_btc": 25})
+        n_tx_score, hash_rate_score, fee_score = _fetch_onchain_btc()
+        assert n_tx_score == pytest.approx(0.0)
+        assert hash_rate_score == pytest.approx(0.0)
+        assert fee_score == pytest.approx(0.0)
 
     @patch("app.core.snapshot.httpx.get", side_effect=Exception("fail"))
     def test_fallback_on_error(self, mock_get):
-        assert _fetch_onchain_score("BTCUSDT") == 0.0
+        assert _fetch_onchain_btc() == (0.0, 0.0, 0.0)
 
 
 class TestBuildExternalContext:
-    @patch("app.core.snapshot._fetch_onchain_score", return_value=0.2)
+    @patch("app.core.snapshot.snapshot_repository.upsert", side_effect=lambda snap: snap)
+    @patch("app.core.snapshot._fetch_taker_buy_sell_ratio", return_value=(None, None))
+    @patch("app.core.snapshot._fetch_long_short_ratio", return_value=(None, None))
+    @patch("app.core.snapshot._fetch_open_interest", return_value=None)
+    @patch("app.core.snapshot._fetch_funding_rate", return_value=(None, None))
+    @patch("app.core.snapshot._fetch_coinpaprika_volume", return_value=(0.0, None))
+    @patch("app.core.snapshot._fetch_global_dominance", return_value=(None, None, None))
+    @patch("app.core.snapshot._fetch_coingecko_sentiment", return_value=(0.0, None))
+    @patch("app.core.snapshot._fetch_onchain_btc", return_value=(0.2, 0.2, 0.2))
     @patch("app.core.snapshot._fetch_news_sentiment", return_value=0.5)
     @patch("app.core.snapshot._fetch_fear_greed", return_value=(11, -0.8))
-    def test_full_snapshot(self, mock_fg, mock_news, mock_onchain):
+    def test_full_snapshot(self, mock_fg, mock_news, mock_onchain, mock_cg, mock_global, mock_volume, mock_funding, mock_oi, mock_ls, mock_taker, mock_upsert):
         snap = build_external_context("BTCUSDT")
         assert snap.asset == "BTCUSDT"
         assert snap.fear_greed_index == 11
-        assert snap.news_sentiment == 0.5
+        assert snap.news_sentiment == pytest.approx(-0.115)
         assert snap.onchain_score == 0.2
         assert snap.macro_risk_score == 0.8  # -(-0.8)
         assert snap.missing_fields == []
         assert "news_sentiment" in snap.components
+        assert not snap.degraded_mode
+        assert snap.source == "live"
+
+    def test_returns_cached_snapshot_when_live_sources_fail(self, monkeypatch):
+        cached = snapshot.ExternalContextSnapshot(
+            asset="BTCUSDT",
+            timestamp=snapshot.datetime.now(snapshot.timezone.utc),
+            source_timestamp=snapshot.datetime.now(snapshot.timezone.utc),
+            news_sentiment=0.2,
+            onchain_score=0.1,
+            macro_risk_score=0.4,
+            fear_greed_index=44,
+            components={"news_sentiment": 0.2},
+            missing_fields=["coinpaprika"],
+            degraded_mode=False,
+            stale=False,
+            source="live",
+        )
+        monkeypatch.setattr(snapshot.snapshot_repository, "upsert", lambda snap: snap)
+        monkeypatch.setattr(snapshot.snapshot_repository, "get_latest", lambda asset: cached.model_copy(deep=True))
+        for fn in (
+            "_fetch_fear_greed",
+            "_fetch_coingecko_sentiment",
+            "_fetch_global_dominance",
+            "_fetch_coinpaprika_volume",
+            "_fetch_funding_rate",
+            "_fetch_open_interest",
+            "_fetch_long_short_ratio",
+            "_fetch_taker_buy_sell_ratio",
+            "_fetch_news_sentiment",
+        ):
+            monkeypatch.setattr(snapshot, fn, lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("boom")))
+        built = build_external_context("BTCUSDT")
+        assert built.source == "cached"
+        assert built.degraded_mode
+        assert built.stale
+        assert "fear_greed" in built.missing_fields

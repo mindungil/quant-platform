@@ -29,12 +29,19 @@ class ExchangeOrderResponse(BaseModel):
     quantity: float
     status: str
     shadow_mode: bool
+    exchange_order_id: str | None = None
+    filled_quantity: float = 0.0
+    average_fill_price: float = 0.0
+    fill_status: str = "NONE"
+    fees: float = 0.0
+    raw_exchange_status: str | None = None
     circuit_state: str = "CLOSED"
     mode: str = "shadow"
     adapter_name: str = "simulated"
     audit_id: int | None = None
     exchange_payload_signature: str | None = None
     filled_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    last_update_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class CancelOrderRequest(BaseModel):

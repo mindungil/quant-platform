@@ -22,6 +22,24 @@ import redis
 
 from app.core.config import settings
 from app.db.repository import orchestrator_repository
+from shared.internal_admin import build_internal_admin_headers
+from shared.request_context import current_request_headers
+
+# Identity used by autonomous orchestrator traffic. Downstream agents emit a
+# WARNING when no X-User-ID is present (assume all calls are user-initiated),
+# so tag orchestrator-originated calls with a well-known system identity.
+_SYSTEM_USER_HEADERS: dict[str, str] = {"X-User-ID": "orchestrator"}
+
+
+def _agent_call_headers() -> dict[str, str]:
+    """Headers for orchestrator → agent calls.
+
+    Propagates request-context if we're in a request scope, otherwise falls
+    back to the system identity so autonomous-loop calls stay identifiable.
+    """
+    headers = current_request_headers()
+    headers.setdefault("X-User-ID", _SYSTEM_USER_HEADERS["X-User-ID"])
+    return headers
 
 logger = logging.getLogger("orchestrator-agent")
 
@@ -130,7 +148,15 @@ def _get_agent_status(name: str, url: str) -> dict:
 def _get_portfolio_risk() -> dict:
     """Check portfolio-level risk across all agents."""
     try:
-        r = httpx.get(f"{settings.portfolio_service_base_url}/portfolio/aggregate", timeout=5.0)
+        r = httpx.get(
+            f"{settings.portfolio_service_base_url}/portfolio/aggregate",
+            headers=build_internal_admin_headers(
+                os.getenv("INTERNAL_ADMIN_SECRET", "dev-internal-admin-secret"),
+                "orchestrator",
+                "/portfolio/aggregate",
+            ),
+            timeout=5.0,
+        )
         if r.status_code == 200:
             data = r.json()
             return {
@@ -180,6 +206,7 @@ def resolve_conflict(losing_agent_url: str, asset: str, reason: str) -> bool:
         r = httpx.post(
             f"{losing_agent_url.rstrip('/')}/agent/override",
             json={"asset": asset, "force_action": "HOLD", "reason": reason},
+            headers=_agent_call_headers(),
             timeout=5.0,
         )
         return r.status_code == 200
@@ -301,6 +328,7 @@ def run_agent_graph(asset: str, agent_type: str = "crypto") -> dict:
     try:
         r = httpx.post(
             f"{base_url.rstrip('/')}/decisions/run/{asset}",
+            headers=_agent_call_headers(),
             timeout=30.0,
         )
         if r.status_code == 200:
@@ -408,7 +436,10 @@ def build_system_summary() -> dict:
 
 def build_summary() -> dict:
     """Backward-compatible wrapper that delegates to build_system_summary."""
-    return build_system_summary()
+    summary = build_system_summary()
+    if "services" not in summary:
+        summary["services"] = summary.get("downstream_services", {})
+    return summary
 
 
 def get_all_agent_statuses() -> dict:

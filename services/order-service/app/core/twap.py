@@ -20,6 +20,7 @@ Safety guards baked in:
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import time
@@ -129,8 +130,61 @@ def execute_twap(
             )
             break
 
-        # Wait for next slice (skip after last)
+        # Wait for next slice (skip after last).
+        # This is a sync function — FastAPI runs sync handlers in a thread
+        # pool, so time.sleep only blocks this worker thread, not the event
+        # loop. For async callers, use execute_twap_async instead.
         if i < plan.n_slices - 1:
             time.sleep(plan.interval_seconds)
+
+    return children
+
+
+async def execute_twap_async(
+    parent: OrderRequest,
+    plan: TwapPlan,
+    submit_child: Callable[[OrderRequest], OrderResponse],
+) -> list[OrderResponse]:
+    """Async version of execute_twap — uses asyncio.sleep between slices
+    so the event loop is not blocked. submit_child is run in the default
+    executor to avoid blocking the loop with sync HTTP calls."""
+    children: list[OrderResponse] = []
+    parent_idem = parent.idempotency_key
+
+    for i in range(plan.n_slices):
+        child = parent.model_copy(deep=True)
+        child.quantity = plan.child_quantity
+        child.requested_notional = plan.child_notional
+        child.idempotency_key = (
+            f"{parent_idem}-twap-{i}" if parent_idem else None
+        )
+        child.correlation_id = f"{parent.correlation_id}-twap-{i}" if parent.correlation_id else None
+
+        try:
+            loop = asyncio.get_running_loop()
+            resp = await loop.run_in_executor(None, submit_child, child)
+        except Exception as exc:
+            logger.exception(
+                "twap_child_failed",
+                extra={"slice": i, "parent_qty": parent.quantity, "error": str(exc)[:200]},
+            )
+            break
+
+        children.append(resp)
+
+        if resp.status in {"REJECTED", "FAILED"}:
+            logger.warning(
+                "twap_aborted",
+                extra={
+                    "slice": i,
+                    "n_slices": plan.n_slices,
+                    "reason": resp.risk_reason,
+                    "child_status": resp.status,
+                },
+            )
+            break
+
+        if i < plan.n_slices - 1:
+            await asyncio.sleep(plan.interval_seconds)
 
     return children

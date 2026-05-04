@@ -47,6 +47,7 @@ class CredentialRepository:
             self._store.execute(
                 "INSERT INTO credential_audit_log (user_id, exchange, action) VALUES (:uid, :ex, :act)",
                 {"uid": user_id, "ex": exchange, "act": action},
+                scope_user_id=user_id,
             )
         except Exception:
             pass  # audit failure should not block operations
@@ -62,6 +63,7 @@ class CredentialRepository:
             LIMIT :limit
             """,
             {"user_id": user_id, "limit": limit},
+            scope_user_id=user_id,
         )
         return [dict(row) for row in rows]
 
@@ -100,6 +102,7 @@ class CredentialRepository:
                 "label": payload.label,
                 "sandbox": payload.sandbox,
             },
+            scope_user_id=payload.user_id,
         )
         self._log_audit(payload.user_id, payload.exchange, "store")
         return self.get_masked(payload.user_id, payload.exchange)
@@ -114,6 +117,7 @@ class CredentialRepository:
                 WHERE user_id = :user_id AND exchange = :exchange
                 """,
                 {"user_id": user_id, "exchange": exchange},
+                scope_user_id=user_id,
             )
             if row is not None:
                 value = {
@@ -139,6 +143,7 @@ class CredentialRepository:
         rows = self._store.fetch_all(
             "SELECT exchange FROM credential_records WHERE user_id = :user_id",
             {"user_id": user_id},
+            scope_user_id=user_id,
         )
         results = []
         for row in rows:
@@ -152,6 +157,7 @@ class CredentialRepository:
         self._store.execute(
             "DELETE FROM credential_records WHERE user_id = :user_id AND exchange = :exchange",
             {"user_id": user_id, "exchange": exchange},
+            scope_user_id=user_id,
         )
         self._log_audit(user_id, exchange, "delete")
         return True

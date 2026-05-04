@@ -2,19 +2,43 @@ from __future__ import annotations
 
 import socket
 import json
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import urlparse
 
-from fastapi import HTTPException
+from fastapi import APIRouter, FastAPI, HTTPException
 
 from shared.persistence import RedisStore, SqlStore
 from shared.runtime import RuntimeDependencyError
 
+CheckFn = Callable[[], dict[str, Any]]
+
+
+# Cache stores per-URL so repeated health checks reuse the same connection
+# pool instead of churning new engines (which can exhaust Postgres'
+# max_connections when every service probes DB on every /ready hit).
+_SQL_STORE_CACHE: dict[str, SqlStore] = {}
+_REDIS_STORE_CACHE: dict[str, RedisStore] = {}
+
+
+def _get_sql_store(url: str) -> SqlStore:
+    store = _SQL_STORE_CACHE.get(url)
+    if store is None:
+        store = SqlStore(url)
+        _SQL_STORE_CACHE[url] = store
+    return store
+
+
+def _get_redis_store(url: str) -> RedisStore:
+    store = _REDIS_STORE_CACHE.get(url)
+    if store is None:
+        store = RedisStore(url)
+        _REDIS_STORE_CACHE[url] = store
+    return store
+
 
 def check_sql(name: str, url: str) -> dict[str, str]:
     try:
-        store = SqlStore(url)
-        store.probe()
+        _get_sql_store(url).probe()
         return {"status": "ok", "target": name}
     except Exception as exc:
         return {"status": "error", "target": name, "detail": str(exc)}
@@ -22,8 +46,7 @@ def check_sql(name: str, url: str) -> dict[str, str]:
 
 def check_redis(name: str, url: str) -> dict[str, str]:
     try:
-        store = RedisStore(url)
-        if store.ping():
+        if _get_redis_store(url).ping():
             return {"status": "ok", "target": name}
         return {"status": "error", "target": name, "detail": "redis_ping_failed"}
     except Exception as exc:
@@ -78,3 +101,71 @@ def require_health(
     payload = {"status": "degraded", "service": service, "checks": checks}
     logger.warning("startup health check exhausted retries, starting in degraded mode: %s", payload)
     return payload
+
+
+def install_health_endpoints(
+    app: FastAPI,
+    *,
+    service: str,
+    readiness_checks: dict[str, CheckFn] | None = None,
+    extra_info: dict[str, Any] | None = None,
+) -> None:
+    """Register `/live`, `/ready`, and `/health` on *app*.
+
+    - `/live` is a static liveness probe: the process is running and the event
+      loop is responsive. Never calls out to dependencies. Used by container
+      liveness probes where failure should trigger a restart.
+    - `/ready` evaluates *readiness_checks* (name → zero-arg function returning
+      a `{status, target, ...}` dict). Returns 503 when any check fails. Use
+      this for load-balancer gating.
+    - `/health` preserves the legacy surface: same body as `/ready` when checks
+      exist, otherwise same as `/live`.
+
+    Each check is called per-request; pass lightweight probes (ping, SELECT 1).
+    """
+    router = APIRouter()
+    checks = readiness_checks or {}
+
+    def _live_payload() -> dict[str, Any]:
+        body: dict[str, Any] = {"status": "ok", "service": service}
+        if extra_info:
+            body.update(extra_info)
+        return body
+
+    def _ready_payload() -> dict[str, Any]:
+        evaluated = {name: fn() for name, fn in checks.items()}
+        overall = "ok" if all(r.get("status") == "ok" for r in evaluated.values()) else "error"
+        body: dict[str, Any] = {"status": overall, "service": service, "checks": evaluated}
+        if extra_info:
+            body.update(extra_info)
+        if overall != "ok":
+            raise HTTPException(status_code=503, detail=body)
+        return body
+
+    @router.get("/live")
+    def live() -> dict[str, Any]:
+        return _live_payload()
+
+    @router.get("/ready")
+    def ready() -> dict[str, Any]:
+        return _ready_payload()
+
+    @router.get("/health")
+    def health() -> dict[str, Any]:
+        return _ready_payload() if checks else _live_payload()
+
+    # /metrics — default Prometheus scrape endpoint. Every service that
+    # wires health endpoints also gets metrics for free, so Prometheus
+    # targets don't show up as `down` just because a service forgot to
+    # register /metrics itself.
+    try:
+        from fastapi import Response
+        from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+
+        @router.get("/metrics")
+        def metrics() -> Response:
+            return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+    except ImportError:
+        pass
+
+    app.include_router(router)

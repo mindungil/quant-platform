@@ -79,24 +79,12 @@ async def _post_candle(asset: str, candle: CandlePayload) -> None:
             if response.status_code < 300:
                 logger.info("Ingested candle %s at %s", asset, candle.timestamp.isoformat())
                 candle_ingest_total.labels(asset=asset, status="success").inc()
-                # Publish NATS event for downstream consumers
-                if _event_bus is not None:
-                    try:
-                        await _event_bus.publish(
-                            "market.candle.ingested",
-                            EventEnvelope(
-                                event_type="market.candle.ingested",
-                                source="binance-collector",
-                                data={
-                                    "asset": asset,
-                                    "timestamp": candle.timestamp.isoformat(),
-                                    "close": candle.close,
-                                    "volume": candle.volume,
-                                },
-                            ),
-                        )
-                    except Exception as pub_exc:
-                        logger.warning("Failed to publish candle event: %s", pub_exc)
+                # Note: The HTTP ingestion endpoint (market-data routes.py)
+                # already publishes market.candle.updated.{asset} to the
+                # MARKET_DATA JetStream. The previous redundant publish of
+                # market.candle.ingested was dropped — no stream claimed that
+                # subject, which produced NoRespondersError noise on every
+                # candle without adding any downstream value.
             else:
                 logger.warning("Ingest rejected %s (status=%d)", asset, response.status_code)
                 candle_ingest_total.labels(asset=asset, status="failed").inc()
@@ -181,19 +169,11 @@ async def start() -> None:
     if _task is not None:
         logger.warning("Binance collector already running")
         return
-    # Initialize NATS event bus for publishing candle events
-    try:
-        _event_bus = JetStreamBus(
-            nats_url=NATS_URL,
-            redis_store=RedisStore(REDIS_URL),
-            enabled=True,
-        )
-        await _event_bus.connect()
-        await _event_bus.ensure_stream("MARKET", ["market.>"])
-        logger.info("Binance collector NATS event bus connected")
-    except Exception as exc:
-        logger.warning("Binance collector NATS init failed (events disabled): %s", exc)
-        _event_bus = None
+    # Collector no longer publishes directly to NATS — the HTTP ingest route
+    # owns the market.candle.updated.* publish. Keeping _event_bus unset
+    # avoids creating a redundant JetStream connection and the "MARKET"
+    # stream attempt that conflicts with MARKET_DATA subjects.
+    _event_bus = None
     logger.info("Starting Binance WebSocket collector background task")
     _task = asyncio.create_task(_run_ws_loop())
 

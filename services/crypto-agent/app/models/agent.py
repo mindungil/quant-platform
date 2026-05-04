@@ -88,7 +88,9 @@ class DecisionRecord(BaseModel):
     threshold_crossed: bool
     reasoning: str
     memory_refs: list[str]
-    components: dict[str, float]
+    # Accepts numeric factor scores plus optional string labels (regime,
+    # style_formula) that graph.py attaches for hindsight/MAB attribution.
+    components: dict[str, Any]
     correlation_id: str | None = None
     reference_price: float | None = None
     decision_phases: list[PhaseResult] = Field(default_factory=list)

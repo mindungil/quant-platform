@@ -9,6 +9,8 @@ class Settings:
     nats_url: str = os.getenv("NATS_URL", "nats://localhost:4222")
     enable_nats: bool = os.getenv("ENABLE_NATS", "true").lower() == "true"
     execution_jetstream_stream: str = os.getenv("EXECUTION_JETSTREAM_STREAM", "EXECUTION_DATA")
+    internal_admin_secret: str = os.getenv("INTERNAL_ADMIN_SECRET", "dev-internal-admin-secret")
+    admin_header_ttl_seconds: int = int(os.getenv("INTERNAL_ADMIN_HEADER_TTL_SECONDS", "300"))
     realtime_replay_limit: int = int(os.getenv("REALTIME_REPLAY_LIMIT", "200"))
 
 

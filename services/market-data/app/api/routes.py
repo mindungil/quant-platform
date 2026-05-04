@@ -33,7 +33,7 @@ def metrics() -> Response:
 @router.post("/candles/{asset}", response_model=CandleIngestResponse)
 def ingest_candle(asset: str, payload: CandlePayload) -> CandleIngestResponse:
     previous = _last_candles.get(asset)
-    validation = validate_candle_transition(previous, payload)
+    validation = validate_candle_transition(previous, payload, asset=asset)
 
     # Non-monotonic timestamps are allowed (e.g. backfill, collector restart)
     # but flagged as anomalies. Only reject truly invalid candles (e.g. negative volume).

@@ -72,7 +72,8 @@ class TestIdempotency:
     def test_redis_idempotency_set_dedup(self):
         """Redis-backed idempotency set prevents double-processing."""
         store = RedisStore("redis://localhost:6379")
-        # Use fallback (in-memory) path since Redis may not be available
+        # Clean any leftover state from prior runs (Redis persists across runs)
+        store.delete("events:idem-test")
         assert not store.sismember("events:idem-test", "evt-100")
         store.sadd("events:idem-test", "evt-100")
         assert store.sismember("events:idem-test", "evt-100")

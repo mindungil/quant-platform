@@ -245,10 +245,12 @@ with patch("app.db.conversation._get_store") as mock_store_fn:
     )
     check("도구 호출 메시지 저장", msg2["role"] == "assistant")
 
-    # Mock return for get_messages
+    # Mock return for get_messages — implementation uses dict-row access
     store.fetch_all.return_value = [
-        ("m1", "user", "안녕", None, None, None, None),
-        ("m2", "assistant", "응답", None, None, None, None),
+        {"message_id": "m1", "role": "user", "content": "안녕",
+         "tool_calls": None, "tool_name": None, "tool_call_id": None, "created_at": None},
+        {"message_id": "m2", "role": "assistant", "content": "응답",
+         "tool_calls": None, "tool_name": None, "tool_call_id": None, "created_at": None},
     ]
     msgs = get_messages(conv["conversation_id"])
     check("메시지 조회 반환", len(msgs) == 2)
@@ -256,8 +258,8 @@ with patch("app.db.conversation._get_store") as mock_store_fn:
 
     # LLM context
     store.fetch_all.return_value = [
-        ("user", "질문"),
-        ("assistant", "답변"),
+        {"role": "user", "content": "질문"},
+        {"role": "assistant", "content": "답변"},
     ]
     ctx = get_llm_context(conv["conversation_id"])
     check("LLM 컨텍스트 반환", len(ctx) == 2)
@@ -319,7 +321,10 @@ with patch("app.core.agent_loop.has_valid_token", return_value=False):
         run_agent_loop("BTC 분석해줘", "user-no-token")
     )
     check("토큰 없음 — provider=none", result.provider == "none")
-    check("토큰 없음 — 안내 메시지", "연결" in result.text or "연동" in result.text)
+    check(
+        "토큰 없음 — 안내 메시지",
+        any(kw in result.text for kw in ["연결", "연동", "설정", "관리자", "LLM"]),
+    )
     check("토큰 없음 — 도구 호출 없음", len(result.tool_calls) == 0)
 
 

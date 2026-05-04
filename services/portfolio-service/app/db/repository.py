@@ -14,6 +14,29 @@ from shared.realtime import RealtimeBus
 logger = get_logger("portfolio-service")
 
 
+def _next_position_state(current_qty: float, current_avg: float, side: str, fill_qty: float, fill_price: float) -> tuple[float, float]:
+    signed_qty = fill_qty if side == "BUY" else -fill_qty
+    new_qty = round(current_qty + signed_qty, 8)
+
+    if abs(new_qty) < 1e-8:
+        return 0.0, 0.0
+
+    if current_qty == 0:
+        return new_qty, float(fill_price)
+
+    same_direction = (current_qty > 0 and signed_qty > 0) or (current_qty < 0 and signed_qty < 0)
+    if same_direction:
+        total_qty = abs(current_qty) + abs(fill_qty)
+        avg = ((abs(current_qty) * current_avg) + (abs(fill_qty) * fill_price)) / total_qty if total_qty > 0 else float(fill_price)
+        return new_qty, round(avg, 8)
+
+    flipped = (current_qty > 0 > new_qty) or (current_qty < 0 < new_qty)
+    if flipped:
+        return new_qty, float(fill_price)
+
+    return new_qty, float(current_avg or fill_price)
+
+
 def _fetch_current_prices(assets: list[str]) -> dict[str, float]:
     """Fetch current prices from market-data service."""
     market_data_url = os.getenv("MARKET_DATA_BASE_URL", "http://localhost:8001")
@@ -103,18 +126,20 @@ class PortfolioRepository:
         self._fills.setdefault(payload.user_id, [])
 
         current = self._items[payload.user_id].get(payload.asset, 0.0)
-        signed_quantity = payload.quantity if payload.side == "BUY" else -payload.quantity
-        new_quantity = round(current + signed_quantity, 8)
+        current_avg = self._prices[payload.user_id].get(payload.asset, 0.0)
+        new_quantity, average_entry_price = _next_position_state(
+            float(current),
+            float(current_avg),
+            payload.side,
+            float(payload.quantity),
+            float(payload.price),
+        )
         self._items[payload.user_id][payload.asset] = new_quantity
-        if payload.side == "BUY" and payload.price > 0:
-            # Weighted average entry price for position adds
-            old_price = self._prices[payload.user_id].get(payload.asset, 0.0)
-            if current > 0 and old_price > 0:
-                self._prices[payload.user_id][payload.asset] = round(
-                    (old_price * current + payload.price * payload.quantity) / (current + payload.quantity), 8
-                )
-            else:
-                self._prices[payload.user_id][payload.asset] = payload.price
+        if new_quantity == 0.0:
+            self._items[payload.user_id].pop(payload.asset, None)
+            self._prices[payload.user_id].pop(payload.asset, None)
+        else:
+            self._prices[payload.user_id][payload.asset] = average_entry_price
         self._fills[payload.user_id].append(payload)
         portfolio_fills_total.labels(side=payload.side).inc()
 
@@ -124,6 +149,7 @@ class PortfolioRepository:
             VALUES (:user_id, :order_id, :asset, :side, :quantity, :price, :notional)
             """,
             payload.model_dump(mode="json"),
+            scope_user_id=payload.user_id,
         )
         self._store.execute(
             """
@@ -138,8 +164,9 @@ class PortfolioRepository:
                 "user_id": payload.user_id,
                 "asset": payload.asset,
                 "quantity": new_quantity,
-                "average_entry_price": self._prices[payload.user_id].get(payload.asset, payload.price),
+                "average_entry_price": average_entry_price,
             },
+            scope_user_id=payload.user_id,
         )
         snapshot = self.get(payload.user_id)
         self._realtime.publish(
@@ -195,6 +222,7 @@ class PortfolioRepository:
             ORDER BY asset ASC
             """,
             {"user_id": user_id},
+            scope_user_id=user_id,
         )
         fill_rows = self._store.fetch_all(
             """
@@ -205,6 +233,7 @@ class PortfolioRepository:
             LIMIT 10
             """,
             {"user_id": user_id},
+            scope_user_id=user_id,
         )
 
         if position_rows:
@@ -265,6 +294,7 @@ class PortfolioRepository:
                 ORDER BY created_at DESC LIMIT 1
                 """,
                 {"user_id": user_id, "before": updated_at},
+                scope_user_id=user_id,
             )
             if prev_row:
                 previous_total = (prev_row.get("total_exposure", 0) or 0) + (prev_row.get("unrealized_pnl", 0) or 0)
@@ -333,6 +363,7 @@ class PortfolioRepository:
             LIMIT :limit
             """,
             {"user_id": user_id, "limit": limit},
+            scope_user_id=user_id,
         )
         from shared.persistence import deserialize_json
         return [
@@ -362,6 +393,7 @@ class PortfolioRepository:
             ORDER BY created_at ASC
             """,
             {"user_id": user_id},
+            scope_user_id=user_id,
         )
         # Track cost basis per asset
         cost_basis: dict[str, list[tuple[float, float]]] = {}  # asset -> [(qty, price)]
@@ -432,7 +464,8 @@ class PortfolioRepository:
             FROM portfolio_positions
             GROUP BY asset
             ORDER BY total_qty DESC
-            """
+            """,
+            scope_user_id=None,
         )
         if not rows:
             return {
@@ -476,6 +509,49 @@ class PortfolioRepository:
             "rebalance_needed": rebalance_needed,
         }
 
+    def get_summary(self) -> dict:
+        """Compliance-shaped view: equity, signed notional positions, kill_switch.
+
+        Consumed by signal-service's PortfolioStateProvider to judge pre-trade
+        compliance. Equity is total gross exposure across all users (internal
+        risk view). Positions are signed notional per asset. kill_switch is
+        read from Redis key 'kill_switch:global' with default False.
+        """
+        rows = self._store.fetch_all(
+            """
+            SELECT asset, SUM(quantity) AS net_qty
+            FROM portfolio_positions
+            GROUP BY asset
+            """,
+            scope_user_id=None,
+        )
+        assets = [row["asset"] for row in rows] if rows else []
+        prices = _fetch_current_prices(assets) if assets else {}
+
+        positions: dict[str, float] = {}
+        gross = 0.0
+        for row in rows or []:
+            asset = row["asset"]
+            net_qty = float(row["net_qty"] or 0.0)
+            px = float(prices.get(asset, 0.0))
+            notional = net_qty * px
+            positions[asset] = round(notional, 4)
+            gross += abs(notional)
+
+        kill = False
+        try:
+            raw = RedisStore(settings.redis_url).get("kill_switch:global")
+            if raw is not None:
+                kill = str(raw).lower() in ("1", "true", "yes")
+        except Exception:
+            pass
+
+        return {
+            "equity": round(gross, 4),
+            "positions": positions,
+            "kill_switch": kill,
+        }
+
     def get_positions(self, user_id: str) -> list[dict]:
         """Return per-asset net positions with side, qty, avg_entry, unrealized PnL."""
         fills = self._store.fetch_all(
@@ -486,6 +562,7 @@ class PortfolioRepository:
             ORDER BY created_at ASC
             """,
             {"user_id": user_id},
+            scope_user_id=user_id,
         )
 
         # Compute net quantity per asset
