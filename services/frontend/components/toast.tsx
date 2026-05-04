@@ -21,7 +21,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const colors = {
     success: "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
     error: "border-red-500/30 bg-red-500/10 text-red-400",
-    info: "border-white/20 bg-white/[0.06] text-zinc-300",
+    info: "border-white/20 bg-[#1c1c21] text-[#a1a1a1]",
     warning: "border-amber-500/30 bg-amber-500/10 text-amber-400",
   };
 

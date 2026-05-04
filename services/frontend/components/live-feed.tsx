@@ -55,15 +55,15 @@ export function LiveFeed() {
   if (events.length === 0) {
     return (
       <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-4">
-        <h3 className="mb-2 text-sm font-medium text-neutral-400">실시간 활동</h3>
-        <p className="text-xs text-neutral-500">아직 이벤트가 없습니다</p>
+        <h3 className="mb-2 text-sm font-medium text-[#a1a1a1]">실시간 활동</h3>
+        <p className="text-xs text-[#a1a1a1]">아직 이벤트가 없습니다</p>
       </div>
     );
   }
 
   return (
     <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-4">
-      <h3 className="mb-3 text-sm font-medium text-neutral-400">실시간 활동</h3>
+      <h3 className="mb-3 text-sm font-medium text-[#a1a1a1]">실시간 활동</h3>
       <div className="space-y-1.5">
         <AnimatePresence initial={false}>
           {events.map((evt, i) => {
@@ -78,9 +78,9 @@ export function LiveFeed() {
                 className="flex items-center gap-2 rounded-lg bg-neutral-900/50 px-3 py-2"
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                <span className="text-xs font-medium text-neutral-300">{label}</span>
+                <span className="text-xs font-medium text-[#a1a1a1]">{label}</span>
                 {detail && (
-                  <span className="text-xs text-neutral-500">{detail}</span>
+                  <span className="text-xs text-[#a1a1a1]">{detail}</span>
                 )}
               </motion.div>
             );

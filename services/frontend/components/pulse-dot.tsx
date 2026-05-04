@@ -9,10 +9,10 @@ interface PulseDotProps {
 }
 
 const statusColors = {
-  active:   { dot: "bg-emerald-400", ring: "bg-emerald-400" },
-  warning:  { dot: "bg-amber-400", ring: "bg-amber-400" },
-  critical: { dot: "bg-red-400", ring: "bg-red-400" },
-  inactive: { dot: "bg-zinc-500", ring: "bg-zinc-500" },
+  active:   { dot: "bg-mint",   ring: "bg-mint",   shadow: "0 0 10px rgba(72,213,151,0.55)" },
+  warning:  { dot: "bg-amber",  ring: "bg-amber",  shadow: "0 0 10px rgba(255,176,0,0.55)" },
+  critical: { dot: "bg-coral",  ring: "bg-coral",  shadow: "0 0 10px rgba(255,92,92,0.55)" },
+  inactive: { dot: "bg-paper-low", ring: "bg-paper-low", shadow: "none" },
 };
 
 const sizes = {
@@ -23,25 +23,25 @@ const sizes = {
 export function PulseDot({ status, size = "sm", className = "" }: PulseDotProps) {
   const colors = statusColors[status];
   const dims = sizes[size];
-  const shouldPulse = status === "active" || status === "critical";
+  const shouldPulse = status === "active" || status === "critical" || status === "warning";
 
   return (
     <span className={`relative inline-flex items-center justify-center ${dims.ring} ${className}`}>
       {shouldPulse && (
         <motion.span
-          className={`absolute rounded-full ${colors.ring} ${dims.ring}`}
-          animate={{
-            scale: [1, 1.8, 1],
-            opacity: [0.4, 0, 0.4],
-          }}
+          className={`absolute rounded-full ${colors.ring} ${dims.ring} opacity-50`}
+          animate={{ scale: [1, 1.9, 1], opacity: [0.45, 0, 0.45] }}
           transition={{
-            duration: status === "critical" ? 1.2 : 2.0,
+            duration: status === "critical" ? 1.1 : status === "warning" ? 1.4 : 1.8,
             repeat: Infinity,
             ease: "easeInOut",
           }}
         />
       )}
-      <span className={`relative rounded-full ${colors.dot} ${dims.dot}`} />
+      <span
+        className={`relative rounded-full ${colors.dot} ${dims.dot}`}
+        style={{ boxShadow: colors.shadow }}
+      />
     </span>
   );
 }

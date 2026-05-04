@@ -28,12 +28,12 @@ export function ConfirmDialog({ open, title, message, confirmText = "확인", ca
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.95, opacity: 0 }}
             onClick={e => e.stopPropagation()}
-            className="w-full max-w-sm rounded-xl border border-white/[0.08] bg-zinc-900 p-6 shadow-2xl"
+            className="w-full max-w-sm rounded-xl border border-[#2e2e2e] bg-zinc-900 p-6 shadow-2xl"
           >
             <h3 className="text-lg font-semibold text-white">{title}</h3>
-            <p className="mt-2 text-sm text-zinc-400">{message}</p>
+            <p className="mt-2 text-sm text-[#a1a1a1]">{message}</p>
             <div className="mt-6 flex justify-end gap-3">
-              <button onClick={onCancel} className="rounded-lg px-4 py-2 text-sm text-zinc-400 hover:bg-white/[0.06]">
+              <button onClick={onCancel} className="rounded-lg px-4 py-2 text-sm text-[#a1a1a1] hover:bg-[#1c1c21]">
                 {cancelText}
               </button>
               <button

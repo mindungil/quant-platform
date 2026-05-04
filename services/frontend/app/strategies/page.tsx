@@ -55,7 +55,7 @@ interface Recommendation {
 function DriftBadge({ stats }: { stats: StrategyStats | null }) {
   if (!stats || stats.trade_count === 0) {
     return (
-      <span className="badge bg-neutral-700/50 text-neutral-400">
+      <span className="badge bg-neutral-700/50 text-[#a1a1a1]">
         데이터 없음
       </span>
     );
@@ -118,13 +118,13 @@ function BaselineComparison({
 
   return (
     <div className="space-y-1.5">
-      <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
+      <p className="text-[11px] font-medium uppercase tracking-wider text-[#a1a1a1]">
         {label}
       </p>
       <div className="space-y-1">
         <div className="flex items-center gap-2">
-          <span className="w-10 text-[10px] text-neutral-500">라이브</span>
-          <div className="flex-1 rounded-full bg-white/[0.04] h-2 overflow-hidden">
+          <span className="w-10 text-[10px] text-[#a1a1a1]">라이브</span>
+          <div className="flex-1 rounded-full bg-[#16161a] h-2 overflow-hidden">
             <motion.div
               className={`h-2 rounded-full ${live >= 0 ? "bg-emerald-500" : "bg-red-400"}`}
               initial={{ width: 0 }}
@@ -137,8 +137,8 @@ function BaselineComparison({
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-10 text-[10px] text-neutral-500">기준</span>
-          <div className="flex-1 rounded-full bg-white/[0.04] h-2 overflow-hidden">
+          <span className="w-10 text-[10px] text-[#a1a1a1]">기준</span>
+          <div className="flex-1 rounded-full bg-[#16161a] h-2 overflow-hidden">
             <motion.div
               className="h-2 rounded-full bg-zinc-500"
               initial={{ width: 0 }}
@@ -146,7 +146,7 @@ function BaselineComparison({
               transition={{ duration: 0.6, delay: 0.1, ease: "easeOut" }}
             />
           </div>
-          <span className="w-16 text-right font-mono text-[11px] text-zinc-400">
+          <span className="w-16 text-right font-mono text-[11px] text-[#a1a1a1]">
             {baseline >= 0 ? "+" : ""}{(baseline * 100).toFixed(2)}%
           </span>
         </div>
@@ -161,6 +161,7 @@ function StrategiesContent() {
   const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [stats, setStats] = useState<StrategyStats | null>(null);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [baselines, setBaselines] = useState<{ return: number; win_rate: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -168,14 +169,22 @@ function StrategiesContent() {
     setLoading(true);
     setError(null);
     try {
-      const [stratList, statsData, recsData] = await Promise.all([
+      const [stratList, statsData, recsData, baselineData] = await Promise.all([
         gatewayFetch("/strategies/active?asset_type=crypto").catch(() => []),
         gatewayFetch("/statistics").catch(() => null),
         gatewayFetch("/recommendations/BTCUSDT").catch(() => []),
+        gatewayFetch("/strategies/baselines").catch(() => null),
       ]);
       setStrategies(Array.isArray(stratList) ? stratList : stratList ? [stratList] : []);
       setStats(statsData);
       setRecommendations(Array.isArray(recsData) ? recsData : []);
+      if (baselineData) {
+        const bd = baselineData as { expected_return?: number; win_rate?: number };
+        setBaselines({
+          return: bd.expected_return ?? 0,
+          win_rate: bd.win_rate ?? 0.5,
+        });
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "데이터를 불러올 수 없습니다");
     } finally {
@@ -191,8 +200,8 @@ function StrategiesContent() {
     return (
       <main className="grid gap-6">
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight text-zinc-50">AI 분석 전략</h2>
-          <p className="mt-1 text-sm text-zinc-400 leading-relaxed">데이터를 불러오고 있어요...</p>
+          <h2 className="text-2xl font-semibold tracking-tight text-white">AI 분석 전략</h2>
+          <p className="mt-1 text-sm text-[#a1a1a1] leading-relaxed">데이터를 불러오고 있어요...</p>
         </div>
         <LoadingSkeleton rows={4} />
       </main>
@@ -203,7 +212,7 @@ function StrategiesContent() {
     return (
       <main className="grid gap-6">
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight text-zinc-50">AI 분석 전략</h2>
+          <h2 className="text-2xl font-semibold tracking-tight text-white">AI 분석 전략</h2>
         </div>
         <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-6 text-center">
           <p className="text-sm text-red-400">{error}</p>
@@ -218,7 +227,8 @@ function StrategiesContent() {
   const totalReturn = stats?.total_return ?? 0;
   const winRate = stats?.win_rate ?? 0;
   const tradeCount = stats?.trade_count ?? 0;
-  const baselineReturn = 0; // backtest baseline (expected return)
+  const baselineReturn = baselines?.return ?? 0; // backtest baseline (expected return) from registry
+  const baselineWinRate = baselines?.win_rate ?? 0.5; // win-rate baseline from registry
   const driftDetected = stats?.drift_detected ?? false;
 
   return (
@@ -226,19 +236,19 @@ function StrategiesContent() {
       <main className="grid gap-6">
         {/* Header */}
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight text-zinc-50">AI 분석 전략</h2>
-          <p className="mt-1 text-xs text-zinc-500">AI 분석 방법 및 성과</p>
+          <h2 className="text-2xl font-semibold tracking-tight text-white">AI 분석 전략</h2>
+          <p className="mt-1 text-xs text-[#a1a1a1]">AI 분석 방법 및 성과</p>
         </div>
 
         {/* Drift Overview */}
         <FadeInView>
-          <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6">
+          <section className="rounded-2xl border border-[#2e2e2e] bg-[#111111] p-6">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-base font-semibold tracking-tight text-zinc-50">
+                <h3 className="text-base font-semibold tracking-tight text-white">
                   전략 상태
                 </h3>
-                <p className="mt-0.5 text-xs text-zinc-500">실시간 전략 모니터링</p>
+                <p className="mt-0.5 text-xs text-[#a1a1a1]">실시간 전략 모니터링</p>
               </div>
               <DriftBadge stats={stats} />
             </div>
@@ -251,12 +261,12 @@ function StrategiesContent() {
                 />
                 <BaselineComparison
                   live={winRate}
-                  baseline={0.55}
+                  baseline={baselineWinRate}
                   label="승률"
                 />
               </div>
             ) : (
-              <p className="mt-4 text-sm text-neutral-500">거래 데이터 없음</p>
+              <p className="mt-4 text-sm text-[#a1a1a1]">거래 데이터 없음</p>
             )}
           </section>
         </FadeInView>
@@ -291,13 +301,13 @@ function StrategiesContent() {
               },
             ].map((m, i) => (
               <StaggerItem key={i}>
-                <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-5">
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
+                <div className="rounded-2xl border border-[#2e2e2e] bg-[#111111] p-5">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-[#a1a1a1]">
                     {m.label}
                   </p>
-                  <p className={`mt-2 font-mono text-2xl font-semibold tracking-tighter tabular-nums ${m.color === "text-white" ? "text-zinc-50" : m.color}`}>
+                  <p className={`mt-2 font-mono text-2xl font-semibold tracking-tighter tabular-nums ${m.color === "text-white" ? "text-white" : m.color}`}>
                     <AnimatedNumber value={m.value} decimals={m.suffix === "건" ? 0 : 1} />
-                    <span className="text-sm text-zinc-500">{m.suffix}</span>
+                    <span className="text-sm text-[#a1a1a1]">{m.suffix}</span>
                   </p>
                 </div>
               </StaggerItem>
@@ -307,9 +317,9 @@ function StrategiesContent() {
 
         {/* Active Strategies */}
         <FadeInView delay={0.1}>
-          <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6">
-            <h3 className="text-base font-semibold tracking-tight text-zinc-50">현재 사용 중인 분석 방법</h3>
-            <p className="mt-0.5 text-xs text-zinc-500">활성 분석 방법</p>
+          <section className="rounded-2xl border border-[#2e2e2e] bg-[#111111] p-6">
+            <h3 className="text-base font-semibold tracking-tight text-white">현재 사용 중인 분석 방법</h3>
+            <p className="mt-0.5 text-xs text-[#a1a1a1]">활성 분석 방법</p>
 
             {strategies.length === 0 ? (
               <EmptyState
@@ -320,7 +330,7 @@ function StrategiesContent() {
               <StaggerContainer className="mt-4 space-y-3">
                 {strategies.map((strat) => (
                   <StaggerItem key={strat.id}>
-                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                    <div className="rounded-xl border border-[#2e2e2e] bg-[#0f0f12] p-4">
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-sm font-medium text-zinc-200">{
@@ -332,7 +342,7 @@ function StrategiesContent() {
                             strat.name.includes("breakout") ? "돌파 분석" :
                             beginnerFriendly(strat.name)
                           }</p>
-                          <p className="mt-0.5 text-xs text-zinc-500">
+                          <p className="mt-0.5 text-xs text-[#a1a1a1]">
                             {strat.asset_type === "crypto" ? "암호화폐" : strat.asset_type}
                           </p>
                         </div>
@@ -343,8 +353,8 @@ function StrategiesContent() {
                               strat.status === "ACTIVE"
                                 ? "bg-emerald-500/15 text-emerald-400"
                                 : strat.status === "SHADOW"
-                                  ? "bg-white/[0.08] text-zinc-300"
-                                  : "bg-neutral-700/50 text-neutral-400"
+                                  ? "bg-[#1a1a1a] text-[#a1a1a1]"
+                                  : "bg-neutral-700/50 text-[#a1a1a1]"
                             }`}
                           >
                             {strat.status}
@@ -356,7 +366,7 @@ function StrategiesContent() {
                           {strat.indicators.map((ind) => (
                             <span
                               key={ind}
-                              className="text-xs font-medium text-zinc-400 bg-white/[0.05] border border-white/[0.06] rounded-md px-2 py-0.5"
+                              className="text-xs font-medium text-[#a1a1a1] bg-[#16161a] border border-[#2e2e2e] rounded-md px-2 py-0.5"
                             >
                               {beginnerIndicatorName(ind)}
                             </span>
@@ -374,9 +384,9 @@ function StrategiesContent() {
         {/* Expert Metrics */}
         {stats && tradeCount > 0 && (
           <FadeInView delay={0.15}>
-            <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6">
-              <h3 className="text-base font-semibold tracking-tight text-zinc-50">상세 성과 지표</h3>
-              <p className="mt-0.5 text-xs text-zinc-500">상세 지표</p>
+            <section className="rounded-2xl border border-[#2e2e2e] bg-[#111111] p-6">
+              <h3 className="text-base font-semibold tracking-tight text-white">상세 성과 지표</h3>
+              <p className="mt-0.5 text-xs text-[#a1a1a1]">상세 지표</p>
               <StaggerContainer className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 {[
                   { label: "위험 대비 수익률", value: stats.sharpe, fmt: 2 },
@@ -385,11 +395,11 @@ function StrategiesContent() {
                   { label: "평균 기대 수익", value: stats.expectancy, fmt: 4 },
                 ].map((m, i) => (
                   <StaggerItem key={i}>
-                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-                      <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
+                    <div className="rounded-xl border border-[#2e2e2e] bg-[#0f0f12] p-4">
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-[#a1a1a1]">
                         {m.label}
                       </p>
-                      <p className="mt-2 font-mono text-xl font-semibold tabular-nums text-zinc-50">
+                      <p className="mt-2 font-mono text-xl font-semibold tabular-nums text-white">
                         {m.value != null ? m.value.toFixed(m.fmt) : "--"}
                       </p>
                     </div>
@@ -403,25 +413,25 @@ function StrategiesContent() {
         {/* Recommendations */}
         {recommendations.length > 0 && (
           <FadeInView delay={0.2}>
-            <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6">
-              <h3 className="text-base font-semibold tracking-tight text-zinc-50">AI 추천 전략</h3>
-              <p className="mt-0.5 text-xs text-zinc-500">현재 시장 기반 추천</p>
+            <section className="rounded-2xl border border-[#2e2e2e] bg-[#111111] p-6">
+              <h3 className="text-base font-semibold tracking-tight text-white">AI 추천 전략</h3>
+              <p className="mt-0.5 text-xs text-[#a1a1a1]">현재 시장 기반 추천</p>
               <StaggerContainer className="mt-4 space-y-3">
                 {recommendations.map((rec, i) => (
                   <StaggerItem key={i}>
-                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                    <div className="rounded-xl border border-[#2e2e2e] bg-[#0f0f12] p-4">
                       <div className="flex items-center justify-between">
                         <p className="text-sm font-medium text-zinc-200">{beginnerFriendly(rec.name)}</p>
-                        <span className="text-xs font-medium tabular-nums text-zinc-50 bg-white/[0.05] border border-white/[0.06] rounded-md px-2 py-0.5">
+                        <span className="text-xs font-medium tabular-nums text-white bg-[#16161a] border border-[#2e2e2e] rounded-md px-2 py-0.5">
                           신뢰도 {(rec.confidence * 100).toFixed(0)}%
                         </span>
                       </div>
-                      <p className="mt-1 text-sm text-zinc-400 leading-relaxed">{beginnerFriendly(rec.description)}</p>
+                      <p className="mt-1 text-sm text-[#a1a1a1] leading-relaxed">{beginnerFriendly(rec.description)}</p>
                       <div className="mt-2 flex gap-2">
-                        <span className="rounded-md bg-white/[0.05] px-2 py-0.5 text-[10px] text-neutral-400">
+                        <span className="rounded-md bg-[#16161a] px-2 py-0.5 text-[10px] text-[#a1a1a1]">
                           {beginnerFriendly(rec.formula_name)}
                         </span>
-                        <span className="rounded-md bg-white/[0.05] px-2 py-0.5 text-[10px] text-neutral-400">
+                        <span className="rounded-md bg-[#16161a] px-2 py-0.5 text-[10px] text-[#a1a1a1]">
                           {beginnerFriendly(rec.regime)}
                         </span>
                       </div>

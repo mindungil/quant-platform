@@ -83,7 +83,7 @@ export function SplashScreen({ children }: { children: React.ReactNode }) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 0.5 }}
             transition={{ delay: 1.0, duration: 0.5 }}
-            className="relative z-10 mt-2 text-xs tracking-[0.2em] text-zinc-500 uppercase"
+            className="relative z-10 mt-2 text-xs tracking-[0.2em] text-[#a1a1a1] uppercase"
           >
             AI Autonomous Trading
           </motion.p>

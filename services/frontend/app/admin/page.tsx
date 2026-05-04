@@ -111,9 +111,9 @@ export default function AdminPage() {
         <main className="grid gap-6">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="rounded border border-white/[0.06] bg-white/[0.03] p-6 animate-pulse">
-                <div className="mx-auto h-4 w-20 rounded bg-white/[0.06]" />
-                <div className="mx-auto mt-3 h-8 w-16 rounded bg-white/[0.06]" />
+              <div key={i} className="rounded border border-[#2e2e2e] bg-[#111111] p-6 animate-pulse">
+                <div className="mx-auto h-4 w-20 rounded bg-[#1c1c21]" />
+                <div className="mx-auto mt-3 h-8 w-16 rounded bg-[#1c1c21]" />
               </div>
             ))}
           </div>
@@ -127,10 +127,10 @@ export default function AdminPage() {
       <PageTransition>
         <main className="grid gap-6">
           {/* Header */}
-          <section className="rounded border border-white/[0.06] bg-white/[0.03] p-6">
-            <p className="text-sm font-medium uppercase tracking-wider text-neutral-400">ADMIN</p>
+          <section className="rounded border border-[#2e2e2e] bg-[#111111] p-6">
+            <p className="text-sm font-medium uppercase tracking-wider text-[#a1a1a1]">ADMIN</p>
             <h2 className="mt-1 text-2xl font-semibold text-white">운영 제어판</h2>
-            <p className="mt-2 text-neutral-500">
+            <p className="mt-2 text-[#a1a1a1]">
               시스템 개요, 빠른 작업, 세부 제어판 탐색
             </p>
           </section>
@@ -138,24 +138,24 @@ export default function AdminPage() {
           {/* Overview Cards */}
           <StaggerContainer className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StaggerItem>
-              <div className="rounded border border-white/[0.06] bg-white/[0.03] p-6 text-center">
-                <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">서비스</p>
+              <div className="rounded border border-[#2e2e2e] bg-[#111111] p-6 text-center">
+                <p className="text-xs font-medium uppercase tracking-wider text-[#a1a1a1]">서비스</p>
                 <p className="mt-1 font-mono text-2xl font-semibold text-white">
                   {serviceCount}
                 </p>
               </div>
             </StaggerItem>
             <StaggerItem>
-              <div className="rounded border border-white/[0.06] bg-white/[0.03] p-6 text-center">
-                <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">가동 시간</p>
+              <div className="rounded border border-[#2e2e2e] bg-[#111111] p-6 text-center">
+                <p className="text-xs font-medium uppercase tracking-wider text-[#a1a1a1]">가동 시간</p>
                 <p className="mt-1 font-mono text-2xl font-semibold text-white">
                   {uptimeHours !== null ? `${uptimeHours}h` : "--"}
                 </p>
               </div>
             </StaggerItem>
             <StaggerItem>
-              <div className="rounded border border-white/[0.06] bg-white/[0.03] p-6 text-center">
-                <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">모드</p>
+              <div className="rounded border border-[#2e2e2e] bg-[#111111] p-6 text-center">
+                <p className="text-xs font-medium uppercase tracking-wider text-[#a1a1a1]">모드</p>
                 <div className="mt-2 flex items-center justify-center gap-2">
                   <span className={`inline-block h-2 w-2 rounded-full ${modeColors[currentMode]}`} />
                   <span className="font-mono text-lg font-semibold uppercase text-white">{currentMode}</span>
@@ -163,8 +163,8 @@ export default function AdminPage() {
               </div>
             </StaggerItem>
             <StaggerItem>
-              <div className="rounded border border-white/[0.06] bg-white/[0.03] p-6 text-center">
-                <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">DLQ 메시지</p>
+              <div className="rounded border border-[#2e2e2e] bg-[#111111] p-6 text-center">
+                <p className="text-xs font-medium uppercase tracking-wider text-[#a1a1a1]">DLQ 메시지</p>
                 <p className="mt-1 font-mono text-2xl font-semibold text-white">
                   {dlqStats ? dlqStats.total_messages : "--"}
                 </p>
@@ -173,8 +173,8 @@ export default function AdminPage() {
           </StaggerContainer>
 
           {/* Quick Actions */}
-          <section className="rounded border border-white/[0.06] bg-white/[0.03] p-6">
-            <p className="text-sm font-medium uppercase tracking-wider text-neutral-400">ACTIONS</p>
+          <section className="rounded border border-[#2e2e2e] bg-[#111111] p-6">
+            <p className="text-sm font-medium uppercase tracking-wider text-[#a1a1a1]">ACTIONS</p>
             <h3 className="mt-2 text-lg font-semibold text-white">빠른 작업</h3>
             <AnimatePresence>
               {actionResult && (
@@ -184,7 +184,7 @@ export default function AdminPage() {
                   exit={{ opacity: 0, height: 0 }}
                   transition={{ duration: 0.25 }}
                   className={`mt-4 rounded border px-4 py-3 text-sm ${
-                    actionResult.type === "ok" ? "border-white/[0.06] text-emerald-400" : "border-white/[0.06] text-red-400"
+                    actionResult.type === "ok" ? "border-[#2e2e2e] text-emerald-400" : "border-[#2e2e2e] text-red-400"
                   }`}
                 >
                   {actionResult.message}
@@ -212,7 +212,7 @@ export default function AdminPage() {
               </StaggerItem>
               <StaggerItem>
                 <button
-                  className="rounded border border-white/[0.10] bg-white/[0.03] px-6 py-3 text-sm font-semibold text-white hover:bg-white/[0.06] disabled:opacity-50"
+                  className="rounded border border-[#2e2e2e] bg-[#111111] px-6 py-3 text-sm font-semibold text-white hover:bg-[#1c1c21] disabled:opacity-50"
                   disabled={actionLoading === "enable-live"}
                   onClick={() => handleAction("enable-live")}
                 >
@@ -233,29 +233,29 @@ export default function AdminPage() {
 
           {/* Execution Config */}
           {execConfig && (
-            <section className="rounded border border-white/[0.06] bg-white/[0.03] p-6">
-              <p className="text-sm font-medium uppercase tracking-wider text-neutral-400">CONFIG</p>
+            <section className="rounded border border-[#2e2e2e] bg-[#111111] p-6">
+              <p className="text-sm font-medium uppercase tracking-wider text-[#a1a1a1]">CONFIG</p>
               <h3 className="mt-2 text-lg font-semibold text-white">실행 설정</h3>
               <StaggerContainer className="mt-4 grid gap-3 sm:grid-cols-3">
                 <StaggerItem>
-                  <div className="rounded border border-white/[0.06] bg-white/[0.03] p-4">
-                    <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">live_trading_enabled</p>
+                  <div className="rounded border border-[#2e2e2e] bg-[#111111] p-4">
+                    <p className="text-xs font-medium uppercase tracking-wider text-[#a1a1a1]">live_trading_enabled</p>
                     <p className={`mt-1 font-mono text-lg font-semibold ${execConfig.live_trading_enabled ? "text-emerald-400" : "text-red-400"}`}>
                       {execConfig.live_trading_enabled ? "true" : "false"}
                     </p>
                   </div>
                 </StaggerItem>
                 <StaggerItem>
-                  <div className="rounded border border-white/[0.06] bg-white/[0.03] p-4">
-                    <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">default_shadow_mode</p>
+                  <div className="rounded border border-[#2e2e2e] bg-[#111111] p-4">
+                    <p className="text-xs font-medium uppercase tracking-wider text-[#a1a1a1]">default_shadow_mode</p>
                     <p className="mt-1 font-mono text-lg font-semibold text-white">
                       {execConfig.default_shadow_mode ? "true" : "false"}
                     </p>
                   </div>
                 </StaggerItem>
                 <StaggerItem>
-                  <div className="rounded border border-white/[0.06] bg-white/[0.03] p-4">
-                    <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">allowed_exchanges</p>
+                  <div className="rounded border border-[#2e2e2e] bg-[#111111] p-4">
+                    <p className="text-xs font-medium uppercase tracking-wider text-[#a1a1a1]">allowed_exchanges</p>
                     <p className="mt-1 font-mono text-lg font-semibold text-white">
                       {execConfig.allowed_exchanges?.join(", ") || "none"}
                     </p>
@@ -267,14 +267,14 @@ export default function AdminPage() {
 
           {/* DLQ Stats */}
           {dlqStats && dlqStats.streams && Object.keys(dlqStats.streams).length > 0 && (
-            <section className="rounded border border-white/[0.06] bg-white/[0.03] p-6">
-              <p className="text-sm font-medium uppercase tracking-wider text-neutral-400">DLQ</p>
+            <section className="rounded border border-[#2e2e2e] bg-[#111111] p-6">
+              <p className="text-sm font-medium uppercase tracking-wider text-[#a1a1a1]">DLQ</p>
               <h3 className="mt-2 text-lg font-semibold text-white">DLQ 스트림</h3>
               <StaggerContainer className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {Object.entries(dlqStats.streams).map(([stream, count]) => (
                   <StaggerItem key={stream}>
-                    <div className="flex items-center justify-between rounded border border-white/[0.06] bg-white/[0.03] px-4 py-3">
-                      <span className="text-sm text-neutral-400">{stream}</span>
+                    <div className="flex items-center justify-between rounded border border-[#2e2e2e] bg-[#111111] px-4 py-3">
+                      <span className="text-sm text-[#a1a1a1]">{stream}</span>
                       <span className="font-mono text-lg font-semibold text-white">{count}</span>
                     </div>
                   </StaggerItem>
@@ -284,23 +284,29 @@ export default function AdminPage() {
           )}
 
           {/* Navigation */}
-          <StaggerContainer className="grid gap-4 sm:grid-cols-3">
+          <StaggerContainer className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StaggerItem>
-              <Link href="/admin/trading" className="block rounded border border-white/[0.06] bg-white/[0.03] p-6 transition hover:border-white/[0.10]">
+              <Link href="/admin/trading" className="block rounded border border-[#2e2e2e] bg-[#111111] p-6 transition hover:border-[#3e3e3e]">
                 <h3 className="text-lg font-semibold text-white">실시간 트레이딩 제어</h3>
-                <p className="mt-2 text-sm text-neutral-500">사전 점검, 라이브 활성화, 긴급 정지, 실행 설정</p>
+                <p className="mt-2 text-sm text-[#a1a1a1]">사전 점검, 라이브 활성화, 긴급 정지, 실행 설정</p>
               </Link>
             </StaggerItem>
             <StaggerItem>
-              <Link href="/admin/system" className="block rounded border border-white/[0.06] bg-white/[0.03] p-6 transition hover:border-white/[0.10]">
+              <Link href="/admin/system" className="block rounded border border-[#2e2e2e] bg-[#111111] p-6 transition hover:border-[#3e3e3e]">
                 <h3 className="text-lg font-semibold text-white">시스템 상태</h3>
-                <p className="mt-2 text-sm text-neutral-500">서비스 상태, 이벤트, DLQ 관리</p>
+                <p className="mt-2 text-sm text-[#a1a1a1]">서비스 상태, 이벤트, DLQ 관리</p>
               </Link>
             </StaggerItem>
             <StaggerItem>
-              <Link href="/admin/users" className="block rounded border border-white/[0.06] bg-white/[0.03] p-6 transition hover:border-white/[0.10]">
+              <Link href="/admin/users" className="block rounded border border-[#2e2e2e] bg-[#111111] p-6 transition hover:border-[#3e3e3e]">
                 <h3 className="text-lg font-semibold text-white">사용자 관리</h3>
-                <p className="mt-2 text-sm text-neutral-500">사용자 목록, 역할 관리, 통계</p>
+                <p className="mt-2 text-sm text-[#a1a1a1]">사용자 목록, 역할 관리, 통계</p>
+              </Link>
+            </StaggerItem>
+            <StaggerItem>
+              <Link href="/admin/evaluation" className="block rounded border border-[#2e2e2e] bg-[#111111] p-6 transition hover:border-[#3e3e3e]">
+                <h3 className="text-lg font-semibold text-white">평가 루프</h3>
+                <p className="mt-2 text-sm text-[#a1a1a1]">24시간 shadow 루프, 과거 재현, blended score, 실패 기록</p>
               </Link>
             </StaggerItem>
           </StaggerContainer>

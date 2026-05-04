@@ -82,7 +82,7 @@ function actionLabel(action: string): { text: string; color: string; bg: string;
     case "SELL":
       return { text: "매도 추천", color: "text-rose-700", bg: "bg-rose-50", ring: "ring-rose-200" };
     default:
-      return { text: "관망 추천", color: "text-neutral-400", bg: "bg-white/[0.02]", ring: "ring-white/[0.06]" };
+      return { text: "관망 추천", color: "text-[#a1a1a1]", bg: "bg-[#0f0f12]", ring: "ring-white/[0.06]" };
   }
 }
 
@@ -118,30 +118,30 @@ function DecisionCard({ decision, expanded, onToggle }: { decision: Decision; ex
   return (
     <div
       onClick={onToggle}
-      className="cursor-pointer rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 hover:bg-white/[0.04] transition-all duration-150"
+      className="cursor-pointer rounded-xl border border-[#2e2e2e] bg-[#0f0f12] p-4 hover:bg-[#16161a] transition-all duration-150"
     >
       {/* Header: Asset + Action + Time */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-zinc-50">{assetShort}</span>
-          <span className={`rounded-md px-2 py-0.5 text-[11px] font-medium border ${decision.action === "BUY" ? "text-green-500 bg-green-500/10 border-green-500/15" : decision.action === "SELL" ? "text-red-500 bg-red-500/10 border-red-500/15" : "text-zinc-400 bg-white/[0.05] border-white/[0.06]"}`}>
+          <span className="text-sm font-medium text-white">{assetShort}</span>
+          <span className={`rounded-md px-2 py-0.5 text-[11px] font-medium border ${decision.action === "BUY" ? "text-green-500 bg-green-500/10 border-green-500/15" : decision.action === "SELL" ? "text-red-500 bg-red-500/10 border-red-500/15" : "text-[#a1a1a1] bg-[#16161a] border-[#2e2e2e]"}`}>
             {action.text}
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[11px] text-zinc-500">{timeStr}</span>
-          <span className={`text-[10px] text-zinc-500 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}>&#9660;</span>
+          <span className="text-[11px] text-[#a1a1a1]">{timeStr}</span>
+          <span className={`text-[10px] text-[#a1a1a1] transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}>&#9660;</span>
         </div>
       </div>
 
       {/* Subtitle: Beginner-friendly regime explanation */}
-      <p className="mt-1.5 text-xs text-zinc-500">
+      <p className="mt-1.5 text-xs text-[#a1a1a1]">
         {explainRegime(regime)}{strength ? ` · 신호 ${strength === "강함" ? "강해요" : strength === "약함" ? "약해요" : "보통이에요"}` : ""}
       </p>
 
       {/* Signal score explanation */}
       {decision.signal_score != null && (
-        <p className="mt-1 text-xs text-zinc-400">
+        <p className="mt-1 text-xs text-[#a1a1a1]">
           {explainScore(decision.signal_score)}
         </p>
       )}
@@ -164,7 +164,7 @@ function DecisionCard({ decision, expanded, onToggle }: { decision: Decision; ex
 
       {/* Conflicts + Memory (compact footer) */}
       {(conflicts.length > 0 || memRefs > 0) && (
-        <div className="mt-2 flex items-center gap-3 text-[10px] text-zinc-500">
+        <div className="mt-2 flex items-center gap-3 text-[10px] text-[#a1a1a1]">
           {conflicts.length > 0 && <span>{conflicts.map((c: string) => formatIndicatorName(c)).join(", ")} 반대 신호</span>}
           {memRefs > 0 && <span>유사 {memRefs}건 참조</span>}
         </div>
@@ -175,22 +175,22 @@ function DecisionCard({ decision, expanded, onToggle }: { decision: Decision; ex
         <div className="mt-3 border-t border-white/[0.04] pt-3 space-y-2">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] min-w-0">
             <div>
-              <span className="text-zinc-500">신호 강도</span>
-              <span className="ml-2 text-zinc-300">{explainScore(decision.signal_score ?? 0)}</span>
+              <span className="text-[#a1a1a1]">신호 강도</span>
+              <span className="ml-2 text-[#a1a1a1]">{explainScore(decision.signal_score ?? 0)}</span>
             </div>
             <div>
-              <span className="text-zinc-500">분석 방식</span>
-              <span className="ml-2 text-zinc-300">{beginnerFriendly(decision.strategy_name || decision.formula_name || "종합 분석")}</span>
+              <span className="text-[#a1a1a1]">분석 방식</span>
+              <span className="ml-2 text-[#a1a1a1]">{beginnerFriendly(decision.strategy_name || decision.formula_name || "종합 분석")}</span>
             </div>
             {decision.confidence != null && (
               <div>
-                <span className="text-zinc-500">AI 확신도</span>
-                <span className="ml-2 text-zinc-300">{Math.round(decision.confidence * 100)}%</span>
+                <span className="text-[#a1a1a1]">AI 확신도</span>
+                <span className="ml-2 text-[#a1a1a1]">{Math.round(decision.confidence * 100)}%</span>
               </div>
             )}
           </div>
           {/* Full reasoning text — formatted for beginners */}
-          <p className="text-xs text-zinc-400 leading-relaxed">{beginnerFriendly(formatStrategyDescription(cleanReasoning(decision.reasoning || "")))}</p>
+          <p className="text-xs text-[#a1a1a1] leading-relaxed">{beginnerFriendly(formatStrategyDescription(cleanReasoning(decision.reasoning || "")))}</p>
         </div>
       )}
     </div>
@@ -212,7 +212,7 @@ function AnimatedBar({
 }) {
   const pct = Math.min(Math.max((value / max) * 100, 0), 100);
   return (
-    <div className={`w-full rounded-full bg-white/[0.06] overflow-hidden ${height}`}>
+    <div className={`w-full rounded-full bg-[#1c1c21] overflow-hidden ${height}`}>
       <motion.div
         className={`${height} rounded-full ${colorClass}`}
         initial={{ width: 0 }}
@@ -301,7 +301,7 @@ function AgentContent() {
     return (
       <PageTransition>
         <div className="flex flex-col items-center gap-3 py-12 text-center">
-          <p className="text-sm text-zinc-500">데이터를 불러오는 중 오류가 발생했습니다</p>
+          <p className="text-sm text-[#a1a1a1]">데이터를 불러오는 중 오류가 발생했습니다</p>
           <button onClick={() => { setError(false); load(); }} className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black">
             다시 시도
           </button>
@@ -325,13 +325,13 @@ function AgentContent() {
       />
       <main className="grid gap-6">
         {/* ── Header ──────────────────────────────────────────── */}
-        <section className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-6">
+        <section className="rounded-xl border border-[#2e2e2e] bg-[#111111] p-6">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-2xl font-semibold tracking-tight text-zinc-50">AI 분석 도우미</h2>
-              <p className="mt-1 text-sm text-zinc-400">AI 매매 분석</p>
+              <h2 className="text-2xl font-semibold tracking-tight text-white">AI 분석 도우미</h2>
+              <p className="mt-1 text-sm text-[#a1a1a1]">AI 매매 분석</p>
               {lastUpdated && (
-                <span className="text-[10px] text-zinc-500">
+                <span className="text-[10px] text-[#a1a1a1]">
                   마지막 업데이트: {new Date(lastUpdated).toLocaleTimeString("ko-KR")}
                 </span>
               )}
@@ -339,7 +339,7 @@ function AgentContent() {
 
             {/* Asset tabs */}
             <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1 rounded-xl bg-white/[0.06] p-1">
+              <div className="flex items-center gap-1 rounded-xl bg-[#1c1c21] p-1">
                 {ASSETS.map((a) => {
                   const am = ASSET_META[a];
                   const active = selectedAsset === a;
@@ -349,8 +349,8 @@ function AgentContent() {
                       onClick={() => setSelectedAsset(a)}
                       className={`relative flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-all duration-200 ${
                         active
-                          ? "bg-white/[0.10] text-white"
-                          : "text-neutral-500 hover:text-neutral-300"
+                          ? "bg-[#1a1a1a] text-white"
+                          : "text-[#a1a1a1] hover:text-[#a1a1a1]"
                       }`}
                     >
                       <CoinIcon asset={a} size={22} />
@@ -394,7 +394,7 @@ function AgentContent() {
             <section>
               <div className="mb-4 flex items-center gap-2">
                 <CoinIcon asset={selectedAsset} size={28} />
-                <h3 className="text-base font-semibold tracking-tight text-zinc-50">
+                <h3 className="text-base font-semibold tracking-tight text-white">
                   {meta.label} AI 추천
                 </h3>
               </div>
@@ -404,10 +404,10 @@ function AgentContent() {
                   {recs.map((r, i) => (
                     <StaggerItem key={i}>
                       <motion.div
-                        className={`group relative rounded-xl border bg-white/[0.03] p-5 transition-all duration-200 hover-lift ${
+                        className={`group relative rounded-xl border bg-[#111111] p-5 transition-all duration-200 hover-lift ${
                           i === 0
                             ? "border-white/[0.20] ring-1 ring-white/[0.06]"
-                            : "border-white/[0.06] hover:border-white/[0.10]"
+                            : "border-[#2e2e2e] hover:border-[#3e3e3e]"
                         }`}
                         whileHover={{ scale: 1.015, y: -2 }}
                         transition={{ type: "spring", stiffness: 400, damping: 25 }}
@@ -420,15 +420,15 @@ function AgentContent() {
 
                         <p className="mt-1 text-sm font-medium text-zinc-200">{beginnerFriendly(formatIndicatorName(r.name))}</p>
 
-                        <p className="mt-2.5 text-sm text-zinc-400 leading-relaxed">
+                        <p className="mt-2.5 text-sm text-[#a1a1a1] leading-relaxed">
                           {beginnerFriendly(formatStrategyDescription(cleanReasoning(r.reasoning)))}
                         </p>
 
                         {/* Confidence bar */}
                         <div className="mt-4">
                           <div className="mb-1.5 flex items-center justify-between">
-                            <span className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">신뢰도</span>
-                            <span className="font-mono text-xs font-medium tabular-nums text-zinc-50">
+                            <span className="text-[11px] font-medium uppercase tracking-wider text-[#a1a1a1]">신뢰도</span>
+                            <span className="font-mono text-xs font-medium tabular-nums text-white">
                               {(r.confidence * 100).toFixed(0)}%
                             </span>
                           </div>
@@ -439,16 +439,16 @@ function AgentContent() {
                         </div>
 
                         <div className="mt-3 flex gap-2">
-                          <span className="rounded-md bg-white/[0.05] px-1.5 py-0.5 text-[10px] text-zinc-500">{formatRegime(r.regime)}</span>
+                          <span className="rounded-md bg-[#16161a] px-1.5 py-0.5 text-[10px] text-[#a1a1a1]">{formatRegime(r.regime)}</span>
                         </div>
                       </motion.div>
                     </StaggerItem>
                   ))}
                 </StaggerContainer>
               ) : (
-                <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-white/[0.06] bg-white/[0.02] py-12">
+                <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[#2e2e2e] bg-[#0f0f12] py-12">
                   <IconSignal />
-                  <p className="mt-3 text-sm text-neutral-400">데이터 수집 중</p>
+                  <p className="mt-3 text-sm text-[#a1a1a1]">데이터 수집 중</p>
                 </div>
               )}
             </section>
@@ -465,9 +465,9 @@ function AgentContent() {
             transition={{ duration: 0.25, delay: 0.05 }}
           >
             <FadeInView delay={0.1}>
-              <section className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-6">
-                <h3 className="text-base font-semibold tracking-tight text-zinc-50">최근 분석 기록</h3>
-                <p className="mt-1 text-xs text-zinc-500">클릭하여 상세 보기</p>
+              <section className="rounded-xl border border-[#2e2e2e] bg-[#111111] p-6">
+                <h3 className="text-base font-semibold tracking-tight text-white">최근 분석 기록</h3>
+                <p className="mt-1 text-xs text-[#a1a1a1]">클릭하여 상세 보기</p>
 
                 {loading ? (
                   <div className="mt-6 space-y-4">
@@ -485,7 +485,7 @@ function AgentContent() {
                 ) : decisions.length === 0 ? (
                   <div className="mt-8 flex flex-col items-center py-8 text-center">
                     <IconEmpty />
-                    <p className="mt-3 text-sm text-neutral-400">분석 기록 없음</p>
+                    <p className="mt-3 text-sm text-[#a1a1a1]">분석 기록 없음</p>
                   </div>
                 ) : (
                   <StaggerContainer className="mt-6 space-y-3">

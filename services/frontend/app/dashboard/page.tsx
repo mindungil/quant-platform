@@ -1,34 +1,17 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
+import Link from "next/link";
 import { gatewayFetch } from "../../lib/api";
 import { AuthGuard } from "../../components/auth-guard";
-import { useToast } from "../../components/toast";
-import { parseReasoning, cleanReasoning, formatIndicatorName, formatStrategyDescription, formatRegime, formatConfidence, beginnerAction, beginnerIndicatorName, beginnerIndicatorStrength } from "../../lib/reasoning";
-import {
-  PageTransition,
-  StaggerContainer,
-  StaggerItem,
-  FadeInView,
-  AnimatedNumber,
-  motion,
-} from "../../components/motion";
-import { MarketChart } from "../../components/market-chart";
-import { IconUp, IconDown, IconPause, IconEmpty } from "../../components/icons";
-import { GradientCard } from "../../components/gradient-card";
-import { AnimatedStat } from "../../components/animated-stat";
-import { PulseDot } from "../../components/pulse-dot";
-import { Sparkline } from "../../components/sparkline";
+import { motion, AnimatePresence } from "framer-motion";
 
-/* ── Types ───────────────────────────────────────────────────── */
+/* ── Types ──────────────────────────────────────────────────── */
 
 interface Recommendation {
-  name: string;
-  description: string;
   formula_name: string;
   regime: string;
   confidence: number;
-  reasoning: string;
 }
 
 interface Decision {
@@ -36,10 +19,7 @@ interface Decision {
   asset: string;
   action: string;
   signal_score: number;
-  reasoning?: string;
   timestamp?: string;
-  threshold_crossed?: boolean;
-  components?: Record<string, number>;
 }
 
 interface DashboardData {
@@ -49,300 +29,421 @@ interface DashboardData {
     realized_pnl?: number;
     total_pnl?: number;
     positions?: Record<string, number>;
-    concentration?: Record<string, number>;
   };
   statistics?: {
-    trade_count?: number;
-    total_return?: number;
     sharpe?: number;
-    win_rate?: number;
-    profit_factor?: number;
+    max_drawdown?: number;
   };
-  active_strategy?: {
-    name?: string;
-    status?: string;
-  } | null;
-  orders?: Array<{ asset?: string; side?: string; status?: string }>;
 }
 
-/* ── Helpers ─────────────────────────────────────────────────── */
+/* ── Helpers ────────────────────────────────────────────────── */
 
-function friendlyAction(action: string): { label: string; color: string; bg: string } {
-  switch (action) {
+function actionDescriptor(a?: string) {
+  switch (a) {
     case "BUY":
-      return { label: "매수", color: "text-emerald-400", bg: "bg-emerald-500/15 border-emerald-500/30" };
+      return { verb: "Long", noun: "long", color: "text-mint", led: "agent-breath-mint", glow: "rgba(45,212,191,0.18)" };
     case "SELL":
-      return { label: "매도", color: "text-red-400", bg: "bg-red-500/15 border-red-500/30" };
+      return { verb: "Short", noun: "short", color: "text-coral", led: "agent-breath-coral", glow: "rgba(248,113,113,0.18)" };
     default:
-      return { label: "관망", color: "text-neutral-400", bg: "bg-white/[0.02] border-white/[0.06]" };
+      return { verb: "Watch", noun: "watching", color: "text-amber", led: "", glow: "rgba(251,189,46,0.18)" };
   }
 }
 
-function friendlyRegime(regime: string): string {
-  const lower = regime?.toLowerCase() ?? "";
-  if (lower.includes("bull") || lower.includes("up")) return "상승 추세";
-  if (lower.includes("bear") || lower.includes("down")) return "하락 추세";
-  if (lower.includes("volatile") || lower.includes("vol")) return "변동성 확대";
-  if (lower.includes("range") || lower.includes("sideways") || lower.includes("neutral")) return "횡보";
-  return regime || "분석 중";
+function friendlyAsset(a?: string) {
+  if (!a) return "BTC";
+  return a.replace("USDT", "");
 }
 
-function friendlyFormula(name: string): string {
-  const lower = name?.toLowerCase() ?? "";
-  if (lower.includes("momentum")) return "모멘텀 분석";
-  if (lower.includes("mean_revert") || lower.includes("reversion")) return "평균 회귀 분석";
-  if (lower.includes("trend")) return "추세 추종 분석";
-  if (lower.includes("breakout")) return "돌파 분석";
-  if (lower.includes("volatility")) return "변동성 분석";
-  return name || "복합 분석";
-}
-
-function friendlyAsset(asset: string): string {
-  return asset?.replace("USDT", "") ?? asset;
-}
-
-function timeAgo(ts: string): string {
+function timeAgo(ts?: string) {
+  if (!ts) return "";
   const diff = Date.now() - new Date(ts).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "방금 전";
-  if (mins < 60) return `${mins}분 전`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}시간 전`;
-  const days = Math.floor(hours / 24);
-  return `${days}일 전`;
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h`;
+  return `${Math.floor(hrs / 24)}d`;
 }
 
-function formatMoney(v: number | undefined | null): string {
-  if (v == null) return "--";
-  return v.toLocaleString("ko-KR", { maximumFractionDigits: 0 });
+function fmtUSD(v?: number | null, dp = 0) {
+  if (v == null || !Number.isFinite(v)) return "—";
+  const sign = v < 0 ? "−" : "";
+  return `${sign}$${Math.abs(v).toLocaleString("en-US", {
+    minimumFractionDigits: dp,
+    maximumFractionDigits: dp,
+  })}`;
 }
 
-/* ── Decision Card (compact, scannable) ──────────────────────── */
+function fmtSignedUSD(v?: number | null, dp = 2) {
+  if (v == null || !Number.isFinite(v)) return "—";
+  const sign = v >= 0 ? "+" : "−";
+  return `${sign}$${Math.abs(v).toLocaleString("en-US", {
+    minimumFractionDigits: dp,
+    maximumFractionDigits: dp,
+  })}`;
+}
 
-function DecisionCard({ decision }: { decision: Decision }) {
-  const { structured, text } = parseReasoning(decision.reasoning || "");
-  const action = friendlyAction(decision.action);
-  const timeStr = decision.timestamp ? timeAgo(decision.timestamp) : "";
+/* ── Live UTC clock ─────────────────────────────────────────── */
 
-  // Use structured data if available, otherwise parse from components
-  const indicators = structured?.bullish_indicators || [];
-  const bearish = structured?.bearish_indicators || [];
-  const conflicts = structured?.conflicts || [];
-  const regime = structured?.regime || "";
-  const strength = structured?.strength || "";
-  const memRefs = structured?.memory_refs || 0;
+function useUtcClock() {
+  const [stamp, setStamp] = useState<{ date: string; time: string }>({ date: "", time: "" });
+  useEffect(() => {
+    const tick = () => {
+      const d = new Date();
+      const w = d.toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" }).toUpperCase();
+      const day = d.toLocaleDateString("en-US", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }).toUpperCase();
+      const t = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: "UTC" });
+      setStamp({ date: `${w} · ${day}`, time: `${t} UTC` });
+    };
+    tick();
+    const iv = setInterval(tick, 1_000);
+    return () => clearInterval(iv);
+  }, []);
+  return stamp;
+}
+
+/* ── Skeleton ───────────────────────────────────────────────── */
+
+function HeroSkeleton() {
+  return (
+    <div className="hero-stage min-h-[78vh] flex flex-col justify-center py-20 sm:py-28">
+      <div className="space-y-12">
+        <div className="skeleton h-3 w-64" />
+        <div className="space-y-5">
+          <div className="skeleton h-6 w-48" />
+          <div className="skeleton h-32 w-[88%]" />
+          <div className="skeleton h-4 w-2/3" />
+        </div>
+        <div className="skeleton h-3 w-80" />
+      </div>
+    </div>
+  );
+}
+
+/* ── HERO ───────────────────────────────────────────────────── */
+
+function Hero({
+  topRec,
+  top,
+  equity,
+  uPnl,
+  rPnl,
+  positions,
+  halted,
+}: {
+  topRec?: Recommendation;
+  top?: Decision;
+  equity: number;
+  uPnl: number;
+  rPnl: number;
+  positions: [string, number][];
+  halted: boolean;
+}) {
+  const { date, time } = useUtcClock();
+  const desc = actionDescriptor(top?.action);
+  const totalPnl = uPnl + rPnl;
+  const pnlPct = equity > 0 ? (totalPnl / equity) * 100 : 0;
+  const heldNotional = positions.reduce((acc, [, v]) => acc + Math.abs(Number(v) || 0), 0);
+  const conviction = topRec?.confidence ?? 0;
+
+  const status = halted
+    ? { label: "AGENT HALTED", led: "bg-coral", color: "text-coral" }
+    : { label: "AGENT OPERATING", led: "agent-breath", color: "text-amber" };
 
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 hover:bg-white/[0.04] transition-all duration-150">
-      {/* Header: Asset + Action + Time */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-zinc-50">{friendlyAsset(decision.asset)}</span>
-          <span className={`rounded-md px-2 py-0.5 text-[11px] font-medium border ${decision.action === "BUY" ? "text-green-500 bg-green-500/10 border-green-500/15" : decision.action === "SELL" ? "text-red-500 bg-red-500/10 border-red-500/15" : "text-zinc-400 bg-white/[0.05] border-white/[0.06]"}`}>
-            {action.label}
+    <section className="hero-stage min-h-[80vh] flex flex-col justify-between py-16 sm:py-20">
+      {/* one-shot scan line + cinematic corner brackets (absolute, sit above content) */}
+      <span className="hero-scan" aria-hidden />
+      <span className="crosshair-frame crosshair-tl" aria-hidden />
+      <span className="crosshair-frame crosshair-tr" aria-hidden />
+      <span className="crosshair-frame crosshair-bl" aria-hidden />
+      <span className="crosshair-frame crosshair-br" aria-hidden />
+
+      {/* ── STATUS BAR ───────────────────────────────────── */}
+      <motion.div
+        initial={{ opacity: 0, y: -6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: "easeOut" }}
+        className="flex flex-wrap items-baseline justify-between gap-4 border-b border-rule-loud pb-4"
+      >
+        <div className="flex items-baseline gap-3">
+          <span
+            className={`agent-breath${halted ? " agent-breath-coral" : ""}`}
+            aria-hidden
+          />
+          <p className={`font-mono text-[11px] sm:text-[12px] font-semibold tracking-[0.22em] uppercase ${status.color}`}>
+            {status.label}
+          </p>
+          <span className="hidden md:inline label-eyebrow border-l border-rule-loud pl-3">
+            v4.5 · half-kelly · 4-alpha ensemble
           </span>
         </div>
-        <span className="text-[11px] text-zinc-500">{timeStr}</span>
-      </div>
+        <p className="font-mono text-[11px] tracking-[0.18em] uppercase text-paper-dim tabular">
+          <span className="text-paper-mute">{date}</span>
+          <span className="text-paper-low mx-2">·</span>
+          <span className="text-amber">{time}</span>
+        </p>
+      </motion.div>
 
-      {/* Subtitle: Regime + Strength */}
-      <p className="mt-1.5 text-xs text-zinc-500">
-        {formatRegime(regime)}{strength ? ` · 시그널 ${strength}` : ""}
-      </p>
-
-      {/* Indicators (inline chips — beginner-friendly) */}
-      {indicators.length > 0 && (
-        <div className="mt-2.5 flex flex-wrap gap-1.5">
-          {indicators.slice(0, 4).map((ind: any) => (
-            <span key={ind.name} className="rounded-md border border-green-500/15 bg-green-500/10 px-1.5 py-0.5 text-[10px] font-medium text-green-500">
-              {beginnerIndicatorName(ind.name)}: {beginnerIndicatorStrength(ind.value)}
-            </span>
-          ))}
-          {bearish.slice(0, 2).map((ind: any) => (
-            <span key={ind.name} className="rounded-md border border-red-500/15 bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium text-red-500">
-              {beginnerIndicatorName(ind.name)}: {beginnerIndicatorStrength(ind.value)}
-            </span>
-          ))}
-        </div>
-      )}
-
-      {/* Conflicts + Memory (compact footer) */}
-      {(conflicts.length > 0 || memRefs > 0) && (
-        <div className="mt-2 flex items-center gap-3 text-[10px] text-zinc-500">
-          {conflicts.length > 0 && <span>{conflicts.map((c: string) => formatIndicatorName(c)).join(", ")} \uBC18\uB300 \uC2E0\uD638</span>}
-          {memRefs > 0 && <span>\uC720\uC0AC {memRefs}\uAC74 \uCC38\uC870</span>}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ── Signal Strength Bar ─────────────────────────────────────── */
-
-function SignalBar({ value, label }: { value: number; label?: string }) {
-  // value is typically -1 to 1, normalize to 0-100
-  const pct = Math.min(100, Math.max(0, (Math.abs(value) * 100)));
-  const isStrong = pct > 70;
-  const isMedium = pct > 40;
-
-  return (
-    <div className="space-y-1">
-      {label && <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">{label}</p>}
-      <div className="h-1.5 w-full rounded-full bg-white/[0.06] overflow-hidden">
+      {/* ── MAIN HERO ────────────────────────────────────── */}
+      <div className="relative flex-1 grid lg:grid-cols-[1fr_auto] items-end gap-12 pt-12 lg:pt-16">
+        {/* Left — what the agent IS doing */}
         <motion.div
-          className={`h-full rounded-full ${
-            isStrong ? "bg-white" : isMedium ? "bg-zinc-400" : "bg-neutral-500"
-          }`}
-          initial={{ width: 0 }}
-          animate={{ width: `${pct}%` }}
-          transition={{ duration: 0.8, ease: "easeOut", delay: 0.2 }}
-        />
-      </div>
-    </div>
-  );
-}
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.85, ease: [0.22, 1, 0.36, 1], delay: 0.15 }}
+          className="space-y-6 min-w-0"
+        >
+          <p className="label-eyebrow-amber">PRESENT // AUTONOMOUS</p>
 
-/* ── Confidence Percentage Bar ───────────────────────────────── */
+          <h1 className="hero-display">
+            <span className="text-paper-low">The agent is</span>
+            <br />
+            <AnimatePresence mode="wait">
+              <motion.span
+                key={`${desc.verb}-${friendlyAsset(top?.asset)}`}
+                initial={{ opacity: 0, y: 14, filter: "blur(6px)" }}
+                animate={{ opacity: 1, y: 0, filter: "blur(0)" }}
+                exit={{ opacity: 0, y: -10, filter: "blur(6px)" }}
+                transition={{ duration: 0.5, ease: "easeOut" }}
+                className={`inline-block ${desc.color}`}
+                style={{ textShadow: `0 0 38px ${desc.glow}` }}
+              >
+                {desc.verb} {friendlyAsset(top?.asset)}
+              </motion.span>
+            </AnimatePresence>
+          </h1>
 
-function ConfidenceBar({ value }: { value: number }) {
-  const pct = Math.round(value * 100);
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.7, delay: 0.55 }}
+            className="font-prose text-paper-dim text-base sm:text-lg leading-relaxed max-w-[42ch]"
+          >
+            {topRec ? (
+              <>
+                Conviction <span className="text-amber tabular">{(conviction * 100).toFixed(0)}%</span>
+                <span className="text-paper-low"> · </span>
+                lead alpha <span className="text-paper">{(topRec.formula_name || "ensemble").replace(/_/g, " ")}</span>
+                <span className="text-paper-low"> · </span>
+                regime <span className="text-paper">{(topRec.regime || "neutral").replace(/_/g, " ")}</span>.
+              </>
+            ) : (
+              <>Half-Kelly sizing engaged. Reading the tape; no headline conviction held.</>
+            )}
+          </motion.p>
+        </motion.div>
 
-  return (
-    <div className="flex items-center gap-3">
-      <div className="flex-1 h-2 rounded-full bg-white/[0.06] overflow-hidden">
-        <motion.div
-          className="h-full rounded-full bg-white"
-          initial={{ width: 0 }}
-          animate={{ width: `${pct}%` }}
-          transition={{ duration: 1, ease: "easeOut", delay: 0.3 }}
-        />
-      </div>
-      <span className="font-mono text-sm font-medium tabular-nums text-zinc-50 w-10 text-right">
-        {pct}%
-      </span>
-    </div>
-  );
-}
+        {/* Right — equity card. Discreet but luxuriously typed */}
+        <motion.aside
+          initial={{ opacity: 0, x: 14 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.7, delay: 0.4 }}
+          className="relative shrink-0 w-full lg:w-[340px] border border-rule-loud bg-ink-50/80 backdrop-blur-sm p-7"
+        >
+          <span className="absolute -top-px left-7 right-7 h-[1px] bg-amber" style={{ boxShadow: "0 0 14px rgba(251,189,46,0.5)" }} />
 
-/* ── Component Bars (top 3 from components dict) ─────────────── */
+          <div className="flex items-baseline justify-between mb-5">
+            <p className="label-eyebrow-amber">BOOK</p>
+            <p className="font-mono text-[10px] tabular text-paper-mute uppercase tracking-[0.18em]">
+              held · {fmtUSD(heldNotional)}
+            </p>
+          </div>
 
-function ComponentBars({ components }: { components: Record<string, number> }) {
-  const sorted = Object.entries(components)
-    .sort(([, a], [, b]) => Math.abs(b) - Math.abs(a))
-    .slice(0, 3);
+          <p className="font-mono font-medium text-5xl sm:text-[3.4rem] text-paper tabular leading-none tracking-[-0.05em]">
+            {fmtUSD(equity)}
+          </p>
 
-  if (sorted.length === 0) return null;
-
-  const maxVal = Math.max(...sorted.map(([, v]) => Math.abs(v)), 0.01);
-
-  return (
-    <div className="space-y-2 mt-3">
-      <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">주요 분석 요소</p>
-      {sorted.map(([key, val]) => {
-        const pct = Math.min(100, (Math.abs(val) / maxVal) * 100);
-        const friendlyKey = formatIndicatorName(key);
-        return (
-          <div key={key} className="space-y-0.5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-zinc-400">{friendlyKey}</span>
-              <span className={`font-mono text-xs font-medium tabular-nums ${val >= 0 ? "text-green-500" : "text-red-500"}`}>
-                {val >= 0 ? "+" : ""}{(val * 100).toFixed(0)}%
+          <div className="mt-6 space-y-2.5">
+            <div className="flex items-baseline justify-between">
+              <span className="label-eyebrow">Net P&amp;L</span>
+              <span className={`font-mono text-base font-medium tabular ${totalPnl >= 0 ? "text-mint" : "text-coral"}`}>
+                {fmtSignedUSD(totalPnl)}
+                <span className="text-paper-mute text-[10px] tracking-[0.18em] uppercase ml-2">
+                  {pnlPct >= 0 ? "+" : ""}{pnlPct.toFixed(2)}%
+                </span>
               </span>
             </div>
-            <div className="h-1 w-full rounded-full bg-white/[0.06] overflow-hidden">
-              <motion.div
-                className={`h-full rounded-full ${val >= 0 ? "bg-emerald-400" : "bg-red-400"}`}
-                initial={{ width: 0 }}
-                animate={{ width: `${pct}%` }}
-                transition={{ duration: 0.6, ease: "easeOut" }}
-              />
+            <div className="flex items-baseline justify-between text-[11px]">
+              <span className="label-eyebrow">Realised</span>
+              <span className={`font-mono tabular ${rPnl >= 0 ? "text-paper-dim" : "text-coral"}`}>{fmtSignedUSD(rPnl)}</span>
+            </div>
+            <div className="flex items-baseline justify-between text-[11px]">
+              <span className="label-eyebrow">Unrealised</span>
+              <span className={`font-mono tabular ${uPnl >= 0 ? "text-paper-dim" : "text-coral"}`}>{fmtSignedUSD(uPnl)}</span>
             </div>
           </div>
-        );
-      })}
-    </div>
+
+          {/* slim positions ledger — just symbols, no numbers */}
+          {positions.length > 0 && (
+            <div className="mt-6 pt-5 border-t border-rule">
+              <p className="label-eyebrow mb-3">Open</p>
+              <div className="flex flex-wrap gap-2">
+                {positions.slice(0, 6).map(([asset, amt]) => {
+                  const v = Number(amt);
+                  return (
+                    <span
+                      key={asset}
+                      className={`badge ${v >= 0 ? "badge-profit" : "badge-loss"}`}
+                    >
+                      {friendlyAsset(asset)} {v >= 0 ? "L" : "S"}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </motion.aside>
+      </div>
+
+      {/* ── BOTTOM RAIL — last-action timestamp + nudge ─── */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.6, delay: 0.85 }}
+        className="mt-12 pt-4 border-t border-rule"
+      >
+        <p className="font-mono text-[11px] tracking-[0.16em] uppercase text-paper-mute">
+          {top?.timestamp ? (
+            <>
+              <span className="text-paper-low">last decision</span>
+              <span className="mx-2">·</span>
+              <span className="text-paper">{timeAgo(top.timestamp)} ago</span>
+              <span className="mx-2">·</span>
+              <span className={desc.color}>{desc.verb} {friendlyAsset(top?.asset)}</span>
+              <span className="mx-2">·</span>
+              <span className="text-paper-mute">score {(top?.signal_score ?? 0).toFixed(2)}</span>
+            </>
+          ) : (
+            <span className="text-paper-low">queue idle · agent reading the tape</span>
+          )}
+        </p>
+      </motion.div>
+    </section>
   );
 }
 
-/* ── Position Cards ──────────────────────────────────────────── */
+/* ── Decision tape — single-line marquee ───────────────────── */
 
-function PositionCards({ positions }: { positions: Record<string, number> }) {
-  const entries = Object.entries(positions);
-  if (entries.length === 0) {
-    return <p className="text-sm text-zinc-400 leading-relaxed mt-3">현재 보유 자산이 없습니다</p>;
-  }
+function DecisionTape({ decisions }: { decisions: Decision[] }) {
+  // double the items for seamless loop
+  const items = useMemo(() => [...decisions, ...decisions], [decisions]);
+  if (decisions.length === 0) return null;
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-3">
-      {entries.map(([asset, amount]) => (
-        <motion.div
-          key={asset}
-          className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 hover:bg-white/[0.04] hover:border-white/[0.10] transition-all duration-150"
-          whileHover={{ scale: 1.02, y: -2 }}
+    <motion.section
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.8, delay: 1.05 }}
+      className="border-y border-rule overflow-hidden"
+    >
+      <div className="flex items-center gap-4 py-3">
+        <p className="label-eyebrow-amber shrink-0 pl-1">TAPE</p>
+        <div className="tape-mask flex-1 overflow-hidden">
+          <div className="tape-track whitespace-nowrap">
+            {items.map((d, i) => {
+              const desc = actionDescriptor(d.action);
+              return (
+                <span key={`${d.decision_id ?? i}-${i}`} className="inline-flex items-baseline gap-2 px-6 font-mono text-[12px] tracking-[0.05em]">
+                  <span className="text-paper-low tabular">{timeAgo(d.timestamp)}</span>
+                  <span className={`uppercase font-semibold ${desc.color}`}>{desc.verb}</span>
+                  <span className="text-paper">{friendlyAsset(d.asset)}</span>
+                  <span className="text-paper-mute tabular">· score {(d.signal_score ?? 0).toFixed(2)}</span>
+                  <span className="text-rule-loud px-3">▍</span>
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </motion.section>
+  );
+}
+
+/* ── Quiet links — "go deeper" ─────────────────────────────── */
+
+const DEEP_LINKS: { href: string; eyebrow: string; title: string; desc: string }[] = [
+  {
+    href: "/monitoring/operations",
+    eyebrow: "Inspect",
+    title: "Operations",
+    desc: "Order book · signal tape · KPI strip · positions ledger.",
+  },
+  {
+    href: "/chat",
+    eyebrow: "Converse",
+    title: "Ask the agent",
+    desc: "Why long? Why short? Question every decision in plain language.",
+  },
+  {
+    href: "/performance",
+    eyebrow: "Audit",
+    title: "Track record",
+    desc: "Eight-year backtest · walk-forward · deflated Sharpe.",
+  },
+];
+
+function DeepLinks() {
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: 18 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.7, delay: 1.2 }}
+      className="grid sm:grid-cols-3 gap-px bg-rule border border-rule"
+    >
+      {DEEP_LINKS.map((l, i) => (
+        <Link
+          key={l.href}
+          href={l.href}
+          className="group bg-ink-50 px-7 py-8 transition-colors hover:bg-ink-100"
         >
-          <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">보유</p>
-          <p className="text-sm font-medium text-zinc-200 mt-0.5">
-            {friendlyAsset(asset)}
+          <p className="label-eyebrow mb-3">
+            <span className="font-mono text-[9px] text-paper-low mr-2">0{i + 1}</span>
+            {l.eyebrow}
           </p>
-          <p className="font-mono text-sm font-medium tabular-nums text-zinc-50 mt-1">
-            ${formatMoney(amount)}
+          <h3 className="font-mono font-semibold text-2xl text-paper tracking-tight transition-colors group-hover:text-amber">
+            {l.title}
+            <span className="ml-2 inline-block text-amber transition-transform group-hover:translate-x-1">→</span>
+          </h3>
+          <p className="mt-3 font-prose text-sm text-paper-dim leading-relaxed">
+            {l.desc}
           </p>
-        </motion.div>
+        </Link>
       ))}
-    </div>
+    </motion.section>
   );
 }
 
-/* ── Loading Skeleton ────────────────────────────────────────── */
+/* ── Footer note — philosophy line ─────────────────────────── */
 
-function DashboardSkeleton() {
+function PhilosophyNote() {
   return (
-    <main className="max-w-5xl mx-auto space-y-8 px-4 pt-8">
-      {/* Hero skeleton */}
-      <div className="space-y-3">
-        <div className="skeleton h-8 w-48" />
-        <div className="skeleton h-5 w-72" />
-      </div>
-      {/* Cards skeleton */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {[0, 1, 2].map((i) => (
-          <div key={i} className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6 space-y-3">
-            <div className="skeleton h-4 w-20" />
-            <div className="skeleton h-10 w-32" />
-          </div>
-        ))}
-      </div>
-      {/* Decisions skeleton */}
-      <div className="space-y-3">
-        <div className="skeleton h-6 w-40" />
-        {[0, 1, 2].map((i) => (
-          <div key={i} className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-5 space-y-2">
-            <div className="skeleton h-4 w-full" />
-            <div className="skeleton h-3 w-2/3" />
-          </div>
-        ))}
-      </div>
-    </main>
+    <motion.section
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.8, delay: 1.4 }}
+      className="pt-2 pb-4"
+    >
+      <p className="font-prose text-paper-low text-[13px] leading-relaxed max-w-[60ch]">
+        <span className="text-amber-deep">▌</span> The terminal stays quiet on purpose. The agent runs autonomously; you are not asked to babysit. Open <span className="text-paper-dim">Operations</span> only when you want the full read of the book.
+      </p>
+    </motion.section>
   );
 }
 
-/* ── Main Dashboard ──────────────────────────────────────────── */
+/* ── Main page component ────────────────────────────────────── */
 
 function DashboardContent() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [recs, setRecs] = useState<Recommendation[]>([]);
   const [decisions, setDecisions] = useState<Decision[]>([]);
-  const [hindsight, setHindsight] = useState<any>(null);
-  const [kimchi, setKimchi] = useState<any>(null);
+  const [halted, setHalted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState<number | null>(null);
-  const toast = useToast();
 
   const loadData = useCallback(() => {
     setLoading(true);
     setError(false);
-    gatewayFetch("/statistics/hindsight/BTCUSDT").then(setHindsight).catch(() => {});
     Promise.all([
       gatewayFetch("/dashboard").catch(() => null),
       gatewayFetch("/recommendations/BTCUSDT").catch(() => []),
@@ -350,361 +451,84 @@ function DashboardContent() {
     ]).then(([dash, rec, dec]) => {
       if (!dash && (!Array.isArray(rec) || rec.length === 0) && (!Array.isArray(dec) || dec.length === 0)) {
         setError(true);
-        toast.show("error", "대시보드 데이터를 불러오지 못했습니다");
-      } else {
-        setLastUpdated(Date.now());
       }
       setData(dash as DashboardData);
       setRecs(Array.isArray(rec) ? rec : []);
-      const decArr = Array.isArray(dec) ? dec : [];
-      setDecisions(decArr.slice(-5).reverse());
+      // Keep most-recent first, but still bounded
+      const list = (Array.isArray(dec) ? dec : []).slice(-10).reverse();
+      setDecisions(list);
       setLoading(false);
     });
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     loadData();
+    const iv = setInterval(loadData, 30_000);
+    return () => clearInterval(iv);
   }, [loadData]);
 
+  // Halt-flag probe — best effort; quietly stays false on failure
   useEffect(() => {
-    const load = () => {
-      fetch("/api/gateway/external/kimchi-premium/BTC")
-        .then((r) => r.json())
-        .then(setKimchi)
-        .catch(() => {});
+    let stopped = false;
+    const probe = async () => {
+      try {
+        const r = await fetch("/api/gateway/risk-service/halt", { cache: "no-store" });
+        if (!r.ok) return;
+        const j = await r.json();
+        if (!stopped) setHalted(Boolean(j?.halted));
+      } catch {
+        /* keep halted=false */
+      }
     };
-    load();
-    const interval = setInterval(load, 30000);
-    return () => clearInterval(interval);
+    probe();
+    const iv = setInterval(probe, 30_000);
+    return () => {
+      stopped = true;
+      clearInterval(iv);
+    };
   }, []);
 
-  const portfolio = data?.portfolio;
-  const stats = data?.statistics;
-  const topRec = recs[0];
-
-  if (loading) return <DashboardSkeleton />;
+  if (loading) return <HeroSkeleton />;
 
   if (error) {
     return (
-      <PageTransition>
-        <div className="flex flex-col items-center gap-3 py-12 text-center">
-          <p className="text-sm text-zinc-500">데이터를 불러오는 중 오류가 발생했습니다</p>
-          <button onClick={() => { setError(false); loadData(); }} className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black">
-            다시 시도
-          </button>
-        </div>
-      </PageTransition>
+      <div className="hero-stage min-h-[60vh] flex flex-col items-center justify-center gap-6 text-center py-24">
+        <p className="font-mono font-bold text-2xl text-coral uppercase tracking-[0.08em]">
+          ERR_503 // SERVICE OFFLINE
+        </p>
+        <p className="label-eyebrow">DATA FEED UNREACHABLE</p>
+        <button onClick={loadData} className="btn-primary">↻ RETRY</button>
+      </div>
     );
   }
 
-  const unrealizedPnl = portfolio?.unrealized_pnl ?? 0;
-  const realizedPnl = portfolio?.realized_pnl ?? 0;
-  // Sparkline data — use recent trade PnLs if available, else a synthetic placeholder
-  const recentPnls = decisions?.slice(0, 20).map((d: Decision) => d.signal_score ?? 0).reverse() ?? [];
+  const portfolio = data?.portfolio;
+  const topRec = recs[0];
+  const top = decisions[0];
+  const equity = portfolio?.total_exposure ?? 0;
+  const uPnl = portfolio?.unrealized_pnl ?? 0;
+  const rPnl = portfolio?.realized_pnl ?? 0;
+  const positions = Object.entries(portfolio?.positions ?? {}).filter(
+    ([, v]) => v && Number(v) !== 0
+  ) as [string, number][];
 
   return (
-    <PageTransition>
-      <main className="max-w-5xl mx-auto space-y-10 px-4 pt-6 pb-16">
-
-        {/* ── Hero Section ────────────────────────────────── */}
-        <FadeInView>
-          <section className="relative overflow-hidden rounded-3xl border border-white/[0.06] bg-gradient-to-br from-white/[0.03] via-white/[0.02] to-white/[0.01] p-8 sm:p-12">
-            {lastUpdated && (
-              <span className="absolute top-4 right-4 text-[10px] text-zinc-500">
-                마지막 업데이트: {new Date(lastUpdated).toLocaleTimeString("ko-KR")}
-              </span>
-            )}
-            {/* Animated gradient background decoration */}
-            <motion.div
-              className="absolute -top-24 -right-24 w-64 h-64 rounded-full opacity-[0.04]"
-              style={{ background: "radial-gradient(circle, #000 0%, transparent 70%)" }}
-              animate={{
-                scale: [1, 1.2, 1],
-                x: [0, 20, 0],
-                y: [0, -10, 0],
-              }}
-              transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-            />
-            <motion.div
-              className="absolute -bottom-16 -left-16 w-48 h-48 rounded-full opacity-[0.03]"
-              style={{ background: "radial-gradient(circle, #000 0%, transparent 70%)" }}
-              animate={{
-                scale: [1, 1.15, 1],
-                x: [0, -15, 0],
-                y: [0, 15, 0],
-              }}
-              transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
-            />
-
-            <div className="relative z-10">
-              {/* Agent status card — icon + action only */}
-              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-                <div className="flex items-center gap-3">
-                  <span>
-                    {decisions[0]?.action === "BUY" ? <IconUp /> : decisions[0]?.action === "SELL" ? <IconDown /> : <IconPause />}
-                  </span>
-                  <p className="text-sm font-medium text-zinc-50">
-                    {beginnerAction(decisions[0]?.action).text}
-                  </p>
-                </div>
-              </div>
-
-              {topRec && (
-                <motion.div
-                  className="mt-4 flex flex-wrap gap-3"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.5, duration: 0.4 }}
-                >
-                  <span className="text-xs font-medium text-zinc-400 bg-white/[0.05] border border-white/[0.06] rounded-md px-2 py-0.5">
-                    시장 상태 : {formatRegime(topRec.regime)}
-                  </span>
-                  <span className="text-xs font-medium text-zinc-400 bg-white/[0.05] border border-white/[0.06] rounded-md px-2 py-0.5">
-                    분석 방식 : {friendlyFormula(topRec.formula_name)}
-                  </span>
-                </motion.div>
-              )}
-            </div>
-          </section>
-        </FadeInView>
-
-        {/* ── Portfolio Summary Cards ─────────────────────── */}
-        <StaggerContainer className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <StaggerItem>
-            <GradientCard accent="blue" glow delay={0.05}>
-              <AnimatedStat
-                label="총 투자금"
-                value={portfolio?.total_exposure ?? 0}
-                decimals={0}
-                prefix="$"
-                positive
-                format="currency"
-              />
-              {portfolio?.positions && (
-                <p className="mt-3 text-xs font-medium text-zinc-500">
-                  <PulseDot status="active" className="mr-1.5" />
-                  {Object.keys(portfolio.positions).length}개 자산 보유 중
-                </p>
-              )}
-            </GradientCard>
-          </StaggerItem>
-
-          <StaggerItem>
-            <GradientCard accent={unrealizedPnl >= 0 ? "green" : "red"} glow delay={0.1}>
-              <AnimatedStat
-                label="평가 손익"
-                value={unrealizedPnl}
-                decimals={0}
-                prefix="$"
-                format="currency"
-                trend={recentPnls}
-              />
-              <p className="mt-3 text-xs font-medium text-zinc-500">
-                현재 보유 자산 기준
-              </p>
-            </GradientCard>
-          </StaggerItem>
-
-          <StaggerItem>
-            <GradientCard accent={realizedPnl >= 0 ? "green" : "red"} glow delay={0.15}>
-              <AnimatedStat
-                label="실현 손익"
-                value={realizedPnl}
-                decimals={0}
-                prefix="$"
-                format="currency"
-              />
-              {stats?.win_rate != null && (
-                <p className="mt-3 text-xs font-medium text-zinc-500">
-                  승률 {(stats.win_rate * 100).toFixed(0)}% / {stats?.trade_count ?? 0}회 거래
-                </p>
-              )}
-            </GradientCard>
-          </StaggerItem>
-        </StaggerContainer>
-
-        {/* ── Kimchi Premium Widget ───────────────────────── */}
-        <FadeInView delay={0.08}>
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 hover:bg-white/[0.04] hover:border-white/[0.10] transition-all duration-150"
-          >
-            <div className="flex items-center justify-between">
-              <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
-                <PulseDot status="active" className="mr-1.5" />김치 프리미엄
-              </p>
-              <span className="text-[10px] text-zinc-500">Upbit vs Binance</span>
-            </div>
-            {kimchi && typeof kimchi.premium_pct === "number" && !kimchi.error ? (
-              <>
-                <p
-                  className={`mt-2 text-3xl font-bold tracking-tighter tabular-nums ${
-                    kimchi.premium_pct > 2
-                      ? "text-zinc-50"
-                      : kimchi.premium_pct < -1
-                      ? "text-zinc-50"
-                      : "text-zinc-300"
-                  }`}
-                >
-                  {kimchi.premium_pct >= 0 ? "+" : ""}
-                  {Number(kimchi.premium_pct).toFixed(2)}%
-                </p>
-                <p className="mt-2 text-[11px] font-medium text-zinc-500">
-                  {kimchi.krw_price ? `Upbit ₩${Number(kimchi.krw_price).toLocaleString("ko-KR", { maximumFractionDigits: 0 })}` : "Upbit --"}
-                  {" · "}
-                  {kimchi.usdt_price ? `Binance $${Number(kimchi.usdt_price).toLocaleString("en-US", { maximumFractionDigits: 0 })}` : "Binance --"}
-                </p>
-                <p className="mt-1 text-[10px] text-zinc-600">
-                  {kimchi.premium_pct > 2
-                    ? "한국 프리미엄 — 역발상 매도 신호"
-                    : kimchi.premium_pct < -1
-                    ? "한국 디스카운트 — 역발상 매수 기회"
-                    : "정상 범위"}
-                </p>
-              </>
-            ) : (
-              <p className="mt-2 text-sm text-zinc-500">로딩 중...</p>
-            )}
-          </motion.div>
-        </FadeInView>
-
-        {/* ── Market Chart ────────────────────────────────── */}
-        <FadeInView delay={0.1}>
-          <MarketChart asset="BTCUSDT" />
-        </FadeInView>
-
-        {/* ── Agent Accuracy Widget ────────────────────────── */}
-        <FadeInView delay={0.12}>
-          <section className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 animate-card-reveal">
-            <h3 className="text-base font-semibold tracking-tight text-zinc-50">AI 분석 정확도</h3>
-
-            {hindsight ? (
-              <div className="mt-4">
-                <div className="flex items-center justify-between text-xs text-zinc-400">
-                  <span>{hindsight.total.toLocaleString()}회 분석</span>
-                  <span>적중률 {(hindsight.accuracy * 100).toFixed(0)}%</span>
-                </div>
-                <div className="mt-2 h-2 rounded-full bg-white/[0.06]">
-                  <div className="h-full rounded-full bg-green-500 transition-all duration-700" style={{width: `${Math.min(hindsight.accuracy * 100, 100)}%`}} />
-                </div>
-              </div>
-            ) : (
-              <p className="mt-4 text-sm text-zinc-500">데이터 수집 중</p>
-            )}
-          </section>
-        </FadeInView>
-
-        {/* ── Agent Status + Positions ────────────────────── */}
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* Confidence & Signal */}
-          <FadeInView>
-            <section className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 h-full hover:bg-white/[0.04] hover:border-white/[0.10] transition-all duration-150 animate-card-reveal">
-              <h2 className="text-base font-semibold tracking-tight text-zinc-50">에이전트 분석 현황</h2>
-
-              {topRec ? (
-                <div className="mt-5 space-y-5">
-                  {/* Confidence */}
-                  <div>
-                    <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-2">확신도</p>
-                    <ConfidenceBar value={topRec.confidence} />
-                  </div>
-
-                  {/* Strategy reasoning — formatted */}
-                  <div>
-                    <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-1">분석 의견</p>
-                    <p className="text-sm text-zinc-400 leading-relaxed">{formatStrategyDescription(cleanReasoning(topRec.reasoning))}</p>
-                  </div>
-
-                  {/* Regime tag */}
-                  <div className="flex gap-2">
-                    <span className="rounded-md bg-white/[0.05] px-1.5 py-0.5 text-[10px] text-zinc-500">{formatRegime(topRec.regime)}</span>
-                  </div>
-
-                  {/* Other recommendations — formatted cards */}
-                  {recs.length > 1 && (
-                    <div>
-                      <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 mb-2">대안 전략</p>
-                      <div className="space-y-2">
-                        {recs.slice(1, 3).map((r, i) => {
-                          const conf = formatConfidence(r.confidence);
-                          return (
-                            <div key={i} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm font-medium text-zinc-200">{formatIndicatorName(r.name)}</span>
-                                <div className="flex items-center gap-1.5">
-                                  <div className={`h-1.5 w-1.5 rounded-full ${conf.level === 'high' ? 'bg-green-500' : conf.level === 'medium' ? 'bg-amber-500' : 'bg-zinc-500'}`} />
-                                  <span className="text-[11px] font-medium tabular-nums text-zinc-400">{Math.round(r.confidence * 100)}%</span>
-                                </div>
-                              </div>
-                              <p className="mt-1.5 text-xs text-zinc-500">{formatStrategyDescription(cleanReasoning(r.reasoning))}</p>
-                              <div className="mt-2 flex gap-2">
-                                <span className="rounded-md bg-white/[0.05] px-1.5 py-0.5 text-[10px] text-zinc-500">{formatRegime(r.regime)}</span>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="mt-5 flex flex-col items-center justify-center py-8">
-                  <motion.div
-                    className="w-8 h-8 rounded-full border-2 border-white/[0.06] border-t-white"
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                  />
-                  <p className="mt-4 text-sm text-neutral-400">시장을 분석하고 있습니다...</p>
-                </div>
-              )}
-            </section>
-          </FadeInView>
-
-          {/* Positions */}
-          <FadeInView delay={0.1}>
-            <section className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 h-full hover:bg-white/[0.04] hover:border-white/[0.10] transition-all duration-150 animate-card-reveal delay-100">
-              <h2 className="text-base font-semibold tracking-tight text-zinc-50">보유 자산</h2>
-
-              {portfolio?.positions && Object.keys(portfolio.positions).length > 0 ? (
-                <PositionCards positions={portfolio.positions} />
-              ) : (
-                <div className="mt-5 flex flex-col items-center py-8">
-                  <IconEmpty />
-                  <p className="mt-3 text-sm text-zinc-400">보유 자산 없음</p>
-                </div>
-              )}
-            </section>
-          </FadeInView>
-        </div>
-
-        {/* ── Recent Decisions ────────────────────────────── */}
-        <FadeInView delay={0.15}>
-          <section>
-            <h2 className="text-base font-semibold tracking-tight text-zinc-50 mb-4">최근 매매 결정</h2>
-
-            {decisions.length === 0 ? (
-              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-8 flex flex-col items-center text-center">
-                <IconEmpty />
-                <p className="mt-3 text-sm text-zinc-400">아직 매매 기록 없음</p>
-              </div>
-            ) : (
-              <StaggerContainer className="space-y-3">
-                {decisions.map((d, i) => (
-                  <StaggerItem key={d.decision_id ?? i}>
-                    <DecisionCard decision={d} />
-                  </StaggerItem>
-                ))}
-              </StaggerContainer>
-            )}
-          </section>
-        </FadeInView>
-      </main>
-    </PageTransition>
+    <div className="space-y-12">
+      <Hero
+        topRec={topRec}
+        top={top}
+        equity={equity}
+        uPnl={uPnl}
+        rPnl={rPnl}
+        positions={positions}
+        halted={halted}
+      />
+      <DecisionTape decisions={decisions} />
+      <DeepLinks />
+      <PhilosophyNote />
+    </div>
   );
 }
-
-/* ── Page Export ──────────────────────────────────────────────── */
 
 export default function DashboardPage() {
   return (

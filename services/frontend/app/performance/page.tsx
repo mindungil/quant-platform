@@ -83,7 +83,7 @@ function ConcentrationBar({
       <span className="w-24 text-sm font-medium text-zinc-200 truncate">
         {friendlyAsset(asset)}
       </span>
-      <div className="flex-1 rounded-full bg-white/[0.06] h-3 overflow-hidden">
+      <div className="flex-1 rounded-full bg-[#1c1c21] h-3 overflow-hidden">
         <motion.div
           className={`rounded-full h-3 ${color}`}
           initial={{ width: 0 }}
@@ -91,7 +91,7 @@ function ConcentrationBar({
           transition={{ duration: 0.6, delay: 0.2 + index * 0.06, ease: "easeOut" }}
         />
       </div>
-      <span className="w-14 text-right font-mono text-sm font-medium text-zinc-400">
+      <span className="w-14 text-right font-mono text-sm font-medium text-[#a1a1a1]">
         {(weight * 100).toFixed(1)}%
       </span>
     </motion.div>
@@ -136,7 +136,7 @@ function PerformanceContent() {
         {[0, 1, 2].map((i) => (
           <div
             key={i}
-            className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-6 animate-pulse h-40"
+            className="rounded-xl border border-[#2e2e2e] bg-[#111111] p-6 animate-pulse h-40"
           />
         ))}
       </main>
@@ -147,7 +147,7 @@ function PerformanceContent() {
     return (
       <PageTransition>
         <div className="flex flex-col items-center gap-3 py-12 text-center">
-          <p className="text-sm text-zinc-500">데이터를 불러오는 중 오류가 발생했습니다</p>
+          <p className="text-sm text-[#a1a1a1]">데이터를 불러오는 중 오류가 발생했습니다</p>
           <button onClick={() => { setError(false); loadData(); }} className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black">
             다시 시도
           </button>
@@ -168,13 +168,13 @@ function PerformanceContent() {
     <PageTransition>
       <main className="grid gap-6">
         {/* Header */}
-        <section className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-6">
-          <h2 className="text-2xl font-semibold tracking-tight text-zinc-50">
+        <section className="rounded-xl border border-[#2e2e2e] bg-[#111111] p-6">
+          <h2 className="text-2xl font-semibold tracking-tight text-white">
             AI 성과 리포트
           </h2>
-          <p className="mt-1 text-xs text-zinc-500">AI 매매 성과</p>
+          <p className="mt-1 text-xs text-[#a1a1a1]">AI 매매 성과</p>
           {lastUpdated && (
-            <span className="text-[10px] text-zinc-500">
+            <span className="text-[10px] text-[#a1a1a1]">
               마지막 업데이트: {new Date(lastUpdated).toLocaleTimeString("ko-KR")}
             </span>
           )}
@@ -182,8 +182,8 @@ function PerformanceContent() {
 
         {/* ── Hero: 총 수익률 ──────────────────────────────────── */}
         <FadeInView>
-          <section className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-5 sm:p-8 text-center">
-            <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">총 수익률</p>
+          <section className="rounded-xl border border-[#2e2e2e] bg-[#111111] p-5 sm:p-8 text-center">
+            <p className="text-[11px] font-medium uppercase tracking-wider text-[#a1a1a1]">총 수익률</p>
             <div
               className={`mt-2 font-mono text-3xl sm:text-4xl md:text-5xl font-bold tracking-tighter tabular-nums break-all ${
                 totalReturn >= 0 ? "text-emerald-400" : "text-red-400"
@@ -193,7 +193,7 @@ function PerformanceContent() {
               <AnimatedNumber value={totalReturnPct} decimals={2} />
               <span className="text-xl sm:text-2xl md:text-3xl">%</span>
             </div>
-            <p className="mt-2 text-xs font-medium text-zinc-500">
+            <p className="mt-2 text-xs font-medium text-[#a1a1a1]">
               총 {tradeCount}건 거래 기준
             </p>
           </section>
@@ -205,15 +205,15 @@ function PerformanceContent() {
             {/* 적중률 */}
             <StaggerItem>
               <GradientCard accent="green" delay={0.1}>
-                <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">적중률</p>
+                <p className="text-[11px] font-medium uppercase tracking-wider text-[#a1a1a1]">적중률</p>
                 <p className="text-[10px] text-zinc-600">맞춘 비율</p>
                 <div className="mt-2 flex items-end gap-2">
-                  <span className="font-mono text-3xl font-bold tracking-tighter tabular-nums text-zinc-50">
+                  <span className="font-mono text-3xl font-bold tracking-tighter tabular-nums text-white">
                     <AnimatedNumber value={winRatePct} decimals={1} />
                   </span>
-                  <span className="mb-1 text-lg text-zinc-500">%</span>
+                  <span className="mb-1 text-lg text-[#a1a1a1]">%</span>
                 </div>
-                <div className="mt-3 h-2 rounded-full bg-white/[0.06] overflow-hidden">
+                <div className="mt-3 h-2 rounded-full bg-[#1c1c21] overflow-hidden">
                   <motion.div
                     className="h-2 rounded-full bg-emerald-500"
                     initial={{ width: 0 }}
@@ -227,12 +227,12 @@ function PerformanceContent() {
             {/* 거래 횟수 */}
             <StaggerItem>
               <GradientCard accent="blue" delay={0.15}>
-                <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">거래 횟수</p>
+                <p className="text-[11px] font-medium uppercase tracking-wider text-[#a1a1a1]">거래 횟수</p>
                 <div className="mt-2 flex items-end gap-2">
-                  <span className="font-mono text-3xl font-bold tracking-tighter tabular-nums text-zinc-50">
+                  <span className="font-mono text-3xl font-bold tracking-tighter tabular-nums text-white">
                     <AnimatedNumber value={tradeCount} decimals={0} />
                   </span>
-                  <span className="mb-1 text-lg text-zinc-500">건</span>
+                  <span className="mb-1 text-lg text-[#a1a1a1]">건</span>
                 </div>
               </GradientCard>
             </StaggerItem>
@@ -240,7 +240,7 @@ function PerformanceContent() {
             {/* 최대 손실폭 */}
             <StaggerItem>
               <GradientCard accent="red" delay={0.2}>
-                <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">최대 손실폭</p>
+                <p className="text-[11px] font-medium uppercase tracking-wider text-[#a1a1a1]">최대 손실폭</p>
                 <p className="text-[10px] text-zinc-600">가장 많이 떨어진 적</p>
                 <div className="mt-2 flex items-end gap-2">
                   <span className="font-mono text-3xl font-bold tracking-tighter tabular-nums text-red-400">
@@ -248,7 +248,7 @@ function PerformanceContent() {
                   </span>
                   <span className="mb-1 text-lg text-red-400">%</span>
                 </div>
-                <div className="mt-3 h-2 rounded-full bg-white/[0.06] overflow-hidden">
+                <div className="mt-3 h-2 rounded-full bg-[#1c1c21] overflow-hidden">
                   <motion.div
                     className="h-2 rounded-full bg-red-400"
                     initial={{ width: 0 }}
@@ -263,18 +263,18 @@ function PerformanceContent() {
 
         {/* ── Portfolio Cards ─────────────────────────────────── */}
         <FadeInView delay={0.1}>
-          <section className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-6">
-            <h3 className="text-base font-semibold tracking-tight text-zinc-50">
+          <section className="rounded-xl border border-[#2e2e2e] bg-[#111111] p-6">
+            <h3 className="text-base font-semibold tracking-tight text-white">
               내 투자 현황
             </h3>
-            <p className="mt-0.5 text-xs text-zinc-500">투자 현황</p>
+            <p className="mt-0.5 text-xs text-[#a1a1a1]">투자 현황</p>
 
             <StaggerContainer className="mt-5 grid gap-4 sm:grid-cols-3">
               {/* 총 투자금 */}
               <StaggerItem>
-                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">총 투자금</p>
-                  <p className="mt-2 font-mono text-2xl font-bold tracking-tighter tabular-nums text-zinc-50">
+                <div className="rounded-xl border border-[#2e2e2e] bg-[#0f0f12] p-5">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-[#a1a1a1]">총 투자금</p>
+                  <p className="mt-2 font-mono text-2xl font-bold tracking-tighter tabular-nums text-white">
                     $<AnimatedNumber value={portfolio?.total_exposure ?? 0} decimals={2} />
                   </p>
                 </div>
@@ -282,8 +282,8 @@ function PerformanceContent() {
 
               {/* 평가 손익 */}
               <StaggerItem>
-                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">평가 손익</p>
+                <div className="rounded-xl border border-[#2e2e2e] bg-[#0f0f12] p-5">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-[#a1a1a1]">평가 손익</p>
                   <p
                     className={`mt-2 font-mono text-2xl font-bold tracking-tighter tabular-nums ${
                       (portfolio?.unrealized_pnl ?? 0) >= 0
@@ -302,8 +302,8 @@ function PerformanceContent() {
 
               {/* 실현 손익 */}
               <StaggerItem>
-                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">실현 손익</p>
+                <div className="rounded-xl border border-[#2e2e2e] bg-[#0f0f12] p-5">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-[#a1a1a1]">실현 손익</p>
                   <p
                     className={`mt-2 font-mono text-2xl font-bold tracking-tighter tabular-nums ${
                       (portfolio?.realized_pnl ?? 0) >= 0
@@ -325,7 +325,7 @@ function PerformanceContent() {
             {portfolio?.concentration &&
               Object.keys(portfolio.concentration).length > 0 && (
                 <div className="mt-6">
-                  <p className="mb-3 text-[11px] font-medium uppercase tracking-wider text-zinc-500">
+                  <p className="mb-3 text-[11px] font-medium uppercase tracking-wider text-[#a1a1a1]">
                     자산 비중
                   </p>
                   <div className="space-y-3">
@@ -348,11 +348,11 @@ function PerformanceContent() {
         {/* ── Recent PnL Chart (animated bars) ────────────────── */}
         {stats?.recent_trade_pnls && stats.recent_trade_pnls.length > 0 && (
           <FadeInView delay={0.15}>
-            <section className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-6">
-              <h3 className="text-base font-semibold tracking-tight text-zinc-50">
+            <section className="rounded-xl border border-[#2e2e2e] bg-[#111111] p-6">
+              <h3 className="text-base font-semibold tracking-tight text-white">
                 최근 거래 결과
               </h3>
-              <p className="mt-0.5 text-xs text-zinc-500">초록색은 이익, 빨간색은 손실이에요</p>
+              <p className="mt-0.5 text-xs text-[#a1a1a1]">초록색은 이익, 빨간색은 손실이에요</p>
               <div className="mt-4 flex items-end gap-1 h-32">
                 {stats.recent_trade_pnls.map((pnl: number, i: number) => {
                   const maxAbs = Math.max(
@@ -364,7 +364,7 @@ function PerformanceContent() {
                   );
                 })}
               </div>
-              <div className="mt-2 flex justify-between text-[11px] text-zinc-500">
+              <div className="mt-2 flex justify-between text-[11px] text-[#a1a1a1]">
                 <span>과거</span>
                 <span>최근</span>
               </div>
@@ -374,21 +374,21 @@ function PerformanceContent() {
 
         {/* ── Expert Metrics (collapsible) ────────────────────── */}
         <FadeInView delay={0.2}>
-          <section className="rounded-xl border border-white/[0.06] bg-white/[0.03]">
+          <section className="rounded-xl border border-[#2e2e2e] bg-[#111111]">
             <button
               onClick={() => setShowExpert(!showExpert)}
               className="flex w-full items-center justify-between p-6 text-left"
             >
               <div>
-                <h3 className="text-base font-semibold tracking-tight text-zinc-50">
+                <h3 className="text-base font-semibold tracking-tight text-white">
                   상세 분석 지표
                 </h3>
-                <p className="mt-0.5 text-xs text-zinc-500">더 자세히 알고 싶다면 펼쳐보세요</p>
+                <p className="mt-0.5 text-xs text-[#a1a1a1]">더 자세히 알고 싶다면 펼쳐보세요</p>
               </div>
               <motion.span
                 animate={{ rotate: showExpert ? 180 : 0 }}
                 transition={{ duration: 0.25 }}
-                className="text-neutral-400"
+                className="text-[#a1a1a1]"
               >
                 <svg
                   width="20"
@@ -437,18 +437,18 @@ function PerformanceContent() {
                     },
                   ].map((m, i) => (
                     <StaggerItem key={i}>
-                      <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-4">
-                        <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
+                      <div className="rounded-lg border border-[#2e2e2e] bg-[#0f0f12] p-4">
+                        <p className="text-[11px] font-medium uppercase tracking-wider text-[#a1a1a1]">
                           {m.label}
                         </p>
-                        <p className="mt-0.5 text-xs text-zinc-400">
+                        <p className="mt-0.5 text-xs text-[#a1a1a1]">
                           {m.tip}
                         </p>
                         <p
                           className={`mt-2 font-mono text-xl font-semibold tabular-nums ${
                             m.color
                               ? m.color(m.value ?? 0)
-                              : "text-zinc-50"
+                              : "text-white"
                           }`}
                         >
                           {m.value != null ? m.fmt(m.value) : "--"}

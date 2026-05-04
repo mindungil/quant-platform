@@ -85,7 +85,7 @@ export function MarketChart({ asset = "BTCUSDT" }: { asset?: string }) {
       const volumes: VolumeFormatted[] = rawCandles.map((c) => ({
         time: Math.floor(new Date(c.timestamp).getTime() / 1000) as Time,
         value: c.volume,
-        color: c.close >= c.open ? "rgba(16,185,129,0.35)" : "rgba(239,68,68,0.35)",
+        color: c.close >= c.open ? "rgba(72,213,151,0.35)" : "rgba(255,92,92,0.35)",
       }));
 
       // EMA data (if available from features)
@@ -106,25 +106,25 @@ export function MarketChart({ asset = "BTCUSDT" }: { asset?: string }) {
         height: 380,
         layout: {
           background: { color: "transparent" },
-          textColor: "rgba(255,255,255,0.4)",
-          fontFamily: "'Inter', -apple-system, sans-serif",
+          textColor: "#8a847a",
+          fontFamily: "'JetBrains Mono', monospace",
         },
         grid: {
-          vertLines: { color: "rgba(255,255,255,0.04)" },
-          horzLines: { color: "rgba(255,255,255,0.04)" },
+          vertLines: { color: "rgba(255, 176, 0, 0.04)" },
+          horzLines: { color: "rgba(245, 239, 230, 0.04)" },
         },
         rightPriceScale: {
-          borderColor: "rgba(255,255,255,0.06)",
+          borderColor: "rgba(245, 239, 230, 0.08)",
           scaleMargins: { top: 0.1, bottom: 0.25 },
         },
         timeScale: {
-          borderColor: "rgba(255,255,255,0.06)",
+          borderColor: "rgba(245, 239, 230, 0.08)",
           timeVisible: true,
           secondsVisible: false,
         },
         crosshair: {
-          vertLine: { color: "rgba(255,255,255,0.1)", labelBackgroundColor: "#1a1a1a" },
-          horzLine: { color: "rgba(255,255,255,0.1)", labelBackgroundColor: "#1a1a1a" },
+          vertLine: { color: "rgba(255, 176, 0, 0.35)", labelBackgroundColor: "#1a1614" },
+          horzLine: { color: "rgba(255, 176, 0, 0.35)", labelBackgroundColor: "#1a1614" },
         },
       });
 
@@ -132,12 +132,12 @@ export function MarketChart({ asset = "BTCUSDT" }: { asset?: string }) {
 
       /* ── Candlestick series ────────────────────────────── */
       const candleSeries = chart.addCandlestickSeries({
-        upColor: "#10b981",
-        downColor: "#ef4444",
-        borderUpColor: "#10b981",
-        borderDownColor: "#ef4444",
-        wickUpColor: "#10b981",
-        wickDownColor: "#ef4444",
+        upColor: "#48d597",
+        downColor: "#ff5c5c",
+        borderUpColor: "#48d597",
+        borderDownColor: "#ff5c5c",
+        wickUpColor: "#48d597",
+        wickDownColor: "#ff5c5c",
       });
       candleSeries.setData(candles);
 
@@ -154,7 +154,7 @@ export function MarketChart({ asset = "BTCUSDT" }: { asset?: string }) {
       /* ── EMA overlay ───────────────────────────────────── */
       if (emaData.length > 0) {
         const emaSeries = chart.addLineSeries({
-          color: "rgba(251,191,36,0.7)",
+          color: "rgba(255, 176, 0, 0.85)",
           lineWidth: 1,
           crosshairMarkerVisible: false,
           priceLineVisible: false,
@@ -190,43 +190,45 @@ export function MarketChart({ asset = "BTCUSDT" }: { asset?: string }) {
   /* ── Render ──────────────────────────────────────────────────── */
 
   return (
-    <div className="relative rounded-xl border border-white/[0.06] bg-zinc-950 overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-white/80">
-            {asset.replace("USDT", "/USDT")}
+    <div className="relative border border-rule bg-ink-50 overflow-hidden">
+      {/* Header — editorial caption */}
+      <div className="flex items-center justify-between px-5 py-3 border-b border-rule">
+        <div className="flex items-baseline gap-3">
+          <span className="font-display-italic text-xl text-paper">
+            {asset.replace("USDT", "")}
           </span>
-          <span className="text-xs text-neutral-500">1H</span>
+          <span className="font-mono text-[10px] tracking-[0.18em] uppercase text-paper-mute">
+            / USDT · 1H
+          </span>
         </div>
-        {loading && (
-          <span className="text-xs text-neutral-500 animate-pulse">불러오는 중...</span>
-        )}
+        <div className="flex items-center gap-2">
+          <span className="amber-led" aria-hidden />
+          <span className="font-mono text-[10px] tracking-[0.18em] uppercase text-paper-mute">
+            {loading ? "Loading" : "Live"}
+          </span>
+        </div>
       </div>
 
-      {/* Chart container */}
       <div ref={containerRef} className="h-[380px] w-full" />
 
-      {/* Loading skeleton overlay */}
       {loading && !error && (
-        <div className="absolute inset-0 top-[45px] flex items-center justify-center bg-zinc-950/80">
-          <div className="space-y-3 w-3/4">
-            <div className="h-2 rounded bg-neutral-800 animate-pulse" />
-            <div className="h-2 rounded bg-neutral-800 animate-pulse w-5/6" />
-            <div className="h-2 rounded bg-neutral-800 animate-pulse w-4/6" />
-            <div className="h-2 rounded bg-neutral-800 animate-pulse w-5/6" />
-            <div className="h-2 rounded bg-neutral-800 animate-pulse w-3/6" />
+        <div className="absolute inset-0 top-[49px] flex items-center justify-center bg-ink-50/85">
+          <div className="space-y-3 w-2/3">
+            <div className="skeleton h-2" />
+            <div className="skeleton h-2 w-5/6" />
+            <div className="skeleton h-2 w-4/6" />
+            <div className="skeleton h-2 w-5/6" />
+            <div className="skeleton h-2 w-3/6" />
           </div>
         </div>
       )}
 
-      {/* Error state */}
       {error && (
-        <div className="absolute inset-0 top-[45px] flex items-center justify-center bg-zinc-950/80">
+        <div className="absolute inset-0 top-[49px] flex items-center justify-center bg-ink-50/90">
           <div className="text-center">
-            <p className="text-sm text-neutral-500">{error}</p>
-            <p className="text-xs text-neutral-500 mt-1">
-              시장 데이터 서비스에 연결할 수 없습니다
+            <p className="font-display-italic text-xl text-paper">{error}</p>
+            <p className="mt-2 label-eyebrow">
+              market data offline
             </p>
           </div>
         </div>

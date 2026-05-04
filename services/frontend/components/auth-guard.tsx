@@ -12,49 +12,27 @@ export function AuthGuard({ children }: { children: ReactNode }) {
   useEffect(() => {
     const token = getToken();
     if (!token) {
-      setAuthorized(false);
-      router.replace("/");
+      router.replace("/login");
       return;
     }
 
     const claims = readTokenClaims();
     if (!claims) {
-      setAuthorized(false);
-      router.replace("/");
+      router.replace("/login");
       return;
     }
 
-    // Check expiration (exp is in seconds)
     if (claims.exp && claims.exp * 1000 < Date.now()) {
-      setAuthorized(false);
-      router.replace("/");
+      router.replace("/login");
       return;
     }
 
     setAuthorized(true);
   }, [router]);
 
-  if (authorized === null) {
-    return (
-      <main className="grid gap-6">
-        <div className="rounded border border-neutral-200 bg-white p-6 animate-pulse">
-          <p className="text-neutral-400">인증 중...</p>
-        </div>
-      </main>
-    );
-  }
-
+  // Show nothing while checking auth or redirecting — no flash of "unauthorized" content
   if (!authorized) {
-    return (
-      <main className="grid gap-6">
-        <div className="rounded border border-neutral-200 bg-white p-6">
-          <h2 className="text-2xl font-semibold text-neutral-900">세션 만료</h2>
-          <p className="mt-3 text-neutral-500">
-            로그인 페이지로 이동 중...
-          </p>
-        </div>
-      </main>
-    );
+    return null;
   }
 
   return <>{children}</>;

@@ -65,10 +65,10 @@ function statusTextColor(status: string): string {
   const s = status.toUpperCase();
   if (s === "FILLED") return "text-emerald-400";
   if (s === "REJECTED") return "text-red-400";
-  if (s === "CANCELLED" || s === "EXPIRED") return "text-neutral-400";
+  if (s === "CANCELLED" || s === "EXPIRED") return "text-[#a1a1a1]";
   if (s === "PENDING" || s === "NEW") return "text-amber-400";
   if (s === "OPEN") return "text-white";
-  return "text-neutral-400";
+  return "text-[#a1a1a1]";
 }
 
 /* ── relative time ───────────────────────────────────────────── */
@@ -165,7 +165,7 @@ function OrderItem({
   const isBuy = order.side === "BUY";
 
   return (
-    <article className="relative rounded-xl border border-white/[0.06] bg-white/[0.02] transition-all duration-150 hover:bg-white/[0.04] hover:border-white/[0.10]">
+    <article className="relative rounded-xl border border-[#2e2e2e] bg-[#0f0f12] transition-all duration-150 hover:bg-[#16161a] hover:border-[#3e3e3e]">
       {/* main row — clickable */}
       <button
         onClick={onToggle}
@@ -207,7 +207,7 @@ function OrderItem({
           </div>
 
           {/* price + qty summary */}
-          <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-zinc-400">
+          <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[#a1a1a1]">
             <span className="font-mono tabular-nums">
               {formatQty(order.filled_quantity ?? order.quantity)}
               {order.filled_price != null
@@ -218,7 +218,7 @@ function OrderItem({
             </span>
             {order.filled_quantity != null &&
               order.filled_price != null && (
-                <span className="font-mono text-xs font-medium tabular-nums text-zinc-50">
+                <span className="font-mono text-xs font-medium tabular-nums text-white">
                   총 {formatPrice(order.filled_quantity * order.filled_price)}
                 </span>
               )}
@@ -227,7 +227,7 @@ function OrderItem({
 
         {/* right side: time + cancel */}
         <div className="flex flex-shrink-0 flex-col items-end gap-2">
-          <span className="text-xs text-neutral-400">
+          <span className="text-xs text-[#a1a1a1]">
             {relativeTime(order.created_at)}
           </span>
           {!isTerminal && (
@@ -237,7 +237,7 @@ function OrderItem({
                 onCancel();
               }}
               disabled={isCancelling}
-              className="rounded-full border border-white/[0.06] px-3 py-1 text-[11px] font-medium text-zinc-500 transition duration-150 hover:border-white/[0.10] hover:text-zinc-300 disabled:opacity-40"
+              className="rounded-full border border-[#2e2e2e] px-3 py-1 text-[11px] font-medium text-[#a1a1a1] transition duration-150 hover:border-[#3e3e3e] hover:text-[#a1a1a1] disabled:opacity-40"
             >
               {isCancelling ? "취소 중..." : "주문 취소"}
             </button>
@@ -247,10 +247,10 @@ function OrderItem({
 
       {/* expandable detail */}
       <Expandable open={isExpanded}>
-        <div className="border-t border-white/[0.06] px-5 pb-5 pt-4">
+        <div className="border-t border-[#2e2e2e] px-5 pb-5 pt-4">
           <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
             <div>
-              <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">주문 유형</p>
+              <p className="text-[11px] font-medium uppercase tracking-wider text-[#a1a1a1]">주문 유형</p>
               <p className="mt-0.5 text-sm text-zinc-200">
                 {order.order_type === "LIMIT"
                   ? "지정가"
@@ -260,20 +260,20 @@ function OrderItem({
               </p>
             </div>
             <div>
-              <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">거래소</p>
+              <p className="text-[11px] font-medium uppercase tracking-wider text-[#a1a1a1]">거래소</p>
               <p className="mt-0.5 text-sm text-zinc-200">
                 {order.exchange ?? "--"}
               </p>
             </div>
             <div>
-              <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">주문 수량</p>
-              <p className="mt-0.5 font-mono text-sm font-medium tabular-nums text-zinc-50">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-[#a1a1a1]">주문 수량</p>
+              <p className="mt-0.5 font-mono text-sm font-medium tabular-nums text-white">
                 {formatQty(order.quantity)}
               </p>
             </div>
             <div>
-              <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">주문 가격</p>
-              <p className="mt-0.5 font-mono text-sm font-medium tabular-nums text-zinc-50">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-[#a1a1a1]">주문 가격</p>
+              <p className="mt-0.5 font-mono text-sm font-medium tabular-nums text-white">
                 {formatPrice(order.price)}
               </p>
             </div>
@@ -285,7 +285,7 @@ function OrderItem({
               <p className="text-[11px] font-medium uppercase tracking-wider text-green-500">
                 체결 정보
               </p>
-              <p className="mt-1 font-mono text-sm font-medium tabular-nums text-zinc-50">
+              <p className="mt-1 font-mono text-sm font-medium tabular-nums text-white">
                 {formatQty(order.filled_quantity)} @ {formatPrice(order.filled_price)}
               </p>
             </div>
@@ -297,14 +297,14 @@ function OrderItem({
               <p className="text-[11px] font-medium uppercase tracking-wider text-red-500">
                 거부 사유
               </p>
-              <p className="mt-1 text-sm text-zinc-400">
+              <p className="mt-1 text-sm text-[#a1a1a1]">
                 {order.reject_reason}
               </p>
             </div>
           )}
 
           {/* timestamps */}
-          <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 text-[11px] text-zinc-500">
+          <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 text-[11px] text-[#a1a1a1]">
             <span>
               생성: {order.created_at ? new Date(order.created_at).toLocaleString("ko-KR") : "--"}
             </span>
@@ -395,15 +395,15 @@ function OrdersContent() {
       />
       <main className="grid gap-6">
         {/* Header */}
-        <section className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-6">
+        <section className="rounded-xl border border-[#2e2e2e] bg-[#111111] p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-2xl font-semibold tracking-tight text-zinc-50">
+              <h2 className="text-2xl font-semibold tracking-tight text-white">
                 주문 내역
               </h2>
-              <p className="mt-1 text-xs text-zinc-500">AI 실행 주문</p>
+              <p className="mt-1 text-xs text-[#a1a1a1]">AI 실행 주문</p>
               {lastUpdated && (
-                <span className="text-[10px] text-zinc-500">
+                <span className="text-[10px] text-[#a1a1a1]">
                   마지막 업데이트: {new Date(lastUpdated).toLocaleTimeString("ko-KR")}
                 </span>
               )}
@@ -411,7 +411,7 @@ function OrdersContent() {
             <div className="flex items-center gap-3">
               <button
                 onClick={fetchOrders}
-                className="rounded-full border border-white/[0.06] px-4 py-1.5 text-xs font-medium text-zinc-400 transition duration-150 hover:border-white/[0.10]"
+                className="rounded-full border border-[#2e2e2e] px-4 py-1.5 text-xs font-medium text-[#a1a1a1] transition duration-150 hover:border-[#3e3e3e]"
               >
                 새로고침
               </button>
@@ -427,7 +427,7 @@ function OrdersContent() {
                 className={`relative rounded-full px-4 py-1.5 text-xs font-medium transition ${
                   filter === f
                     ? "bg-white text-black"
-                    : "text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200"
+                    : "text-[#a1a1a1] hover:bg-[#1c1c21] hover:text-zinc-200"
                 }`}
               >
                 {FILTER_LABELS[f] ?? f}
@@ -473,15 +473,15 @@ function OrdersContent() {
                     o.status.toUpperCase()
                   )
                 ).length,
-                color: "text-neutral-400",
+                color: "text-[#a1a1a1]",
               },
             ].map((s) => (
               <div
                 key={s.label}
-                className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-4 text-center"
+                className="rounded-xl border border-[#2e2e2e] bg-[#111111] p-4 text-center"
               >
-                <p className="text-xs font-medium text-zinc-500">{s.label}</p>
-                <p className={`mt-1 font-mono text-2xl font-bold tracking-tighter tabular-nums ${s.color === "text-white" ? "text-zinc-50" : s.color}`}>
+                <p className="text-xs font-medium text-[#a1a1a1]">{s.label}</p>
+                <p className={`mt-1 font-mono text-2xl font-bold tracking-tighter tabular-nums ${s.color === "text-white" ? "text-white" : s.color}`}>
                   <AnimatedNumber value={s.count} decimals={0} />
                 </p>
               </div>
@@ -494,14 +494,14 @@ function OrdersContent() {
           <StaggerContainer className="space-y-3">
             {[0, 1, 2, 3].map((i) => (
               <StaggerItem key={i}>
-                <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-5 animate-pulse">
+                <div className="rounded-xl border border-[#2e2e2e] bg-[#111111] p-5 animate-pulse">
                   <div className="flex items-center gap-4">
-                    <div className="h-10 w-10 rounded-full bg-white/[0.06]" />
+                    <div className="h-10 w-10 rounded-full bg-[#1c1c21]" />
                     <div className="flex-1 space-y-2">
-                      <div className="h-4 w-32 rounded bg-white/[0.06]" />
-                      <div className="h-3 w-48 rounded bg-white/[0.02]" />
+                      <div className="h-4 w-32 rounded bg-[#1c1c21]" />
+                      <div className="h-3 w-48 rounded bg-[#0f0f12]" />
                     </div>
-                    <div className="h-3 w-16 rounded bg-white/[0.02]" />
+                    <div className="h-3 w-16 rounded bg-[#0f0f12]" />
                   </div>
                 </div>
               </StaggerItem>
@@ -509,16 +509,16 @@ function OrdersContent() {
           </StaggerContainer>
         ) : error ? (
           <div className="flex flex-col items-center gap-3 py-12 text-center">
-            <p className="text-sm text-zinc-500">데이터를 불러오는 중 오류가 발생했습니다</p>
-            <p className="text-xs text-zinc-500">{error}</p>
+            <p className="text-sm text-[#a1a1a1]">데이터를 불러오는 중 오류가 발생했습니다</p>
+            <p className="text-xs text-[#a1a1a1]">{error}</p>
             <button onClick={() => { setError(null); fetchOrders(); }} className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black">
               다시 시도
             </button>
           </div>
         ) : filtered.length === 0 ? (
-          <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-12 flex flex-col items-center text-center">
+          <div className="rounded-xl border border-[#2e2e2e] bg-[#111111] p-12 flex flex-col items-center text-center">
             <IconEmpty />
-            <p className="mt-3 text-sm text-zinc-400">
+            <p className="mt-3 text-sm text-[#a1a1a1]">
               {filter === "ALL"
                 ? "주문 내역 없음"
                 : `${FILTER_LABELS[filter] ?? filter} 주문 없음`}

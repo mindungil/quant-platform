@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { AuthGuard } from "../../components/auth-guard";
 import { gatewayFetch } from "../../lib/api";
 import { cleanReasoning } from "../../lib/reasoning";
 import { cleanLLMResponse, beginnerFriendly } from "../../lib/reasoning";
@@ -135,7 +136,7 @@ function ToolPill({
           ${
             hasError
               ? "text-red-500 bg-red-500/10 border-red-500/15 hover:bg-red-500/20"
-              : "text-zinc-400 bg-white/[0.05] border-white/[0.06] hover:bg-white/[0.08] hover:text-zinc-50"
+              : "text-[#a1a1a1] bg-[#16161a] border-[#2e2e2e] hover:bg-[#1a1a1a] hover:text-white"
           }
         `}
       >
@@ -166,13 +167,13 @@ function ToolPill({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 4, scale: 0.95 }}
             transition={{ duration: 0.15 }}
-            className="absolute left-0 top-full z-50 mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-neutral-700/50 bg-neutral-900/95 p-3 shadow-xl backdrop-blur-sm"
+            className="absolute left-0 top-full z-50 mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-neutral-600/50 bg-neutral-900/95 p-3 shadow-xl backdrop-blur-sm"
           >
-            <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+            <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#a1a1a1]">
               {tc.tool_name}
             </div>
             {Object.keys(tc.arguments).length > 0 && (
-              <pre className="mb-2 max-h-20 overflow-auto rounded bg-neutral-950/80 p-2 text-[11px] leading-relaxed text-neutral-400">
+              <pre className="mb-2 max-h-20 overflow-auto rounded bg-neutral-950/80 p-2 text-[11px] leading-relaxed text-[#a1a1a1]">
                 {JSON.stringify(tc.arguments, null, 2)}
               </pre>
             )}
@@ -182,7 +183,7 @@ function ToolPill({
                 const parsed = JSON.parse(tc.result);
                 if (parsed.structured?.summary) {
                   return (
-                    <div className="rounded bg-neutral-950/80 p-2 text-[11px] leading-relaxed text-neutral-300">
+                    <div className="rounded bg-neutral-950/80 p-2 text-[11px] leading-relaxed text-[#a1a1a1]">
                       {parsed.structured.summary}
                     </div>
                   );
@@ -192,14 +193,14 @@ function ToolPill({
                 const cleaned = cleanReasoning(tc.result);
                 if (cleaned !== tc.result && cleaned !== "분석 중...") {
                   return (
-                    <div className="rounded bg-neutral-950/80 p-2 text-[11px] leading-relaxed text-neutral-300">
+                    <div className="rounded bg-neutral-950/80 p-2 text-[11px] leading-relaxed text-[#a1a1a1]">
                       {cleaned}
                     </div>
                   );
                 }
               }
               return (
-                <pre className="max-h-28 overflow-auto rounded bg-neutral-950/80 p-2 text-[11px] leading-relaxed text-neutral-400">
+                <pre className="max-h-28 overflow-auto rounded bg-neutral-950/80 p-2 text-[11px] leading-relaxed text-[#a1a1a1]">
                   {tc.result.length > 400 ? tc.result.slice(0, 400) + "..." : tc.result}
                 </pre>
               );
@@ -217,6 +218,14 @@ function ToolPill({
 /* ── Main Page ──────────────────────────────────────────────── */
 
 export default function ChatPage() {
+  return (
+    <AuthGuard>
+      <ChatPageInner />
+    </AuthGuard>
+  );
+}
+
+function ChatPageInner() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -336,7 +345,7 @@ export default function ChatPage() {
   ];
 
   return (
-    <div className="flex h-[calc(100vh-64px)] bg-neutral-950">
+    <div className="flex h-[calc(100dvh-64px)] bg-neutral-950">
       {/* ── Sidebar ─────────────────────────────────────────── */}
       <AnimatePresence initial={false}>
         {showSidebar && (
@@ -348,7 +357,7 @@ export default function ChatPage() {
             className="flex flex-col overflow-hidden border-r border-neutral-800/60 bg-zinc-950"
           >
             <div className="flex items-center justify-between p-4">
-              <span className="text-xs font-semibold uppercase tracking-wider text-neutral-500">
+              <span className="text-xs font-semibold uppercase tracking-wider text-[#a1a1a1]">
                 대화 목록
               </span>
               <motion.button
@@ -371,21 +380,21 @@ export default function ChatPage() {
                   className={`mb-0.5 w-full rounded-lg px-3 py-2.5 text-left transition-colors ${
                     conversationId === conv.conversation_id
                       ? "bg-neutral-800/80 text-white"
-                      : "text-neutral-400 hover:bg-neutral-800/40 hover:text-neutral-200"
+                      : "text-[#a1a1a1] hover:bg-neutral-800/40 hover:text-neutral-100"
                   }`}
                 >
                   <div className="truncate text-sm">
                     {conv.title || "새 대화"}
                   </div>
                   {conv.updated_at && (
-                    <div className="mt-0.5 text-[10px] text-neutral-500">
+                    <div className="mt-0.5 text-[10px] text-[#a1a1a1]">
                       {new Date(conv.updated_at).toLocaleDateString("ko-KR")}
                     </div>
                   )}
                 </motion.button>
               ))}
               {conversations.length === 0 && (
-                <p className="px-3 py-8 text-center text-xs text-neutral-500">
+                <p className="px-3 py-8 text-center text-xs text-[#a1a1a1]">
                   대화 기록이 없습니다
                 </p>
               )}
@@ -402,13 +411,13 @@ export default function ChatPage() {
             onClick={() => setShowSidebar(!showSidebar)}
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
-            className="rounded-lg p-2 text-neutral-500 transition-colors hover:bg-neutral-800/60 hover:text-white"
+            className="rounded-lg p-2 text-[#a1a1a1] transition-colors hover:bg-neutral-800/60 hover:text-white"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <path d="M3 12h18M3 6h18M3 18h18" />
             </svg>
           </motion.button>
-          <h1 className="text-sm font-medium text-zinc-50 tracking-tight">
+          <h1 className="text-sm font-medium text-white tracking-tight">
             AI 트레이딩 에이전트
           </h1>
         </div>
@@ -422,7 +431,7 @@ export default function ChatPage() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.6 }}
-                className="flex h-[calc(100vh-250px)] flex-col items-center justify-center text-center"
+                className="flex flex-1 flex-col items-center justify-center text-center"
               >
                 <motion.div
                   initial={{ scale: 0.8, opacity: 0 }}
@@ -445,7 +454,7 @@ export default function ChatPage() {
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.25 }}
-                  className="mb-10 max-w-md text-sm text-zinc-400 leading-relaxed"
+                  className="mb-10 max-w-md text-sm text-[#a1a1a1] leading-relaxed"
                 >
                   무엇이든 물어보세요.
                 </motion.p>
@@ -474,7 +483,7 @@ export default function ChatPage() {
                         setInput(s.text);
                         inputRef.current?.focus();
                       }}
-                      className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3.5 text-left text-sm text-zinc-300 transition-all duration-150 hover:border-white/[0.10] hover:bg-white/[0.04] hover:text-zinc-50"
+                      className="rounded-xl border border-[#2e2e2e] bg-[#0f0f12] px-4 py-3.5 text-left text-sm text-[#a1a1a1] transition-all duration-150 hover:border-[#3e3e3e] hover:bg-[#16161a] hover:text-white"
                     >
                       {s.text}
                     </motion.button>
@@ -496,7 +505,7 @@ export default function ChatPage() {
                 >
                   {msg.role === "user" ? (
                     /* ── User bubble ──────────────────── */
-                    <div className="max-w-[88%] sm:max-w-[75%] rounded-2xl rounded-br-md bg-white/[0.08] px-4 py-3 sm:px-5 text-sm leading-relaxed text-zinc-50 break-words">
+                    <div className="max-w-[88%] sm:max-w-[75%] rounded-2xl rounded-br-md bg-[#1a1a1a] px-4 py-3 sm:px-5 text-sm leading-relaxed text-white break-words">
                       {msg.content}
                     </div>
                   ) : (
@@ -525,13 +534,13 @@ export default function ChatPage() {
                       )}
 
                       {/* Text content */}
-                      <div className="border-l-2 border-white/[0.15] pl-4">
-                        <div className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-300">
+                      <div className="border-l-2 border-[#3e3e3e] pl-4">
+                        <div className="whitespace-pre-wrap text-sm leading-relaxed text-[#a1a1a1]">
                           {beginnerFriendly(cleanLLMResponse(msg.content))}
                         </div>
                         {/* Subtle elapsed time */}
                         {msg.elapsed_ms !== undefined && msg.elapsed_ms > 0 && (
-                          <div className="mt-2 text-[11px] text-neutral-500">
+                          <div className="mt-2 text-[11px] text-[#a1a1a1]">
                             {formatElapsed(msg.elapsed_ms)}
                           </div>
                         )}
@@ -551,7 +560,7 @@ export default function ChatPage() {
                   exit={{ opacity: 0, y: -4 }}
                   className="mb-5"
                 >
-                  <div className="inline-flex items-center gap-3 border-l-2 border-neutral-700/50 pl-4 text-[15px] text-neutral-400">
+                  <div className="inline-flex items-center gap-3 border-l-2 border-neutral-600/50 pl-4 text-[15px] text-[#a1a1a1]">
                     <LoadingDots />
                     <span>분석 중</span>
                   </div>
@@ -610,7 +619,7 @@ export default function ChatPage() {
                 </svg>
               </motion.button>
             </motion.div>
-            <p className="mt-2 text-center text-[11px] text-neutral-500">
+            <p className="mt-2 text-center text-[11px] text-[#a1a1a1]">
               Shift+Enter로 줄바꿈
             </p>
           </div>

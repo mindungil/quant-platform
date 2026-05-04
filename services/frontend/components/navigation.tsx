@@ -5,119 +5,106 @@ import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { clearToken, hasRole } from "../lib/api";
+import { startTour } from "./onboarding-tour";
 
-const baseLinks: [string, string][] = [
-  ["/dashboard", "대시보드"],
-  ["/chat", "AI 에이전트"],
-  ["/agent", "자동매매"],
-  ["/strategies", "전략"],
-  ["/templates", "템플릿"],
-  ["/performance", "성과"],
-  ["/orders", "주문"],
-  ["/pricing", "플랜"],
-  ["/settings", "설정"],
+const baseLinks: [string, string, string][] = [
+  ["/dashboard",             "메인",        "01"],
+  ["/chat",                  "에이전트",    "02"],
+  ["/agent",                 "자동매매",    "03"],
+  ["/monitoring/operations", "모니터링",    "04"],
+  ["/strategies",            "전략",        "05"],
+  ["/performance",           "성과",        "06"],
+  ["/settings",              "설정",        "07"],
 ];
 
 export function Navigation() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const links: [string, string][] = [...baseLinks];
+  const links = [...baseLinks];
   if (hasRole("admin")) {
-    links.push(["/admin", "관리"]);
+    links.push(["/admin", "관리", "08"]);
   }
 
-  // Close drawer on route change
+  useEffect(() => { setOpen(false); }, [pathname]);
   useEffect(() => {
-    setOpen(false);
-  }, [pathname]);
-
-  // Lock body scroll when drawer open
-  useEffect(() => {
-    if (open) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
-    return () => {
-      document.body.style.overflow = "";
-    };
+    document.body.style.overflow = open ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
   }, [open]);
 
   const handleLogout = () => {
     clearToken();
-    window.location.href = "/";
+    window.location.href = "/login";
   };
 
   return (
     <>
-      {/* Desktop nav (md+) */}
-      <nav className="hidden md:flex items-center gap-0.5 text-sm min-w-0">
-        {links.map(([href, label]) => {
-          const isActive = pathname === href || pathname?.startsWith(href + "/");
+      {/* ── DESKTOP ── */}
+      <nav className="hidden md:flex items-stretch text-sm">
+        {links.map(([href, label, num]) => {
+          // Top-level section match: /monitoring/operations link should also
+          // light up when the user is browsing /monitoring (alpha health) or
+          // any other /monitoring/* sub-route.
+          const sectionRoot = href.startsWith("/monitoring") ? "/monitoring" : href;
+          const isActive =
+            pathname === href ||
+            pathname?.startsWith(href + "/") ||
+            (sectionRoot !== href && (pathname === sectionRoot || pathname?.startsWith(sectionRoot + "/")));
           return (
             <Link
               key={href}
               href={href}
-              className={`relative rounded-lg px-3 py-1.5 transition-colors duration-150 whitespace-nowrap ${
-                isActive
-                  ? "font-medium text-zinc-50"
-                  : "text-zinc-400 hover:text-zinc-50"
+              data-tour={`nav-${href.replace(/^\//, "")}`}
+              className={`group relative flex items-center gap-2 px-3.5 py-1.5 transition-colors ${
+                isActive ? "text-amber" : "text-paper-dim hover:text-paper"
               }`}
             >
-              {label}
+              <span className={`font-mono text-[9px] tracking-[0.18em] ${isActive ? "text-amber-deep" : "text-paper-low group-hover:text-amber-deep"}`}>
+                {num}
+              </span>
+              <span className="font-mono text-[12px] font-medium uppercase tracking-[0.12em]">
+                {label}
+              </span>
               {isActive && (
-                <motion.div
-                  layoutId="nav-active"
-                  className="absolute inset-0 rounded-lg bg-white/[0.08] border border-white/[0.10]"
-                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                  style={{ zIndex: -1 }}
+                <motion.span
+                  layoutId="nav-underline"
+                  className="absolute -bottom-[16px] left-3.5 right-3.5 h-[2px] bg-amber"
+                  style={{ boxShadow: "0 0 12px rgba(251,189,46,0.5)" }}
+                  transition={{ type: "spring", stiffness: 380, damping: 32 }}
                 />
               )}
             </Link>
           );
         })}
         <button
-          className="ml-3 rounded-lg px-2.5 py-1 text-sm text-zinc-400 transition-colors duration-150 hover:text-red-400 whitespace-nowrap"
+          className="ml-2 px-3 text-paper-mute font-mono text-[10px] uppercase tracking-[0.16em] transition-colors hover:text-amber"
+          onClick={startTour}
+          title="기능 투어"
+        >
+          ?
+        </button>
+        <button
+          className="ml-1 px-3 text-paper-mute font-mono text-[10px] uppercase tracking-[0.16em] transition-colors hover:text-coral"
           onClick={handleLogout}
         >
-          로그아웃
+          Logout
         </button>
       </nav>
 
-      {/* Mobile hamburger button */}
+      {/* ── MOBILE TRIGGER ── */}
       <button
         type="button"
         aria-label="메뉴 열기"
         aria-expanded={open}
-        className="md:hidden inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-zinc-200 transition-colors hover:bg-white/[0.06]"
+        className="md:hidden inline-flex h-10 w-10 items-center justify-center border border-rule-loud text-paper transition-colors hover:border-amber hover:text-amber"
         onClick={() => setOpen((v) => !v)}
       >
-        <svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          {open ? (
-            <>
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </>
-          ) : (
-            <>
-              <line x1="3" y1="6" x2="21" y2="6" />
-              <line x1="3" y1="12" x2="21" y2="12" />
-              <line x1="3" y1="18" x2="21" y2="18" />
-            </>
-          )}
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          {open ? (<><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></>)
+                : (<><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></>)}
         </svg>
       </button>
 
-      {/* Mobile drawer */}
+      {/* ── MOBILE DRAWER ── */}
       <AnimatePresence>
         {open && (
           <>
@@ -126,38 +113,38 @@ export function Navigation() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
-              className="md:hidden fixed inset-0 top-14 z-40 bg-black/60 backdrop-blur-sm"
+              className="md:hidden fixed inset-0 top-14 z-40 bg-black/70 backdrop-blur-sm"
               onClick={() => setOpen(false)}
             />
             <motion.nav
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
-              transition={{ type: "tween", duration: 0.2 }}
-              className="md:hidden fixed right-0 top-14 z-50 h-[calc(100vh-3.5rem)] w-[78vw] max-w-xs overflow-y-auto border-l border-white/[0.06] bg-zinc-950/95 backdrop-blur-xl px-3 py-4"
+              transition={{ type: "tween", duration: 0.22, ease: "easeOut" }}
+              className="md:hidden fixed right-0 top-14 z-50 h-[calc(100vh-3.5rem)] w-[82vw] max-w-sm overflow-y-auto border-l border-rule-loud bg-ink/98 px-6 py-7"
             >
-              <div className="flex flex-col gap-1">
-                {links.map(([href, label]) => {
+              <p className="label-eyebrow-amber mb-5">Sections</p>
+              <div className="flex flex-col">
+                {links.map(([href, label, num]) => {
                   const isActive = pathname === href || pathname?.startsWith(href + "/");
                   return (
                     <Link
                       key={href}
                       href={href}
-                      className={`block truncate rounded-lg px-4 py-3 text-sm transition-colors ${
-                        isActive
-                          ? "bg-white/[0.08] text-zinc-50 font-medium border border-white/[0.10]"
-                          : "text-zinc-300 hover:bg-white/[0.04] hover:text-zinc-50"
+                      className={`flex items-baseline justify-between border-b border-rule py-4 transition-colors ${
+                        isActive ? "text-amber" : "text-paper hover:text-amber"
                       }`}
                     >
-                      {label}
+                      <span className="font-mono text-[16px] font-medium uppercase tracking-[0.12em]">{label}</span>
+                      <span className="font-mono text-[10px] tracking-[0.18em] text-paper-low">{num}</span>
                     </Link>
                   );
                 })}
                 <button
-                  className="mt-2 block w-full truncate rounded-lg px-4 py-3 text-left text-sm text-red-400 transition-colors hover:bg-red-500/10"
+                  className="mt-8 self-start font-mono text-[11px] uppercase tracking-[0.18em] text-coral hover:text-paper"
                   onClick={handleLogout}
                 >
-                  로그아웃
+                  → Logout
                 </button>
               </div>
             </motion.nav>

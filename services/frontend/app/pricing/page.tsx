@@ -1,26 +1,29 @@
 "use client";
+
 import { motion } from "framer-motion";
+import Link from "next/link";
 
 const tiers = [
   {
-    name: "Free",
+    code: "01",
+    name: "FREE",
     price: "0",
     unit: "원",
-    description: "시작하기",
+    description: "READ_ONLY",
     features: [
       "시그널 조회 (5분 지연)",
       "대시보드 읽기 전용",
       "AI 채팅 5회/일",
       "에이전트 적중률 확인",
     ],
-    cta: "무료로 시작",
     highlight: false,
   },
   {
-    name: "Pro",
+    code: "02",
+    name: "PRO",
     price: "29,000",
     unit: "원/월",
-    description: "자동매매 시작",
+    description: "AUTO_TRADING",
     features: [
       "실시간 시그널",
       "자동매매 (1자산)",
@@ -28,14 +31,14 @@ const tiers = [
       "전체 결정 이력",
       "포트폴리오 분석",
     ],
-    cta: "Pro 시작하기",
     highlight: true,
   },
   {
-    name: "Premium",
+    code: "03",
+    name: "PREMIUM",
     price: "89,000",
     unit: "원/월",
-    description: "전문 트레이더",
+    description: "FULL_DESK",
     features: [
       "전체 자산 자동매매",
       "무제한 AI 채팅",
@@ -44,73 +47,114 @@ const tiers = [
       "API 접근",
       "전담 지원",
     ],
-    cta: "Premium 시작하기",
     highlight: false,
   },
 ];
 
 export default function PricingPage() {
   return (
-    <main className="min-h-screen bg-zinc-950 px-6 py-20">
-      <div className="mx-auto max-w-5xl text-center">
-        <motion.h1
+    <div className="relative min-h-screen bg-ink overflow-hidden">
+      {/* Ambient lights */}
+      <div className="pointer-events-none fixed inset-0">
+        <div className="bg-orb-light" style={{ top: "-100px", left: "-80px", width: "min(500px, 80vw)", height: "min(500px, 80vw)" }} />
+        <div className="bg-orb-dim" style={{ bottom: "-80px", right: "-60px", width: "min(380px, 70vw)", height: "min(380px, 70vw)" }} />
+        <div className="absolute inset-0 opacity-[0.06]" style={{
+          backgroundImage: "linear-gradient(rgba(251,189,46,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(251,189,46,0.4) 1px, transparent 1px)",
+          backgroundSize: "64px 64px",
+        }} />
+      </div>
+
+      <main className="relative z-10 mx-auto max-w-6xl px-6 py-20">
+        {/* Header */}
+        <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-2xl font-semibold tracking-tight text-zinc-50"
+          transition={{ duration: 0.5 }}
+          className="mb-12"
         >
-          플랜 선택
-        </motion.h1>
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.2 }}
-          className="mt-3 text-sm text-zinc-400 leading-relaxed"
-        >
-          AI 자동 매매 구독
-        </motion.p>
+          <div className="flex items-baseline gap-3 mb-3">
+            <span className="amber-led-static" aria-hidden />
+            <p className="label-eyebrow-amber">SECTION // PRICING</p>
+          </div>
+          <h1 className="font-mono text-3xl sm:text-4xl font-bold tracking-tight text-paper uppercase">
+            플랜 선택
+          </h1>
+          <p className="mt-3 font-prose text-sm text-paper-dim leading-relaxed">
+            AI 자동 매매 구독 — 결제 시스템 준비 중
+          </p>
+        </motion.div>
 
-        <div className="mt-16 grid grid-cols-1 gap-6 md:grid-cols-3">
+        {/* Tier grid */}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           {tiers.map((tier, i) => (
             <motion.div
               key={tier.name}
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 * (i + 1) }}
-              className={`rounded-2xl border p-8 text-left hover-lift ${
-                tier.highlight
-                  ? "border-white/[0.20] bg-white/[0.06]"
-                  : "border-white/[0.06] bg-white/[0.03]"
+              transition={{ delay: 0.15 + i * 0.08, duration: 0.5 }}
+              className={`relative bg-ink-50 border p-7 ${
+                tier.highlight ? "border-amber panel-amber-tab" : "border-rule-loud"
               }`}
             >
               {tier.highlight && (
-                <span className="mb-4 inline-block rounded-full bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-black">
-                  추천
+                <span className="absolute -top-2.5 right-5 bg-amber px-2.5 py-0.5 font-mono text-[9px] tracking-[0.2em] uppercase text-ink font-bold">
+                  RECOMMENDED
                 </span>
               )}
-              <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">{tier.description}</p>
-              <p className="mt-2 text-3xl font-bold tracking-tighter tabular-nums text-zinc-50">
-                {tier.price}
-                <span className="text-sm font-normal text-zinc-500">{tier.unit}</span>
+
+              <div className="flex items-baseline justify-between mb-5">
+                <p className={`label-eyebrow ${tier.highlight ? "text-amber" : ""}`}>
+                  {tier.description}
+                </p>
+                <p className="label-eyebrow tabular">{tier.code}/03</p>
+              </div>
+
+              <p className="font-mono text-xl font-bold tracking-[0.18em] text-paper uppercase">
+                {tier.name}
               </p>
-              <ul className="mt-6 space-y-3">
+
+              <div className="mt-5 mb-6 pb-6 border-b border-rule">
+                <div className="flex items-baseline gap-1.5">
+                  <span className={`font-mono text-3xl font-bold tabular tracking-tight ${
+                    tier.highlight ? "text-amber" : "text-paper"
+                  }`}>
+                    {tier.price}
+                  </span>
+                  <span className="font-prose text-sm text-paper-mute">{tier.unit}</span>
+                </div>
+              </div>
+
+              <ul className="space-y-2.5">
                 {tier.features.map((f) => (
-                  <li key={f} className="flex items-center gap-2 text-sm text-zinc-400 leading-relaxed">
-                    <span className="text-green-500">&#10003;</span>
-                    {f}
+                  <li key={f} className="flex items-baseline gap-2.5">
+                    <span className="text-amber font-mono text-[11px] shrink-0">▸</span>
+                    <span className="font-prose text-[13px] text-paper-dim leading-relaxed">{f}</span>
                   </li>
                 ))}
               </ul>
+
               <button
                 disabled
-                className="mt-8 w-full rounded-lg py-2.5 text-sm font-semibold border border-white/[0.06] text-zinc-500 cursor-not-allowed"
+                className="mt-7 w-full py-2.5 border border-rule font-mono text-[11px] uppercase tracking-[0.16em] text-paper-mute cursor-not-allowed"
               >
-                준비 중
+                준비 중 // COMING SOON
               </button>
-              <p className="mt-2 text-[10px] text-zinc-600 text-center">결제 시스템 준비 중입니다</p>
             </motion.div>
           ))}
         </div>
-      </div>
-    </main>
+
+        {/* Footer note */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.5 }}
+          className="mt-12 pt-8 border-t border-rule text-center"
+        >
+          <p className="label-eyebrow text-paper-low">
+            ENCRYPTED // JWT // TLS 1.3 &middot; <Link href="/terms" className="hover:text-amber">이용약관</Link>
+          </p>
+        </motion.div>
+      </main>
+    </div>
   );
 }
