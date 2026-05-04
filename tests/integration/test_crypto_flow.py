@@ -285,6 +285,10 @@ class TestCryptoAgentDecision:
             lambda *a, **kw: "integration reasoning",  # _fallback_reasoning
             lambda *a, **kw: [],    # _risk_pre_check
         ))
+        monkeypatch.setattr(agent_graph, "_get_escalation_helpers", lambda: (
+            lambda state: False,                # _should_escalate
+            lambda state, asset: "",            # _escalate_to_deep_reasoning
+        ))
 
         decision = agent_engine.run_decision_loop(
             "BTCUSDT", user_id="test-user", correlation_id="corr-int",
@@ -318,15 +322,23 @@ class TestOrderProcessing:
                 return {"user_id": uid, "exchange": exch, "sandbox": True, "label": "t"}
 
         class StubPortfolio:
-            def apply_fill(self, p, *, order_id, status):
+            def get_snapshot(self, user_id):
+                return {"user_id": user_id, "positions": {}, "total_exposure": 0}
+
+            def apply_fill(self, p, *, order_id, status, fill_quantity=None,
+                           fill_price=None, filled_notional=None):
+                qty = fill_quantity if fill_quantity is not None else p.quantity
+                price = fill_price if fill_price is not None else p.price
                 return {
-                    "user_id": p.user_id, "positions": {p.asset: p.quantity},
-                    "average_entry_prices": {p.asset: p.price}, "recent_fills": [],
-                    "total_exposure": p.quantity * p.price, "rebalance_needed": False,
+                    "user_id": p.user_id, "positions": {p.asset: qty},
+                    "average_entry_prices": {p.asset: price}, "recent_fills": [],
+                    "total_exposure": qty * price, "rebalance_needed": False,
                 }
 
         class StubStats:
-            def record_trade(self, p, *, order_status, order_id=None):
+            def record_trade(self, p, *, order_status, order_id=None,
+                             pre_fill_portfolio=None, fill_quantity=None,
+                             fill_price=None):
                 return {
                     "user_id": p.user_id, "trade_count": 1,
                     "total_return": 0, "win_rate": 0, "drift_detected": False,
