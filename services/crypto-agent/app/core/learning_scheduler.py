@@ -176,6 +176,7 @@ class LearningScheduler:
 
             # ── IC Engine: feed verified decisions for rolling IC tracking ──
             ic_updated = 0
+            ic_skipped = 0
             try:
                 from shared.factors.ic_weight_engine import get_ic_engine
                 ic_engine = get_ic_engine()
@@ -185,6 +186,11 @@ class LearningScheduler:
                     "_n_components", "_insufficient_data", "_agreement_bonus",
                     "_weight_mode",
                 })
+                # Same per-factor dedupe rationale as the daily loop:
+                # bursts of decisions on the same hourly bar would feed
+                # identical (score, fwd_return) pairs to slowly-updating
+                # factors and inflate IC toward ±1.0.
+                seen: dict[str, set[tuple[float, float]]] = {}
                 for d in decisions:
                     ref_price = d.get("reference_price")
                     if not ref_price or ref_price <= 0:
@@ -206,11 +212,24 @@ class LearningScheduler:
                         and not k.startswith("cat_")
                         and k not in _IC_META_KEYS
                     }
-                    if factor_scores:
-                        ic_engine.update(factor_scores, forward_return)
+                    if not factor_scores:
+                        continue
+                    deduped = {}
+                    for fname, score in factor_scores.items():
+                        key = (round(score, 8), round(forward_return, 8))
+                        bucket = seen.setdefault(fname, set())
+                        if key in bucket:
+                            ic_skipped += 1
+                            continue
+                        bucket.add(key)
+                        deduped[fname] = score
+                    if deduped:
+                        ic_engine.update(deduped, forward_return)
                         ic_updated += 1
                 if ic_updated > 0:
-                    logger.info("fast_loop_ic_fed", extra={"observations": ic_updated})
+                    logger.info("fast_loop_ic_fed", extra={
+                        "observations": ic_updated, "deduped": ic_skipped,
+                    })
             except Exception as exc:
                 logger.debug("fast_loop_ic_feed_failed", extra={"error": str(exc)[:120]})
 
@@ -337,6 +356,16 @@ class LearningScheduler:
                     "_weight_mode",
                 })
 
+                # Dedupe per-factor before feeding the IC engine. Without
+                # this, a burst of decisions sharing the same hourly bar
+                # (same reference_price → same forward_return; slowly-changing
+                # factors like news_sentiment/fear_greed_index also stuck on
+                # the same scalar) gets fed as N "independent" observations,
+                # which inflates rolling-IC ranks toward ±1.0 from the few
+                # non-tied points and crowds out informative factors.
+                seen: dict[str, set[tuple[float, float]]] = {}
+                ic_obs_fed = 0
+                ic_obs_skipped = 0
                 for d in verified:
                     forward_return = d.get("price_change_pct", 0.0) / 100.0
                     if not math.isfinite(forward_return):
@@ -349,8 +378,24 @@ class LearningScheduler:
                         and not k.startswith("cat_")
                         and k not in _IC_META_KEYS
                     }
-                    if factor_scores:
-                        ic_engine.update(factor_scores, forward_return)
+                    if not factor_scores:
+                        continue
+                    deduped = {}
+                    for fname, score in factor_scores.items():
+                        key = (round(score, 8), round(forward_return, 8))
+                        bucket = seen.setdefault(fname, set())
+                        if key in bucket:
+                            ic_obs_skipped += 1
+                            continue
+                        bucket.add(key)
+                        deduped[fname] = score
+                    if deduped:
+                        ic_engine.update(deduped, forward_return)
+                        ic_obs_fed += 1
+
+                logger.info("daily_ic_dedupe", extra={
+                    "fed": ic_obs_fed, "skipped_duplicates": ic_obs_skipped,
+                })
 
                 # Recompute weights → saves to Redis automatically
                 new_ic_weights = ic_engine.recompute_weights()

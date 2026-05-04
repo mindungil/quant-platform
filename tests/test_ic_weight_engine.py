@@ -81,3 +81,47 @@ def test_get_all_states():
     assert "b" in states
     assert "ic" in states["a"]
     assert "weight" in states["a"]
+
+
+def test_stuck_factor_pathology_zeroed():
+    """Slowly-updating factors (news/fear_greed/macro) can produce only a few
+    unique (score, fwd_return) pairs across N obs. Spearman returns ±1.0 in
+    that case from the few non-tied points, but it's not a real signal —
+    it's the scheduler feeding the same hourly bar's data N times.
+
+    The unique-floor guard zeros IC for factors with insufficient distinct
+    score or forward-return values (≥10% of n_obs, with absolute floor of 5).
+    """
+    engine = ICWeightEngine()
+    # 200 observations: 197 identical pairs + 3 distinct pairs that happen
+    # to align monotonically (the exact pattern observed in production).
+    pairs = [(-0.0016, -0.0231)] * 197 + [
+        (0.0018, -0.0105),
+        (0.0076, -0.0089),
+        (0.0086, -0.0026),
+    ]
+    for sc, fwd in pairs:
+        engine.update({"news_sentiment_stuck": sc}, fwd)
+    weights = engine.recompute_weights()
+    state = engine.get_factor_state("news_sentiment_stuck")
+    assert state is not None
+    assert state.n_obs == 200
+    assert state.ic == 0.0, f"stuck factor must report ic=0, got {state.ic}"
+    assert state.weight == 0.0
+    # Should not appear with positive weight in the recomputed weights
+    assert weights.get("news_sentiment_stuck", 0.0) == 0.0
+
+
+def test_diverse_factor_unaffected_by_unique_floor():
+    """Factors with normal variability (≥10% unique values) compute IC normally."""
+    engine = ICWeightEngine()
+    for i in range(80):
+        # Both score and fwd vary with n — 80 unique values each
+        score = math.sin(i / 7) * 0.5
+        fwd = math.sin(i / 7) * 0.01 + 0.0001 * (i % 3)
+        engine.update({"diverse_factor": score}, fwd)
+    engine.recompute_weights()
+    state = engine.get_factor_state("diverse_factor")
+    assert state is not None
+    assert state.n_obs == 80
+    assert abs(state.ic) > 0.5, f"diverse factor should have nonzero IC, got {state.ic}"
