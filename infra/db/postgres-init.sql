@@ -93,3 +93,48 @@ CREATE POLICY rls_user_isolation ON conversations
     WITH CHECK (user_id = current_setting('app.current_user_id', true)::text);
 DROP POLICY IF EXISTS rls_admin_bypass ON conversations;
 CREATE POLICY rls_admin_bypass ON conversations TO admin USING (true) WITH CHECK (true);
+
+
+-- ──────────────────────────────────────────────────────────────────
+-- Phase C: alpha incubator
+--
+-- Holds candidate alphas that must pass standalone 8-year validation
+-- before being considered for the production ensemble. Enforces the
+-- "never add untested alphas" rule: promotion requires Sharpe ≥ 1.0,
+-- max drawdown ≤ 30%, and IC information ratio ≥ 0.5 across the full
+-- 8-year window AND a final 20% out-of-sample holdout.
+--
+-- Status machine:
+--   PENDING     — submitted, not yet evaluated
+--   EVALUATING  — run in progress (idempotent lease)
+--   EVALUATED   — stats written, no promotion decision yet
+--   PROMOTED    — passed gates, auto-listed in alpha ensemble
+--   REJECTED    — failed one or more gates (reason in gate_report)
+--   DEPRECATED  — previously promoted but live perf decayed
+-- ──────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS alpha_incubator_candidates (
+    id TEXT PRIMARY KEY,
+    alpha_name TEXT NOT NULL,              -- entry in shared.alpha.registry
+    params JSONB NOT NULL DEFAULT '{}'::jsonb,
+    status TEXT NOT NULL DEFAULT 'PENDING',
+    submitted_by TEXT NOT NULL,
+    submitted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    evaluated_at TIMESTAMPTZ,
+    promoted_at TIMESTAMPTZ,
+    -- Evaluation stats: filled when status moves past EVALUATING.
+    sharpe_full DOUBLE PRECISION,          -- full-period Sharpe
+    sharpe_oos DOUBLE PRECISION,           -- last 20% holdout Sharpe
+    max_drawdown DOUBLE PRECISION,         -- (positive fraction, e.g. 0.28)
+    ic DOUBLE PRECISION,                   -- Spearman IC with forward return
+    ic_ir DOUBLE PRECISION,                -- IC information ratio
+    turnover DOUBLE PRECISION,             -- avg |Δposition| per bar
+    n_bars INTEGER,
+    asset TEXT,
+    gate_report JSONB NOT NULL DEFAULT '{}'::jsonb,
+    CONSTRAINT incubator_status_valid CHECK (
+        status IN ('PENDING', 'EVALUATING', 'EVALUATED', 'PROMOTED', 'REJECTED', 'DEPRECATED')
+    )
+);
+
+CREATE INDEX IF NOT EXISTS alpha_incubator_status_idx ON alpha_incubator_candidates (status);
+CREATE INDEX IF NOT EXISTS alpha_incubator_submitted_at_idx ON alpha_incubator_candidates (submitted_at DESC);

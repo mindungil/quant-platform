@@ -8,29 +8,51 @@ on:
       - 'feature/**'
   pull_request:
 
-# Lightweight CI: only the profit-engine test suite (93+ tests, ~20 s).
-# We do NOT install the 22 microservices here — that's brittle and the
-# unit tests in this repo's `tests/` directory cover the engine code we
-# actually care about. Service-level integration tests live elsewhere.
+# CI covers:
+# (1) lint via ruff
+# (2) core engine tests (alpha, backtest, optim, regime, features, labels, ml, portfolio)
+# (3) signal-service tests
+# (4) order-service tests (compliance, routing, engine)
+# (5) maker-simulator & execution tests
+# (6) frontend type-check & build
+# (7) coverage reporting
 
 jobs:
-  engine:
+  lint:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install ruff
+        run: pip install ruff
+      - name: Lint shared + services
+        run: |
+          ruff check shared/ services/signal-service/ services/order-service/ \
+            --select E,F,W --ignore E501 --exit-zero
 
+  engine-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
 
-      - name: Install engine dependencies
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install numpy pandas scipy pytest
+          pip install numpy pandas scipy scikit-learn lightgbm pytest pytest-cov pydantic httpx
 
-      - name: Run engine tests
+      - name: Run engine core tests
+        env:
+          PYTHONPATH: .
         run: |
           python -m pytest \
             tests/alpha \
@@ -41,4 +63,114 @@ jobs:
             tests/labels \
             tests/ml \
             tests/portfolio \
-            -q --tb=short
+            tests/test_ic_weight_engine.py \
+            -q --tb=short \
+            --cov=shared --cov-report=term-missing --cov-report=xml:coverage-engine.xml
+
+      - name: Upload engine coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-engine
+          path: coverage-engine.xml
+
+  service-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: lint
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - signal-service
+          - order-service
+          - portfolio-service
+          - market-data
+          - risk-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install numpy pandas scipy scikit-learn pytest pytest-cov pydantic httpx
+          if [ -f services/${{ matrix.service }}/requirements.txt ]; then
+            pip install -r services/${{ matrix.service }}/requirements.txt || true
+          fi
+
+      - name: Run ${{ matrix.service }} tests
+        env:
+          PYTHONPATH: .:services/${{ matrix.service }}
+        run: |
+          python -m pytest \
+            services/${{ matrix.service }}/tests/ \
+            -q --tb=short \
+            --cov=services/${{ matrix.service }}/app \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage-${{ matrix.service }}.xml
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.service }}
+          path: coverage-${{ matrix.service }}.xml
+
+  execution-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install numpy pandas scipy pytest pytest-cov pydantic
+
+      - name: Run maker-simulator & execution tests
+        env:
+          PYTHONPATH: .
+        run: |
+          python -m pytest \
+            tests/execution \
+            tests/test_maker_simulator.py \
+            tests/test_cvar_overlay.py \
+            tests/test_drift_registry.py \
+            -q --tb=short \
+            --cov=shared/execution --cov=shared/portfolio \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage-execution.xml
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-execution
+          path: coverage-execution.xml
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: services/frontend/package-lock.json
+
+      - name: Install and validate frontend
+        working-directory: services/frontend
+        run: |
+          npm ci
+          npx tsc --noEmit
+          npm run build

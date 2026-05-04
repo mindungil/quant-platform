@@ -38,6 +38,7 @@ Docker Compose productionization runtime for the startup-club autonomous trading
 - `memory-service` and `strategy-registry` now write through durable repositories with local fallback behavior
 - `frontend` is now a Next.js application backed by the gateway public routes
 - `order-service`, `portfolio-service`, and `statistics-service` now persist execution-state scaffolding through PostgreSQL-backed repositories
+- `order-service` now runs a background reconciliation loop so active orders converge to exchange-reported status and fill state after restarts or partial fills
 - gateway websocket now replays Redis-backed recent events instead of polling dashboard snapshots
 - bootstrap admin, gateway RBAC, and admin operator routes now exist for `user` and `admin`
 - Docker Compose now includes service healthchecks plus operator commands for `seed-admin`, `demo-flow`, and `smoke-e2e`
@@ -52,6 +53,7 @@ Docker Compose productionization runtime for the startup-club autonomous trading
 - `quant-agent-platform` is now archived as legacy reference only; `quant` is the single active repository
 - `crypto-agent` now implements the full 6-phase decision loop (gather/select/retrieve/check/execute/record) with per-phase timing
 - `exchange-adapter` now has an abstract adapter layer with Binance (HMAC, rate limiter), Upbit, and Alpaca stubs
+- `external-data-service` now persists durable external-context snapshots and can serve cached degraded-mode context during upstream outages
 - `backtest-service` now supports async job execution with polling and completion events
 - ETF and stock agents now have market-hours-guarded decision endpoints with exchange calendars (KR/US holidays)
 - `orchestrator-agent` now performs real downstream health checks and cross-agent conflict detection
@@ -113,6 +115,8 @@ make smoke-e2e
 make release-check
 ```
 
+`make release-check` now includes `smoke-e2e`, so run it with the compose stack already up.
+
 4. Manual example flow:
 
 ```bash
@@ -173,11 +177,16 @@ open http://localhost:8018/admin
 
 ## Deployment Architecture
 
-The stack runs in **5 containers** (down from 25):
+The default stack runs in **10 containers**:
 
 | Container | Description | Port(s) |
 |-----------|-------------|---------|
-| `backend` | All 20 Python microservices (separate uvicorn processes) | 8001-8021 |
+| `platform` | `api-gateway` + `auth-service` | 8017, 8019 |
+| `market-pipeline` | `market-data` + `feature-store` + `signal-service` + `external-data-service` | 8001, 8002, 8003, 8020 |
+| `strategy-lab` | `memory-service` + `strategy-registry` + `backtest-service` + `statistics-service` | 8004, 8005, 8007, 8013 |
+| `execution` | `exchange-adapter` + `risk-service` + `credential-store` + `order-service` + `portfolio-service` | 8008-8012 |
+| `intelligence` | `crypto-agent` + `orchestrator-agent` + `etf-agent` + `stock-agent` | 8006, 8014-8016 |
+| `llm-tools` | `llm-gateway` | 8021 |
 | `frontend` | Next.js product UI | 8018 |
 | `db` | TimescaleDB + pgvector (single database server) | 5432 |
 | `redis` | Cache + realtime pub/sub | 6379 |
@@ -187,8 +196,8 @@ Optional: `docker-compose --profile observability up -d` adds Prometheus (9090) 
 
 ## Notes
 
-- All backend services share one container but run as isolated processes with separate ports.
-- Services communicate via `localhost` within the backend container.
+- Backend services are grouped by domain container and run as isolated uvicorn processes with separate ports.
+- Services communicate over Compose DNS names such as `platform`, `market-pipeline`, `execution`, and `intelligence`.
 - `feature-store` owns all indicator computation by design.
 - `signal-service` reads calculated features and composes signal plus external context.
 - Gateway (port 8017) is the product-facing entry point for REST and WebSocket.

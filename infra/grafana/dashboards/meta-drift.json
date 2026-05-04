@@ -1,0 +1,149 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "title": "Drift Alert Level",
+      "description": "0=ok, 1=warn, 2=breach. Pages oncall at ≥2.",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [
+        {
+          "expr": "meta_drift_alert_level",
+          "legendFormat": "{{asset}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 1},
+              {"color": "red", "value": 2}
+            ]
+          },
+          "max": 2,
+          "min": 0
+        }
+      }
+    },
+    {
+      "title": "Drift Observations Rate",
+      "description": "Observations per minute fed into live-drift monitors.",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [
+        {
+          "expr": "rate(meta_drift_observations_total[5m])",
+          "legendFormat": "{{asset}}"
+        }
+      ]
+    },
+    {
+      "title": "Compliance Decisions",
+      "description": "Pre-trade compliance approve/block breakdown.",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [
+        {
+          "expr": "rate(meta_compliance_decisions_total[5m])",
+          "legendFormat": "{{asset}} {{approved}} {{reason}}"
+        }
+      ]
+    },
+    {
+      "title": "Compliance Block Reasons",
+      "description": "Breakdown of blocked orders by compliance reason.",
+      "type": "piechart",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [
+        {
+          "expr": "increase(meta_compliance_decisions_total{approved=\"false\"}[1h])",
+          "legendFormat": "{{asset}}: {{reason}}"
+        }
+      ]
+    },
+    {
+      "title": "Meta Signals Evaluated",
+      "description": "Meta-ensemble signal evaluations per minute.",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [
+        {
+          "expr": "rate(meta_signals_evaluated_total[5m])",
+          "legendFormat": "{{direction}} ({{regime}})"
+        }
+      ]
+    },
+    {
+      "title": "Orders Rejected by Compliance",
+      "description": "Order-service rejections with compliance: prefix in risk_reason.",
+      "type": "stat",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [
+        {
+          "expr": "increase(orders_total{status=\"REJECTED\"}[1h])",
+          "legendFormat": "rejected/hr"
+        }
+      ]
+    },
+    {
+      "title": "BL Posterior Weights",
+      "description": "Black-Litterman posterior allocation weights from meta-ensemble views. Updates on dashboard refresh via /signals/meta/views.",
+      "type": "barchart",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [
+        {
+          "expr": "meta_drift_alert_level * 0 + 1",
+          "legendFormat": "{{asset}} (placeholder — BL weights via API, not Prom)"
+        }
+      ]
+    },
+    {
+      "title": "PnL Attribution (Factor vs Idio)",
+      "description": "Brinson-style decomposition: factor contribution vs idiosyncratic alpha. Requires custom exporter pushing risk_model.attribute_pnl() to Prom.",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [
+        {
+          "expr": "pnl_factor_contribution",
+          "legendFormat": "factor"
+        },
+        {
+          "expr": "pnl_idiosyncratic_contribution",
+          "legendFormat": "idiosyncratic"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["quant", "meta-ensemble", "drift", "compliance"],
+  "templating": {
+    "list": [
+      {
+        "name": "DS_PROMETHEUS",
+        "type": "datasource",
+        "query": "prometheus"
+      }
+    ]
+  },
+  "time": {"from": "now-6h", "to": "now"},
+  "title": "Meta-Ensemble: Drift & Compliance",
+  "uid": "meta-drift-compliance-v1"
+}

@@ -1,0 +1,79 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: platform
+  namespace: quant
+spec:
+  selector:
+    app: platform
+  ports:
+    - name: api-gateway
+      port: 8017
+      targetPort: 8017
+    - name: auth-service
+      port: 8019
+      targetPort: 8019
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: platform
+  namespace: quant
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: platform
+  template:
+    metadata:
+      labels:
+        app: platform
+    spec:
+      containers:
+        - name: platform
+          image: quant/platform:latest
+          ports:
+            - containerPort: 8017
+            - containerPort: 8019
+          envFrom:
+            - configMapRef:
+                name: quant-config
+            - secretRef:
+                name: quant-secrets
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8017
+            initialDelaySeconds: 10
+            periodSeconds: 30
+---
+# Ingress for API Gateway
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: quant-ingress
+  namespace: quant
+  annotations:
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: api.quant.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: platform
+                port:
+                  number: 8017

@@ -1,11 +1,18 @@
 # =============================================================
-# Quant Platform — Simplified Compose (5 containers)
+# Quant Platform — Domain-Consolidated Compose
 #
-#   backend   — all Python microservices (20 uvicorn processes)
-#   frontend  — Next.js product UI
-#   db        — TimescaleDB + pgvector (single database server)
-#   redis     — cache + realtime pub/sub
-#   nats      — JetStream event bus
+#   db         — TimescaleDB + pgvector (single database server)
+#   redis      — cache + realtime pub/sub
+#   nats       — JetStream event bus
+#
+#   platform   — api-gateway + auth-service           (Phase 1)
+#   backend    — remaining Python services            (to be split in Phases 2–6)
+#   frontend   — Next.js product UI
+#
+# During the 21→6 consolidation (see docs/CONSOLIDATION_PLAN.md),
+# each phase carves services out of `backend` into their own
+# domain container. `backend` shrinks each phase and is retired
+# in Phase 7.
 #
 # Optional: prometheus + grafana via --profile observability
 # =============================================================
@@ -17,6 +24,10 @@ services:
   db:
     build:
       context: ./infra/db
+    # 18 services × ~5-conn SQLAlchemy pool + health probes + psql clients
+    # regularly push past the default max_connections=100. 300 gives us
+    # headroom before needing a connection pooler (pgbouncer).
+    command: ["postgres", "-c", "max_connections=300"]
     environment:
       POSTGRES_DB: platform
       POSTGRES_USER: postgres
@@ -53,35 +64,89 @@ services:
       retries: 10
 
   # ---- Application ----
+  # `backend` monolith retired in Phase 6. All services now live in domain containers below.
 
-  backend:
+  # ---- platform domain (Phase 1): api-gateway + auth-service ----
+  platform:
     build:
       context: .
-      dockerfile: Dockerfile.backend
+      dockerfile: docker/domains/platform.Dockerfile
     env_file:
       - .env.example
       - .env
+    environment:
+      # Intra-compose DNS names — overrides the localhost defaults from .env.example
+      # so gateway can reach peer services that still live in the `backend` container.
+      - AUTH_SERVICE_BASE_URL=http://platform:8019
+      - API_GATEWAY_BASE_URL=http://platform:8017
+      - MARKET_DATA_BASE_URL=http://market-pipeline:8001
+      - FEATURE_STORE_BASE_URL=http://market-pipeline:8002
+      - SIGNAL_SERVICE_BASE_URL=http://market-pipeline:8003
+      - EXTERNAL_DATA_SERVICE_BASE_URL=http://market-pipeline:8020
+      - MEMORY_SERVICE_BASE_URL=http://strategy-lab:8004
+      - STRATEGY_REGISTRY_BASE_URL=http://strategy-lab:8005
+      - BACKTEST_SERVICE_BASE_URL=http://strategy-lab:8007
+      - STATISTICS_SERVICE_BASE_URL=http://strategy-lab:8013
+      - EXCHANGE_ADAPTER_BASE_URL=http://execution:8008
+      - RISK_SERVICE_BASE_URL=http://execution:8009
+      - CREDENTIAL_STORE_BASE_URL=http://execution:8010
+      - ORDER_SERVICE_BASE_URL=http://execution:8011
+      - PORTFOLIO_SERVICE_BASE_URL=http://execution:8012
+      - CRYPTO_AGENT_BASE_URL=http://intelligence:8006
+      - ORCHESTRATOR_AGENT_BASE_URL=http://intelligence:8014
+      - LLM_GATEWAY_BASE_URL=http://llm-tools:8021
     ports:
-      - "127.0.0.1:8001:8001"   # market-data (internal only)
-      - "127.0.0.1:8002:8002"   # feature-store (internal only)
-      - "127.0.0.1:8003:8003"   # signal-service (internal only)
-      - "127.0.0.1:8004:8004"   # memory-service (internal only)
-      - "127.0.0.1:8005:8005"   # strategy-registry (internal only)
-      - "127.0.0.1:8006:8006"   # crypto-agent (internal only)
-      - "127.0.0.1:8007:8007"   # backtest-service (internal only)
-      - "127.0.0.1:8008:8008"   # exchange-adapter (internal only)
-      - "127.0.0.1:8009:8009"   # risk-service (internal only)
-      - "127.0.0.1:8010:8010"   # credential-store (internal only)
-      - "127.0.0.1:8011:8011"   # order-service (internal only)
-      - "127.0.0.1:8012:8012"   # portfolio-service (internal only)
-      - "127.0.0.1:8013:8013"   # statistics-service (internal only)
-      - "127.0.0.1:8014:8014"   # orchestrator-agent (internal only)
-      - "127.0.0.1:8015:8015"   # etf-agent (internal only)
-      - "127.0.0.1:8016:8016"   # stock-agent (internal only)
       - "8017:8017"              # api-gateway (public)
       - "127.0.0.1:8019:8019"   # auth-service (internal only)
-      - "127.0.0.1:8020:8020"   # external-data-service (internal only)
-      - "127.0.0.1:8021:8021"   # llm-gateway (internal only)
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8017/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  # ---- market-pipeline domain (Phase 3): market-data + feature-store + signal-service + external-data-service ----
+  market-pipeline:
+    build:
+      context: .
+      dockerfile: docker/domains/market-pipeline.Dockerfile
+    env_file:
+      - .env.example
+      - .env
+    environment:
+      # Phase 4: strategy-lab.
+      - MEMORY_SERVICE_BASE_URL=http://strategy-lab:8004
+      - STRATEGY_REGISTRY_BASE_URL=http://strategy-lab:8005
+      - BACKTEST_SERVICE_BASE_URL=http://strategy-lab:8007
+      - STATISTICS_SERVICE_BASE_URL=http://strategy-lab:8013
+      # Phase 5: execution.
+      - RISK_SERVICE_BASE_URL=http://execution:8009
+      - ORDER_SERVICE_BASE_URL=http://execution:8011
+      - PORTFOLIO_SERVICE_BASE_URL=http://execution:8012
+      - EXCHANGE_ADAPTER_BASE_URL=http://execution:8008
+      - CREDENTIAL_STORE_BASE_URL=http://execution:8010
+      # Moved peers.
+      - AUTH_SERVICE_BASE_URL=http://platform:8019
+      - LLM_GATEWAY_BASE_URL=http://llm-tools:8021
+      # Intra-domain — same container, any DNS name works.
+      - MARKET_DATA_BASE_URL=http://market-pipeline:8001
+      - FEATURE_STORE_BASE_URL=http://market-pipeline:8002
+      - SIGNAL_SERVICE_BASE_URL=http://market-pipeline:8003
+      - EXTERNAL_DATA_SERVICE_BASE_URL=http://market-pipeline:8020
+      # Phase K: meta-ensemble live path (Phases F-J stack).
+      # SIGNAL_META_ENABLED=true activates the /signals/meta endpoint.
+      - SIGNAL_META_ENABLED=${SIGNAL_META_ENABLED:-false}
+      - SIGNAL_META_ALPHAS=${SIGNAL_META_ALPHAS:-technical_ensemble,momentum_ensemble,vol_breakout,range_reversion,rv_ratio_breakout}
+    ports:
+      - "127.0.0.1:8001:8001"
+      - "127.0.0.1:8002:8002"
+      - "127.0.0.1:8003:8003"
+      - "127.0.0.1:8020:8020"
     depends_on:
       db:
         condition: service_healthy
@@ -90,11 +155,208 @@ services:
       nats:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8017/health').read()"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health').read()"]
       interval: 10s
       timeout: 5s
       retries: 30
       start_period: 30s
+
+  # ---- strategy-lab domain (Phase 4): memory + strategy-registry + backtest + statistics ----
+  strategy-lab:
+    build:
+      context: .
+      dockerfile: docker/domains/strategy-lab.Dockerfile
+    env_file:
+      - .env.example
+      - .env
+    environment:
+      # Peers still in backend (post-Phase 5).
+      - CRYPTO_AGENT_BASE_URL=http://intelligence:8006
+      - ORCHESTRATOR_AGENT_BASE_URL=http://intelligence:8014
+      # Phase 5: execution.
+      - EXCHANGE_ADAPTER_BASE_URL=http://execution:8008
+      - RISK_SERVICE_BASE_URL=http://execution:8009
+      - CREDENTIAL_STORE_BASE_URL=http://execution:8010
+      - ORDER_SERVICE_BASE_URL=http://execution:8011
+      - PORTFOLIO_SERVICE_BASE_URL=http://execution:8012
+      # Moved peers.
+      - MARKET_DATA_BASE_URL=http://market-pipeline:8001
+      - FEATURE_STORE_BASE_URL=http://market-pipeline:8002
+      - SIGNAL_SERVICE_BASE_URL=http://market-pipeline:8003
+      - EXTERNAL_DATA_SERVICE_BASE_URL=http://market-pipeline:8020
+      - AUTH_SERVICE_BASE_URL=http://platform:8019
+      - LLM_GATEWAY_BASE_URL=http://llm-tools:8021
+      # Intra-domain — same container.
+      - MEMORY_SERVICE_BASE_URL=http://strategy-lab:8004
+      - STRATEGY_REGISTRY_BASE_URL=http://strategy-lab:8005
+      - BACKTEST_SERVICE_BASE_URL=http://strategy-lab:8007
+      - STATISTICS_SERVICE_BASE_URL=http://strategy-lab:8013
+      # Memory-service uses sentence-transformers; passing HF_TOKEN lifts
+      # anonymous-download rate limits for first-run model fetches.
+      - HF_TOKEN=${HF_TOKEN:-}
+    ports:
+      - "127.0.0.1:8004:8004"
+      - "127.0.0.1:8005:8005"
+      - "127.0.0.1:8007:8007"
+      - "127.0.0.1:8013:8013"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8005/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  # ---- execution domain (Phase 5): order + exchange-adapter + risk + credential-store + portfolio ----
+  execution:
+    build:
+      context: .
+      dockerfile: docker/domains/execution.Dockerfile
+    env_file:
+      - .env.example
+      - .env
+    environment:
+      # Peers still in backend (post-Phase 5).
+      - CRYPTO_AGENT_BASE_URL=http://intelligence:8006
+      - ORCHESTRATOR_AGENT_BASE_URL=http://intelligence:8014
+      # Moved peers.
+      - MARKET_DATA_BASE_URL=http://market-pipeline:8001
+      - FEATURE_STORE_BASE_URL=http://market-pipeline:8002
+      - SIGNAL_SERVICE_BASE_URL=http://market-pipeline:8003
+      - EXTERNAL_DATA_SERVICE_BASE_URL=http://market-pipeline:8020
+      - MEMORY_SERVICE_BASE_URL=http://strategy-lab:8004
+      - STRATEGY_REGISTRY_BASE_URL=http://strategy-lab:8005
+      - BACKTEST_SERVICE_BASE_URL=http://strategy-lab:8007
+      - STATISTICS_SERVICE_BASE_URL=http://strategy-lab:8013
+      - AUTH_SERVICE_BASE_URL=http://platform:8019
+      - LLM_GATEWAY_BASE_URL=http://llm-tools:8021
+      # Intra-domain.
+      - EXCHANGE_ADAPTER_BASE_URL=http://execution:8008
+      - RISK_SERVICE_BASE_URL=http://execution:8009
+      - CREDENTIAL_STORE_BASE_URL=http://execution:8010
+      - ORDER_SERVICE_BASE_URL=http://execution:8011
+      - PORTFOLIO_SERVICE_BASE_URL=http://execution:8012
+    ports:
+      - "127.0.0.1:8008:8008"
+      - "127.0.0.1:8009:8009"
+      - "127.0.0.1:8010:8010"
+      - "127.0.0.1:8011:8011"
+      - "127.0.0.1:8012:8012"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8011/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  # ---- intelligence domain (Phase 6): crypto-agent + stock-agent + etf-agent + orchestrator ----
+  intelligence:
+    build:
+      context: .
+      dockerfile: docker/domains/intelligence.Dockerfile
+    env_file:
+      - .env.example
+      - .env
+    environment:
+      # All non-intelligence peers via DNS.
+      - MARKET_DATA_BASE_URL=http://market-pipeline:8001
+      - FEATURE_STORE_BASE_URL=http://market-pipeline:8002
+      - SIGNAL_SERVICE_BASE_URL=http://market-pipeline:8003
+      - EXTERNAL_DATA_SERVICE_BASE_URL=http://market-pipeline:8020
+      - MEMORY_SERVICE_BASE_URL=http://strategy-lab:8004
+      - STRATEGY_REGISTRY_BASE_URL=http://strategy-lab:8005
+      - BACKTEST_SERVICE_BASE_URL=http://strategy-lab:8007
+      - STATISTICS_SERVICE_BASE_URL=http://strategy-lab:8013
+      - EXCHANGE_ADAPTER_BASE_URL=http://execution:8008
+      - RISK_SERVICE_BASE_URL=http://execution:8009
+      - CREDENTIAL_STORE_BASE_URL=http://execution:8010
+      - ORDER_SERVICE_BASE_URL=http://execution:8011
+      - PORTFOLIO_SERVICE_BASE_URL=http://execution:8012
+      - AUTH_SERVICE_BASE_URL=http://platform:8019
+      - LLM_GATEWAY_BASE_URL=http://llm-tools:8021
+      # Intra-domain.
+      - CRYPTO_AGENT_BASE_URL=http://intelligence:8006
+      - ORCHESTRATOR_AGENT_BASE_URL=http://intelligence:8014
+    ports:
+      - "127.0.0.1:8006:8006"
+      - "127.0.0.1:8014:8014"
+      - "127.0.0.1:8015:8015"
+      - "127.0.0.1:8016:8016"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8006/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  # ---- llm-tools domain (Phase 2): llm-gateway ----
+  llm-tools:
+    build:
+      context: .
+      dockerfile: docker/domains/llm-tools.Dockerfile
+    env_file:
+      - .env.example
+      - .env
+    environment:
+      # llm-gateway fans out tool calls to data/strategy services.
+      - MARKET_DATA_BASE_URL=http://market-pipeline:8001
+      - FEATURE_STORE_BASE_URL=http://market-pipeline:8002
+      - SIGNAL_SERVICE_BASE_URL=http://market-pipeline:8003
+      - EXTERNAL_DATA_SERVICE_BASE_URL=http://market-pipeline:8020
+      - MEMORY_SERVICE_BASE_URL=http://strategy-lab:8004
+      - STRATEGY_REGISTRY_BASE_URL=http://strategy-lab:8005
+      - BACKTEST_SERVICE_BASE_URL=http://strategy-lab:8007
+      - STATISTICS_SERVICE_BASE_URL=http://strategy-lab:8013
+      - RISK_SERVICE_BASE_URL=http://execution:8009
+      - ORDER_SERVICE_BASE_URL=http://execution:8011
+      - PORTFOLIO_SERVICE_BASE_URL=http://execution:8012
+      - EXCHANGE_ADAPTER_BASE_URL=http://execution:8008
+      - CREDENTIAL_STORE_BASE_URL=http://execution:8010
+      - AUTH_SERVICE_BASE_URL=http://platform:8019
+      # Optional: server-side LLM keys for /reasoning/generate fallback when no
+      # user OAuth token is available (autonomous loop, anomaly narrator, etc.).
+      # Reads from .env automatically via env_file above; listed here for visibility.
+      - ANTHROPIC_API_KEY
+      - OPENAI_API_KEY
+      - LLM_GATEWAY_MODEL
+    ports:
+      - "127.0.0.1:8021:8021"
+    volumes:
+      # Read-only access to autonomous monitoring loop state — powers
+      # get_loop_state tool so the chat agent can answer questions about
+      # the soak run without going through any HTTP service.
+      - ./data/loop:/data/loop:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8021/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
 
   frontend:
     build:
@@ -104,11 +366,23 @@ services:
       - .env.example
       - .env
     environment:
-      - API_GATEWAY_BASE_URL=http://backend:8017
+      - API_GATEWAY_BASE_URL=http://platform:8017
     ports:
       - "8018:3000"
+    volumes:
+      - ./data/loop:/data/loop:ro
     depends_on:
-      backend:
+      platform:
+        condition: service_healthy
+      market-pipeline:
+        condition: service_healthy
+      strategy-lab:
+        condition: service_healthy
+      execution:
+        condition: service_healthy
+      llm-tools:
+        condition: service_healthy
+      intelligence:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3000', (res) => process.exit(res.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
@@ -127,7 +401,17 @@ services:
     ports:
       - "9090:9090"
     depends_on:
-      backend:
+      platform:
+        condition: service_healthy
+      market-pipeline:
+        condition: service_healthy
+      strategy-lab:
+        condition: service_healthy
+      execution:
+        condition: service_healthy
+      intelligence:
+        condition: service_healthy
+      llm-tools:
         condition: service_healthy
 
   grafana:

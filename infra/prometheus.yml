@@ -2,27 +2,52 @@ global:
   scrape_interval: 15s
 
 scrape_configs:
-  - job_name: 'quant-backend'
+  - job_name: 'quant-intelligence'
     static_configs:
       - targets:
-        - 'backend:8001'   # market-data
-        - 'backend:8002'   # feature-store
-        - 'backend:8003'   # signal-service
-        - 'backend:8004'   # memory-service
-        - 'backend:8005'   # strategy-registry
-        - 'backend:8006'   # crypto-agent
-        - 'backend:8007'   # backtest-service
-        - 'backend:8008'   # exchange-adapter
-        - 'backend:8009'   # risk-service
-        - 'backend:8010'   # credential-store
-        - 'backend:8011'   # order-service
-        - 'backend:8012'   # portfolio-service
-        - 'backend:8013'   # statistics-service
-        - 'backend:8014'   # orchestrator-agent
-        - 'backend:8015'   # etf-agent
-        - 'backend:8016'   # stock-agent
-        - 'backend:8017'   # api-gateway
-        - 'backend:8019'   # auth-service
-        - 'backend:8020'   # external-data-service
-        - 'backend:8021'   # llm-gateway
+        - 'intelligence:8006'  # crypto-agent
+        - 'intelligence:8014'  # orchestrator-agent
+        - 'intelligence:8015'  # etf-agent
+        - 'intelligence:8016'  # stock-agent
+    metrics_path: '/metrics'
+
+  - job_name: 'quant-execution'
+    static_configs:
+      - targets:
+        - 'execution:8008'  # exchange-adapter
+        - 'execution:8009'  # risk-service
+        - 'execution:8010'  # credential-store
+        - 'execution:8011'  # order-service
+        - 'execution:8012'  # portfolio-service
+    metrics_path: '/metrics'
+
+  - job_name: 'quant-strategy-lab'
+    static_configs:
+      - targets:
+        - 'strategy-lab:8004'  # memory-service
+        - 'strategy-lab:8005'  # strategy-registry
+        - 'strategy-lab:8007'  # backtest-service
+        - 'strategy-lab:8013'  # statistics-service
+    metrics_path: '/metrics'
+
+  - job_name: 'quant-market-pipeline'
+    static_configs:
+      - targets:
+        - 'market-pipeline:8001'  # market-data
+        - 'market-pipeline:8002'  # feature-store
+        - 'market-pipeline:8003'  # signal-service
+        - 'market-pipeline:8020'  # external-data-service
+    metrics_path: '/metrics'
+
+  - job_name: 'quant-platform'
+    static_configs:
+      - targets:
+        - 'platform:8017'  # api-gateway
+        - 'platform:8019'  # auth-service
+    metrics_path: '/metrics'
+
+  - job_name: 'quant-llm-tools'
+    static_configs:
+      - targets:
+        - 'llm-tools:8021'  # llm-gateway
     metrics_path: '/metrics'

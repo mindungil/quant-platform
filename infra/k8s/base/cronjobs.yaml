@@ -1,0 +1,82 @@
+---
+# Alpha gate canary — monthly revalidation of live ensemble
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: alpha-gate-canary
+  namespace: quant
+spec:
+  schedule: "0 4 1 * *"  # 1st of every month at 04:00 UTC
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: canary
+              image: quant/market-pipeline:latest
+              command: ["python3", "scripts/alpha_gate_canary.py"]
+              envFrom:
+                - configMapRef:
+                    name: quant-config
+                - secretRef:
+                    name: quant-secrets
+              resources:
+                requests:
+                  memory: "512Mi"
+                  cpu: "250m"
+                limits:
+                  memory: "2Gi"
+                  cpu: "1000m"
+---
+# Drift feeder — hourly bar return observation
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: drift-feeder
+  namespace: quant
+spec:
+  schedule: "5 * * * *"  # every hour at :05
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: drift-feeder
+              image: quant/market-pipeline:latest
+              command: ["python3", "scripts/drift_feeder.py", "--interval", "0"]
+              envFrom:
+                - configMapRef:
+                    name: quant-config
+                - secretRef:
+                    name: quant-secrets
+              resources:
+                requests:
+                  memory: "128Mi"
+                  cpu: "50m"
+---
+# Alternative data collector — daily derivatives + macro update
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: alt-data-collector
+  namespace: quant
+spec:
+  schedule: "0 6 * * *"  # daily at 06:00 UTC
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: collector
+              image: quant/market-pipeline:latest
+              command: ["python3", "scripts/collect_alt_data.py", "--all", "--incremental"]
+              envFrom:
+                - configMapRef:
+                    name: quant-config
+              resources:
+                requests:
+                  memory: "256Mi"
+                  cpu: "100m"

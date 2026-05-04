@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: quant-config
+  namespace: quant
+data:
+  # Infrastructure URLs (K8s internal DNS)
+  NATS_URL: "nats://nats.quant.svc.cluster.local:4222"
+  POSTGRES_URL: "postgresql://postgres:$(POSTGRES_PASSWORD)@timescaledb.quant.svc.cluster.local:5432/platform"
+  MARKET_DB_URL: "postgresql://postgres:$(POSTGRES_PASSWORD)@timescaledb.quant.svc.cluster.local:5432/market"
+  REDIS_URL: "redis://:$(REDIS_PASSWORD)@redis.quant.svc.cluster.local:6379/0"
+
+  # Service URLs
+  MARKET_DATA_BASE_URL: "http://market-pipeline.quant.svc.cluster.local:8001"
+  FEATURE_STORE_BASE_URL: "http://market-pipeline.quant.svc.cluster.local:8002"
+  SIGNAL_SERVICE_BASE_URL: "http://market-pipeline.quant.svc.cluster.local:8003"
+  MEMORY_SERVICE_BASE_URL: "http://strategy-lab.quant.svc.cluster.local:8004"
+  STRATEGY_REGISTRY_BASE_URL: "http://strategy-lab.quant.svc.cluster.local:8005"
+  BACKTEST_SERVICE_BASE_URL: "http://strategy-lab.quant.svc.cluster.local:8007"
+  EXCHANGE_ADAPTER_BASE_URL: "http://execution.quant.svc.cluster.local:8008"
+  RISK_SERVICE_BASE_URL: "http://execution.quant.svc.cluster.local:8009"
+  CREDENTIAL_STORE_BASE_URL: "http://execution.quant.svc.cluster.local:8010"
+  ORDER_SERVICE_BASE_URL: "http://execution.quant.svc.cluster.local:8011"
+  PORTFOLIO_SERVICE_BASE_URL: "http://execution.quant.svc.cluster.local:8012"
+  STATISTICS_SERVICE_BASE_URL: "http://strategy-lab.quant.svc.cluster.local:8013"
+
+  # Runtime
+  STRICT_RUNTIME: "true"
+  LIVE_TRADING_ENABLED: "false"
+  SIGNAL_META_ENABLED: "false"
+  COMPLIANCE_ENABLED: "true"
+  COMPLIANCE_FAIL_CLOSED: "true"
+
+  # Compliance limits
+  COMPLIANCE_MAX_GROSS_LEV: "3.0"
+  COMPLIANCE_MAX_NET_EXP: "1.0"
+  COMPLIANCE_MAX_SYMBOL_W: "0.30"
+  COMPLIANCE_MAX_TURNOVER: "5.0"
+
+  # JetStream
+  NATS_STREAM_MARKET: "MARKET_DATA"
+  NATS_STREAM_FEATURE: "FEATURE_DATA"
+  NATS_STREAM_SIGNAL: "SIGNAL_DATA"
+  NATS_STREAM_EXECUTION: "EXECUTION_DATA"

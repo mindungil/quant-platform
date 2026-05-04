@@ -1,0 +1,70 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: market-pipeline
+  namespace: quant
+spec:
+  selector:
+    app: market-pipeline
+  ports:
+    - name: market-data
+      port: 8001
+      targetPort: 8001
+    - name: feature-store
+      port: 8002
+      targetPort: 8002
+    - name: signal-service
+      port: 8003
+      targetPort: 8003
+    - name: external-data
+      port: 8020
+      targetPort: 8020
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: market-pipeline
+  namespace: quant
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: market-pipeline
+  template:
+    metadata:
+      labels:
+        app: market-pipeline
+    spec:
+      containers:
+        - name: market-pipeline
+          image: quant/market-pipeline:latest
+          ports:
+            - containerPort: 8001
+            - containerPort: 8002
+            - containerPort: 8003
+            - containerPort: 8020
+          envFrom:
+            - configMapRef:
+                name: quant-config
+            - secretRef:
+                name: quant-secrets
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "200m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 5
+            periodSeconds: 10

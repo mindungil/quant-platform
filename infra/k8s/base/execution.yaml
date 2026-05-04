@@ -1,0 +1,68 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: execution
+  namespace: quant
+spec:
+  selector:
+    app: execution
+  ports:
+    - name: exchange-adapter
+      port: 8008
+      targetPort: 8008
+    - name: risk-service
+      port: 8009
+      targetPort: 8009
+    - name: credential-store
+      port: 8010
+      targetPort: 8010
+    - name: order-service
+      port: 8011
+      targetPort: 8011
+    - name: portfolio-service
+      port: 8012
+      targetPort: 8012
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: execution
+  namespace: quant
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: execution
+  template:
+    metadata:
+      labels:
+        app: execution
+    spec:
+      containers:
+        - name: execution
+          image: quant/execution:latest
+          ports:
+            - containerPort: 8008
+            - containerPort: 8009
+            - containerPort: 8010
+            - containerPort: 8011
+            - containerPort: 8012
+          envFrom:
+            - configMapRef:
+                name: quant-config
+            - secretRef:
+                name: quant-secrets
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "200m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8011
+            initialDelaySeconds: 15
+            periodSeconds: 30

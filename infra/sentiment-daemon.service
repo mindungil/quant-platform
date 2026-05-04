@@ -1,0 +1,22 @@
+[Unit]
+Description=Quant Sentiment Collection Daemon
+After=network.target docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/quant
+EnvironmentFile=/home/ubuntu/quant/infra/sentiment-daemon.env
+ExecStart=/usr/bin/python3 scripts/sentiment_pipeline.py
+Restart=always
+RestartSec=30
+StandardOutput=append:/home/ubuntu/quant/data/logs/sentiment-daemon.log
+StandardError=append:/home/ubuntu/quant/data/logs/sentiment-daemon.log
+
+# Resource limits
+MemoryMax=2G
+CPUQuota=50%
+
+[Install]
+WantedBy=multi-user.target
