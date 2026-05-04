@@ -45,14 +45,13 @@ STATE_PATH = Path(os.getenv("LOOP_STATE_PATH", "/home/ubuntu/quant/data/loop/sta
 SNAPSHOTS_PATH = Path(os.getenv("LOOP_SNAPSHOTS_PATH", "/home/ubuntu/quant/data/loop/snapshots.jsonl"))
 TRACKER_LOG = Path(os.getenv("OOS_TRACKER_LOG", "/home/ubuntu/quant/data/loop/oos_tracker_30d.jsonl"))
 
-# Symbol → SR field name in snapshot dicts
+# Symbol → SR field name in snapshot dicts. Mirrors _SNAPSHOT_SR_FIELDS in
+# scripts/engine/health_check.py — extend both together.
 _SR_FIELDS = {
     "BTC": "btc_6m_sr",
     "ETH": "eth_6m_sr",
     "BNB": "bnb_6m_sr",
-    # SOL/SOLUSDT recently added — no live SR field yet in snapshot schema.
-    # Will surface once snapshot writer (engine/health_check or loop driver)
-    # is updated to populate sol_6m_sr.
+    "SOL": "sol_6m_sr",
 }
 
 
@@ -203,7 +202,9 @@ def main() -> int:
     print(f"  {'-' * 5} {'-' * 9} {'-' * 8} {'-' * 7} {'-' * 6} {'-' * 20} {'-' * 7}")
     for (sym, band, streak, alerted) in rows:
         if band["status"] in ("no_data", "insufficient_data"):
-            print(f"  {sym:<5} {band.get('live_sr','?'):>9} {band.get('expected_sr','?'):>8} "
+            live_repr = "?" if band.get("live_sr") is None else f"{band['live_sr']:+.3f}"
+            exp_repr = "?" if band.get("expected_sr") is None else f"{band['expected_sr']:+.3f}"
+            print(f"  {sym:<5} {live_repr:>9} {exp_repr:>8} "
                   f"{'-':>7} {'-':>6} {band['status']:<20} {streak:>7}")
             continue
         flag = "  ⚠ ALERT" if alerted else ""

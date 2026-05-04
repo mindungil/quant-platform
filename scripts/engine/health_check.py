@@ -22,14 +22,96 @@ sys.path.insert(0, str(REPO_ROOT))
 
 SIGNALS_DIR = REPO_ROOT / "data" / "signals"
 PAPER_STATE = REPO_ROOT / "data" / "paper" / "portfolio_state.json"
+VIRTUAL_STATE = REPO_ROOT / "data" / "virtual" / "state.json"
 HEALTH_LOG_DIR = REPO_ROOT / "data" / "metrics" / "health_log"
+LOOP_STATE = REPO_ROOT / "data" / "loop" / "state.json"
+LOOP_SNAPSHOTS = REPO_ROOT / "data" / "loop" / "snapshots.jsonl"
 UTC = timezone.utc
+
+# Symbol → snapshot SR field. Consumed by oos_tracker_30d._SR_FIELDS, daily_digest,
+# narrate_anomaly. Add a new line here when extending the universe (and update the
+# reader's _SR_FIELDS to match) so the live OOS bands cover the new symbol.
+_SNAPSHOT_SR_FIELDS = {
+    "BTCUSDT": "btc_6m_sr",
+    "ETHUSDT": "eth_6m_sr",
+    "BNBUSDT": "bnb_6m_sr",
+    "SOLUSDT": "sol_6m_sr",
+}
 
 
 def _latest_signal_file() -> Path | None:
     SIGNALS_DIR.mkdir(parents=True, exist_ok=True)
     files = sorted(SIGNALS_DIR.glob("signals_*.json"), reverse=True)
     return files[0] if files else None
+
+
+def _safe_load_json(path: Path) -> dict | None:
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text())
+    except Exception:
+        return None
+
+
+def _write_loop_snapshot(ts: datetime, signals: list[dict], warn_syms: list[str]) -> None:
+    """Append a snapshot record to data/loop/snapshots.jsonl and refresh state.json.
+
+    Resurrects the soak-loop snapshot pipeline so oos_tracker_30d, alpha_health_daily,
+    and narrate_anomaly keep getting fresh per-symbol SR + paper/virtual equity even
+    when a dedicated loop driver isn't running. SOL is included via _SNAPSHOT_SR_FIELDS.
+    """
+    sym_sr = {sig.get("symbol"): sig.get("live_6m_sharpe") for sig in signals if "symbol" in sig}
+    sym_sr_30d = {sig.get("symbol"): sig.get("rolling_30d_sharpe") for sig in signals if "symbol" in sig}
+
+    paper = _safe_load_json(PAPER_STATE) or {}
+    virtual = _safe_load_json(VIRTUAL_STATE) or {}
+    loop_state = _safe_load_json(LOOP_STATE) or {}
+
+    paper_eq = float(paper.get("capital", 0.0) or 0.0)
+    virtual_eq = float(virtual.get("equity", 0.0) or 0.0)
+    max_dd = float(paper.get("max_drawdown", 0.0) or 0.0)
+    n_trades = int(paper.get("n_trades", 0) or 0)
+
+    # daily_ret_diff_bps: paper vs virtual return delta over the previous 24h.
+    # Approximated via deltas vs the last persisted snapshot (~1h apart). Set to
+    # None when we don't yet have a baseline — readers already tolerate missing.
+    last_snap = loop_state.get("last_snapshot") or {}
+    last_paper = last_snap.get("paper")
+    last_virtual = last_snap.get("virtual")
+    if isinstance(last_paper, (int, float)) and isinstance(last_virtual, (int, float)) \
+            and last_paper > 0 and last_virtual > 0:
+        paper_ret = (paper_eq - last_paper) / last_paper
+        virtual_ret = (virtual_eq - last_virtual) / last_virtual
+        daily_ret_diff_bps = round((paper_ret - virtual_ret) * 1e4, 1)
+    else:
+        daily_ret_diff_bps = None
+
+    snapshot: dict = {
+        "iter": int(loop_state.get("iteration_count", 0) or 0) + 1,
+        "ts": ts.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "paper": round(paper_eq, 2),
+        "virtual": round(virtual_eq, 2),
+        "daily_ret_diff_bps": daily_ret_diff_bps,
+        "btc_30d_sr": sym_sr_30d.get("BTCUSDT"),
+        "max_dd": round(max_dd, 4),
+        "warn_symbols": warn_syms,
+        "n_trades": n_trades,
+        "anomalies": [],
+    }
+    for sym, field in _SNAPSHOT_SR_FIELDS.items():
+        snapshot[field] = sym_sr.get(sym)
+
+    LOOP_SNAPSHOTS.parent.mkdir(parents=True, exist_ok=True)
+    with LOOP_SNAPSHOTS.open("a") as fh:
+        fh.write(json.dumps(snapshot) + "\n")
+
+    loop_state["iteration_count"] = snapshot["iter"]
+    loop_state["last_iter_at"] = ts.isoformat()
+    loop_state["last_snapshot"] = {k: v for k, v in snapshot.items() if k not in ("iter", "ts", "anomalies")}
+    tmp = LOOP_STATE.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(loop_state, indent=2))
+    tmp.replace(LOOP_STATE)
 
 
 def main() -> int:
@@ -121,6 +203,11 @@ def main() -> int:
     out = HEALTH_LOG_DIR / f"health_{ts.strftime('%Y%m%d_%H%M')}.json"
     with open(out, "w") as f:
         json.dump(payload, f, indent=2)
+
+    try:
+        _write_loop_snapshot(ts, signals, warn_syms)
+    except Exception as exc:
+        print(f"  ? loop snapshot write failed: {exc}")
     return 0
 
 

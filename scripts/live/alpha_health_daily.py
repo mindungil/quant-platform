@@ -73,6 +73,7 @@ _SR_FIELDS = {
     "BTC": "btc_30d_sr",
     "ETH": "eth_6m_sr",
     "BNB": "bnb_6m_sr",
+    "SOL": "sol_6m_sr",
 }
 
 
