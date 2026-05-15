@@ -26,10 +26,13 @@ from shared.logging import get_logger
 from shared.regime import detect_regime, suggest_formula_type
 
 # Ensure formula modules are registered
-import shared.formulas.momentum   # noqa: F401
-import shared.formulas.reversion  # noqa: F401
-import shared.formulas.breakout   # noqa: F401
-import shared.formulas.composite  # noqa: F401
+try:
+    import shared.formulas.momentum   # noqa: F401
+    import shared.formulas.reversion  # noqa: F401
+    import shared.formulas.breakout   # noqa: F401
+    import shared.formulas.composite  # noqa: F401
+except ImportError:
+    pass  # formulas pkg is private
 
 UTC = timezone.utc
 logger = get_logger("stock-agent")

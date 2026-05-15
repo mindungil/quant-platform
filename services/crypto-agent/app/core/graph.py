@@ -38,11 +38,14 @@ from shared.realtime import RealtimeBus
 from shared.regime import detect_regime, suggest_formula_type
 
 # Ensure formula modules are registered
-import shared.formulas.momentum  # noqa: F401
-import shared.formulas.reversion  # noqa: F401
-import shared.formulas.breakout  # noqa: F401
-import shared.formulas.composite  # noqa: F401
-import shared.formulas.factor_ensemble  # noqa: F401
+try:
+    import shared.formulas.momentum  # noqa: F401
+    import shared.formulas.reversion  # noqa: F401
+    import shared.formulas.breakout  # noqa: F401
+    import shared.formulas.composite  # noqa: F401
+    import shared.formulas.factor_ensemble  # noqa: F401
+except ImportError:
+    pass  # formulas pkg is private — registry stays empty
 
 logger = get_logger("crypto-agent")
 

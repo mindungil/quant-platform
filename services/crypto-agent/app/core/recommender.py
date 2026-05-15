@@ -16,10 +16,13 @@ try:
     from shared.formulas import formula_registry
 except ImportError:
     formula_registry = None  # type: ignore
-import shared.formulas.momentum
-import shared.formulas.reversion
-import shared.formulas.breakout
-import shared.formulas.composite
+try:
+    import shared.formulas.momentum
+    import shared.formulas.reversion
+    import shared.formulas.breakout
+    import shared.formulas.composite
+except ImportError:
+    pass  # formulas pkg is private — registry stays empty
 
 logger = logging.getLogger("crypto-agent")
 
