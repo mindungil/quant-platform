@@ -2,9 +2,41 @@
 # and KEPT in quant-alpha. One path per line; comments start with #.
 # Paths are directories (trailing /) or single files.
 
-# Alpha implementations
-shared/alpha/
-# (base.py + registry.py + reference.py are public — re-added explicitly after filter)
+# Alpha implementations (base.py + registry.py + __init__.py stay public)
+shared/alpha/carry.py
+shared/alpha/cross_asset.py
+shared/alpha/cross_sectional.py
+shared/alpha/cross_sectional_ml.py
+shared/alpha/derivatives_alpha.py
+shared/alpha/external_context.py
+shared/alpha/fear_greed.py
+shared/alpha/flow_sentiment.py
+shared/alpha/funding_carry.py
+shared/alpha/funding_momentum.py
+shared/alpha/kalman_trend.py
+shared/alpha/lead_lag.py
+shared/alpha/lsr_contrarian.py
+shared/alpha/macro_context.py
+shared/alpha/mean_reversion.py
+shared/alpha/ml_discovery.py
+shared/alpha/ml_forest.py
+shared/alpha/ml_meta.py
+shared/alpha/ml_meta_alpha.py
+shared/alpha/ml_meta_features.py
+shared/alpha/ml_refit.py
+shared/alpha/momentum_ensemble.py
+shared/alpha/news_impact.py
+shared/alpha/oi_divergence.py
+shared/alpha/online_rls.py
+shared/alpha/order_flow.py
+shared/alpha/range_reversion.py
+shared/alpha/rv_ratio_breakout.py
+shared/alpha/stat_arb.py
+shared/alpha/technical_ensemble.py
+shared/alpha/trend_breakout.py
+shared/alpha/vol_breakout.py
+shared/alpha/vol_timing.py
+shared/alpha/vwap_reversion.py
 
 # Factor IP (technical/momentum/volatility/mean_reversion stay public)
 shared/factors/ic_weight_engine.py
