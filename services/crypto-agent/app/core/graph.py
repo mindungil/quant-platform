@@ -27,7 +27,10 @@ from app.models.agent import (
     SignalSnapshot,
     StrategySnapshot,
 )
-from shared.formulas import formula_registry
+try:
+    from shared.formulas import formula_registry
+except ImportError:
+    formula_registry = None  # type: ignore
 from app.db.repository import decision_repository
 from shared.logging import get_logger
 from shared.persistence import RedisStore

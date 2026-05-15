@@ -21,7 +21,10 @@ from shared.realtime import RealtimeBus
 from shared.regime import detect_regime, suggest_formula_type
 from app.core.mab_state import formula_mab
 from app.core.formula_selector import rank_formulas_ml
-from shared.formulas import formula_registry
+try:
+    from shared.formulas import formula_registry
+except ImportError:
+    formula_registry = None  # type: ignore
 import shared.formulas.momentum
 import shared.formulas.reversion
 import shared.formulas.breakout

@@ -24,14 +24,30 @@ import numpy as np
 import pandas as pd
 
 from shared.alpha.base import AlphaConfig
-from shared.alpha.ml_refit import MLRefitScheduler
 from shared.alpha.registry import ALPHA_REGISTRY, get_alpha
-from shared.portfolio.kelly_store import KellyStore
-from shared.portfolio.meta_ensemble import (
-    MetaEnsembleConfig,
-    combine,
-    compute_regime_kelly,
-)
+
+# IP modules — present only when private quant-alpha is mounted. Public-only
+# builds get None placeholders; meta-engine then degrades to the legacy
+# scoring path (engine is feature-gated by SIGNAL_META_ENABLED anyway).
+try:
+    from shared.alpha.ml_refit import MLRefitScheduler
+except ImportError:
+    MLRefitScheduler = None  # type: ignore
+
+try:
+    from shared.portfolio.kelly_store import KellyStore
+except ImportError:
+    KellyStore = None  # type: ignore
+
+try:
+    from shared.portfolio.meta_ensemble import (
+        MetaEnsembleConfig,
+        combine,
+        compute_regime_kelly,
+    )
+except ImportError:
+    MetaEnsembleConfig = None  # type: ignore
+    combine = compute_regime_kelly = None  # type: ignore
 
 
 # Default alpha pool = production-ready subset from the registry audit
