@@ -1,0 +1,95 @@
+# Private (IP-bearing) paths. These are REMOVED from quant-platform
+# and KEPT in quant-alpha. One path per line; comments start with #.
+# Paths are directories (trailing /) or single files.
+
+# Alpha implementations
+shared/alpha/
+# (base.py + registry.py + reference.py are public — re-added explicitly after filter)
+
+# Factor IP (technical/momentum/volatility/mean_reversion stay public)
+shared/factors/ic_weight_engine.py
+shared/factors/kimchi_premium.py
+shared/factors/derivatives.py
+shared/factors/dynamic_weights.py
+shared/factors/sentiment.py
+shared/factors/research_alpha.py
+shared/factors/worldquant_alphas.py
+shared/factors/optimizer.py
+
+# Portfolio IP (HRP/NCO/Black-Litterman themselves are academic — stay public)
+shared/portfolio/meta_ensemble.py
+shared/portfolio/meta_learner.py
+shared/portfolio/sentiment_risk_filter.py
+shared/portfolio/signal_smoother.py
+shared/portfolio/regime_ensemble.py
+shared/portfolio/alpha_tracker.py
+shared/portfolio/attribution.py
+shared/portfolio/attribution_regime.py
+shared/portfolio/kelly_store.py
+
+# Regime — composite is the proprietary 4-state
+shared/regime/composite.py
+shared/regime/enhanced.py
+
+# ML — AFML-inspired but with proprietary tuning
+shared/ml/cpcv.py
+shared/ml/uniqueness.py
+shared/ml/rl_agent.py
+shared/ml/vol_forecaster.py
+shared/ml/online.py
+shared/ml/gbm.py
+shared/ml/trees.py
+
+# Risk policy
+shared/risk/kill_switch.py
+shared/risk/funding_spike.py
+shared/risk/capital_guards.py
+shared/risk/position_sizing.py
+shared/risk/forecast_combination.py
+shared/risk/concentration.py
+
+# Labels
+shared/labels/triple_barrier.py
+
+# Formulas (proprietary library)
+shared/formulas/
+
+# Strategy templates (regional + proprietary catalogue)
+shared/strategy_templates/
+
+# Production config + experiment outputs
+config/v4_production.json
+config/archive/
+data/results/
+data/funding/
+data/ohlcv/
+data/derivatives/
+data/sentiment/
+data/loop/
+
+# IP scripts — walk-forward, gates, research, tuning
+scripts/walk_forward_alpha.py
+scripts/walk_forward_backtest.py
+scripts/walk_forward_maker.py
+scripts/walk_forward_meta.py
+scripts/walk_forward_multi_asset.py
+scripts/incubate_alpha.py
+scripts/alpha_gate.py
+scripts/alpha_gate_canary.py
+scripts/alpha_audit.py
+scripts/tune_production_alphas.py
+scripts/factor_diagnostics.py
+scripts/factor_ic_analysis.py
+scripts/retrain_impact.py
+scripts/train_impact_model.py
+scripts/asset_param_search.py
+scripts/benchmark_upgrades.py
+scripts/market_anomaly_monitor.py
+scripts/research/
+scripts/bootstrap/
+scripts/bootstrap_ic_engine.py
+scripts/incubator_cron.sh
+
+# Tier-3 service policy *implementations* (the policy/ skeleton itself stays public)
+# These are placeholders — the actual private impls will live in quant-alpha
+# under quant_alpha/policies/<svc>/...  No paths to remove here in the FIRST split.
