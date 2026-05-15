@@ -31,74 +31,60 @@ from shared.alpha.base import Alpha, AlphaConfig
 # Each entry: name -> factory(config) -> Alpha
 ALPHA_REGISTRY: dict[str, Callable[..., Alpha]] = {}
 
-# Built-in alpha catalogue. Wrapped in try/except so a Tier-1-only build
-# (quant-platform without the private quant-alpha repo mounted) can still
-# import this module — the catalogue just stays empty and plugins are
-# expected to populate it via QUANT_ALPHA_PLUGINS.
-try:
-    from shared.alpha.carry import CarryAlpha
-    from shared.alpha.funding_carry import FundingCarryAlpha
-    from shared.alpha.funding_momentum import FundingMomentumAlpha
-    from shared.alpha.cross_sectional import CrossSectionalMomentumAlpha
-    from shared.alpha.kalman_trend import KalmanTrendAlpha
-    from shared.alpha.mean_reversion import MeanReversionAlpha
-    from shared.alpha.ml_forest import MetaForestAlpha
-    from shared.alpha.ml_meta import MetaMLAlpha
-    from shared.alpha.online_rls import OnlineRLSAlpha
-    from shared.alpha.momentum_ensemble import MomentumEnsembleAlpha
-    from shared.alpha.stat_arb import StatArbAlpha
-    from shared.alpha.trend_breakout import TrendBreakoutAlpha
-    from shared.alpha.cross_sectional_ml import CrossSectionalMLAlpha
-    from shared.alpha.derivatives_alpha import DerivativesAlpha
-    from shared.alpha.ml_discovery import MLDiscoveryAlpha
-    from shared.alpha.ml_meta_alpha import MLMetaAlpha
-    from shared.alpha.fear_greed import FearGreedAlpha
-    from shared.alpha.cross_asset import CrossAssetAlpha
-    from shared.alpha.range_reversion import RangeReversionAlpha
-    from shared.alpha.vol_breakout import VolBreakoutAlpha
-    from shared.alpha.rv_ratio_breakout import RvRatioBreakoutAlpha
-    from shared.alpha.oi_divergence import OiDivergenceAlpha
-    from shared.alpha.lsr_contrarian import LsrContrarianAlpha
-    from shared.alpha.technical_ensemble import TechnicalEnsembleAlpha
-    from shared.alpha.external_context import ExternalContextAlpha
-    from shared.alpha.macro_context import MacroContextAlpha
-    from shared.alpha.flow_sentiment import FlowSentimentAlpha
-    from shared.alpha.news_impact import NewsImpactAlpha
+# Built-in alpha catalogue. Each entry is registered independently so a
+# single missing/broken alpha module doesn't take the whole catalogue
+# down — a Tier-1-only build (no private repo mounted) ends up with an
+# empty registry, and plugins via QUANT_ALPHA_PLUGINS fill it.
+_BUILTIN_ALPHA_SPECS: list[tuple[str, str, str, bool]] = [
+    # (registry_name, module_path, class_name, takes_symbol_kwarg)
+    ("trend_breakout",            "shared.alpha.trend_breakout",       "TrendBreakoutAlpha",            False),
+    ("mean_reversion",            "shared.alpha.mean_reversion",       "MeanReversionAlpha",            False),
+    ("momentum_ensemble",         "shared.alpha.momentum_ensemble",    "MomentumEnsembleAlpha",         False),
+    ("vol_breakout",              "shared.alpha.vol_breakout",         "VolBreakoutAlpha",              False),
+    ("carry",                     "shared.alpha.carry",                "CarryAlpha",                    False),
+    ("funding_carry",             "shared.alpha.funding_carry",        "FundingCarryAlpha",             True),
+    ("funding_momentum",          "shared.alpha.funding_momentum",     "FundingMomentumAlpha",          True),
+    ("stat_arb",                  "shared.alpha.stat_arb",             "StatArbAlpha",                  False),
+    ("cross_sectional_momentum",  "shared.alpha.cross_sectional",      "CrossSectionalMomentumAlpha",   False),
+    ("ml_meta",                   "shared.alpha.ml_meta",              "MetaMLAlpha",                   False),
+    ("kalman_trend",              "shared.alpha.kalman_trend",         "KalmanTrendAlpha",              False),
+    ("ml_forest",                 "shared.alpha.ml_forest",            "MetaForestAlpha",               False),
+    ("online_rls",                "shared.alpha.online_rls",           "OnlineRLSAlpha",                False),
+    ("ml_discovery",              "shared.alpha.ml_discovery",         "MLDiscoveryAlpha",              False),
+    ("ml_meta_alpha",             "shared.alpha.ml_meta_alpha",        "MLMetaAlpha",                   False),
+    ("derivatives_alpha",         "shared.alpha.derivatives_alpha",    "DerivativesAlpha",              False),
+    ("cross_sectional_ml",        "shared.alpha.cross_sectional_ml",   "CrossSectionalMLAlpha",         False),
+    ("fear_greed",                "shared.alpha.fear_greed",           "FearGreedAlpha",                False),
+    ("cross_asset",               "shared.alpha.cross_asset",          "CrossAssetAlpha",               False),
+    ("range_reversion",           "shared.alpha.range_reversion",      "RangeReversionAlpha",           False),
+    ("rv_ratio_breakout",         "shared.alpha.rv_ratio_breakout",    "RvRatioBreakoutAlpha",          False),
+    ("oi_divergence",             "shared.alpha.oi_divergence",        "OiDivergenceAlpha",             False),
+    ("lsr_contrarian",            "shared.alpha.lsr_contrarian",       "LsrContrarianAlpha",            False),
+    ("technical_ensemble",        "shared.alpha.technical_ensemble",   "TechnicalEnsembleAlpha",        False),
+    ("external_context",          "shared.alpha.external_context",     "ExternalContextAlpha",          False),
+    ("macro_context",             "shared.alpha.macro_context",        "MacroContextAlpha",             False),
+    ("flow_sentiment",            "shared.alpha.flow_sentiment",       "FlowSentimentAlpha",            False),
+    ("news_impact",               "shared.alpha.news_impact",          "NewsImpactAlpha",               False),
+]
 
-    ALPHA_REGISTRY.update({
-        "trend_breakout": lambda cfg=None: TrendBreakoutAlpha(cfg),
-    "mean_reversion": lambda cfg=None: MeanReversionAlpha(cfg),
-    "momentum_ensemble": lambda cfg=None: MomentumEnsembleAlpha(cfg),
-    "vol_breakout": lambda cfg=None: VolBreakoutAlpha(cfg),
-    "carry": lambda cfg=None: CarryAlpha(cfg),
-    "funding_carry": lambda cfg=None, symbol="BTCUSDT": FundingCarryAlpha(cfg, symbol=symbol),
-    "funding_momentum": lambda cfg=None, symbol="BTCUSDT": FundingMomentumAlpha(cfg, symbol=symbol),
-    "stat_arb": lambda cfg=None: StatArbAlpha(cfg),
-    "cross_sectional_momentum": lambda cfg=None: CrossSectionalMomentumAlpha(cfg),
-    "ml_meta": lambda cfg=None: MetaMLAlpha(cfg),
-    "kalman_trend": lambda cfg=None: KalmanTrendAlpha(cfg),
-    "ml_forest": lambda cfg=None: MetaForestAlpha(cfg),
-    "online_rls": lambda cfg=None: OnlineRLSAlpha(cfg),
-    "ml_discovery": lambda cfg=None: MLDiscoveryAlpha(cfg),
-    "ml_meta_alpha": lambda cfg=None: MLMetaAlpha(cfg),
-    "derivatives_alpha": lambda cfg=None: DerivativesAlpha(cfg),
-    "cross_sectional_ml": lambda cfg=None: CrossSectionalMLAlpha(cfg),
-    "fear_greed": lambda cfg=None: FearGreedAlpha(cfg),
-    "cross_asset": lambda cfg=None: CrossAssetAlpha(cfg),
-    "range_reversion": lambda cfg=None: RangeReversionAlpha(cfg),
-    "rv_ratio_breakout": lambda cfg=None: RvRatioBreakoutAlpha(cfg),
-    "oi_divergence": lambda cfg=None: OiDivergenceAlpha(cfg),
-    "lsr_contrarian": lambda cfg=None: LsrContrarianAlpha(cfg),
-    "technical_ensemble": lambda cfg=None: TechnicalEnsembleAlpha(cfg),
-    "external_context": lambda cfg=None: ExternalContextAlpha(cfg),
-    "macro_context": lambda cfg=None: MacroContextAlpha(cfg),
-    "flow_sentiment": lambda cfg=None: FlowSentimentAlpha(cfg),
-        "news_impact": lambda cfg=None: NewsImpactAlpha(cfg),
-    })
-except ImportError:
-    # Public-only build — catalogue stays empty, plugins will register via
-    # QUANT_ALPHA_PLUGINS (see load_plugins() below).
-    pass
+
+def _register_builtins() -> None:
+    import importlib
+    for name, mod_path, cls_name, takes_symbol in _BUILTIN_ALPHA_SPECS:
+        try:
+            mod = importlib.import_module(mod_path)
+            cls = getattr(mod, cls_name)
+        except (ImportError, AttributeError):
+            continue
+        if takes_symbol:
+            ALPHA_REGISTRY[name] = (
+                lambda cfg=None, symbol="BTCUSDT", _c=cls: _c(cfg, symbol=symbol)
+            )
+        else:
+            ALPHA_REGISTRY[name] = (lambda cfg=None, _c=cls: _c(cfg))
+
+
+_register_builtins()
 
 
 def list_alphas() -> list[str]:
