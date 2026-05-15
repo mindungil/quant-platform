@@ -16,22 +16,33 @@ The legacy feature-dict-based `detect_regime`/`suggest_formula_type` API
 is re-exported for backward compatibility with existing agent code.
 """
 
-from shared.regime.composite import (
-    AdxHurstRegime,
-    CompositeOutput,
-    CompositeRegime,
-    TREND_STATES,
-    VOL_STATES,
-    VolQuantileRegime,
-)
 from shared.regime.detector import HMMRegime, RegimeOutput, VolTrendRegime
-from shared.regime.enhanced import EnhancedRegime
 from shared.regime.legacy import (
     MarketRegime,
     RegimeDetector,
     detect_regime,
     suggest_formula_type,
 )
+
+# Composite + enhanced detectors are proprietary — present only in private builds.
+try:
+    from shared.regime.composite import (
+        AdxHurstRegime,
+        CompositeOutput,
+        CompositeRegime,
+        TREND_STATES,
+        VOL_STATES,
+        VolQuantileRegime,
+    )
+except ImportError:
+    AdxHurstRegime = CompositeOutput = CompositeRegime = None  # type: ignore
+    TREND_STATES = VOL_STATES = ()
+    VolQuantileRegime = None  # type: ignore
+
+try:
+    from shared.regime.enhanced import EnhancedRegime
+except ImportError:
+    EnhancedRegime = None  # type: ignore
 
 
 # Canonical hard-coded affinity priors for VolTrendRegime's 4 states. Used by

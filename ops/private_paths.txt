@@ -72,6 +72,11 @@ shared/ml/online.py
 shared/ml/gbm.py
 shared/ml/trees.py
 
+# Engine internals — ML alpha discovery + refit + adaptive TF
+shared/engine/alpha_miner.py
+shared/engine/refit.py
+shared/engine/adaptive_tf.py
+
 # Risk policy
 shared/risk/kill_switch.py
 shared/risk/funding_spike.py
