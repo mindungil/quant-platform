@@ -194,6 +194,56 @@ The default stack runs in **10 containers**:
 
 Optional: `docker-compose --profile observability up -d` adds Prometheus (9090) and Grafana (3001).
 
+## Open-Core Plugin Pattern (Bring Your Own Alpha)
+
+The public release ships the platform, services, and reference alphas in
+`examples/`. The full proprietary alpha catalogue lives in a separate
+repository and is loaded at runtime via plugin entry points.
+
+Five registries support env-driven plugin discovery:
+
+| Registry | Env var | Hook |
+|----------|---------|------|
+| `shared.alpha.registry` | `QUANT_ALPHA_PLUGINS` | `register_alpha(name, factory)` |
+| `shared.factors.registry` | `QUANT_FACTOR_PLUGINS` | `register_factors(list)` |
+| `shared.formulas.registry` | `QUANT_FORMULA_PLUGINS` | `formula_registry.register(formula)` |
+| `shared.strategies.registry` | `QUANT_STRATEGY_PLUGINS` | `register_preset(name, dict)` |
+| `shared.strategy_templates` | `QUANT_TEMPLATE_PLUGINS` | `register_template(dict)` |
+
+Eight services expose a policy plugin surface (Protocol + no-op default + register/get):
+
+| Service | Env var |
+|---------|---------|
+| signal-service | `QUANT_SIGNAL_POLICY` |
+| crypto-agent | `QUANT_CRYPTO_POLICY` |
+| risk-service | `QUANT_RISK_POLICY` |
+| portfolio-service | `QUANT_PORTFOLIO_POLICY` |
+| orchestrator-agent | `QUANT_ORCHESTRATOR_POLICY` |
+| etf-agent | `QUANT_ETF_POLICY` |
+| stock-agent | `QUANT_STOCK_POLICY` |
+| feature-store | `QUANT_FEATURE_POLICY` |
+
+### Adding your own alpha (60 seconds)
+
+1. Subclass `shared.alpha.base.Alpha` and implement `_generate(df)` returning a
+   `pd.Series` in `[-1, 1]`.
+2. In your plugin module:
+   ```python
+   from shared.alpha.registry import register_alpha
+   from .my_alpha import MyAlpha
+   register_alpha("my_alpha", lambda cfg=None: MyAlpha(cfg))
+   ```
+3. Point the env at it: `QUANT_ALPHA_PLUGINS=my_pkg.alphas`. The service will
+   auto-discover at boot.
+
+See `examples/sma_crossover_alpha.py` and `examples/rsi_mean_reversion_alpha.py`
+for a copy-pasteable minimal alpha. To run with the examples plugged in:
+
+```bash
+QUANT_ALPHA_PLUGINS=examples.sma_crossover_alpha,examples.rsi_mean_reversion_alpha \
+  python -c "from shared.alpha.registry import list_alphas; print(list_alphas())"
+```
+
 ## Notes
 
 - Backend services are grouped by domain container and run as isolated uvicorn processes with separate ports.
