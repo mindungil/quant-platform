@@ -6,6 +6,9 @@ engine.py and outcome_consumer.py.
 from __future__ import annotations
 
 from app.core.bandit import FormulaMAB
-from shared.formulas import formula_registry
+try:
+    from shared.formulas import formula_registry
+except ImportError:
+    formula_registry = None  # type: ignore
 
 formula_mab = FormulaMAB(formula_registry.list_names())

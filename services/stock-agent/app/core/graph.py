@@ -17,7 +17,10 @@ from prometheus_client import Counter
 
 from app.core.graph_state import AgentState
 from app.models.agent import DecisionRecord, SignalSnapshot, StrategySnapshot
-from shared.formulas import formula_registry
+try:
+    from shared.formulas import formula_registry
+except ImportError:
+    formula_registry = None  # type: ignore
 from shared.internal_admin import build_internal_admin_headers
 from shared.logging import get_logger
 from shared.regime import detect_regime, suggest_formula_type

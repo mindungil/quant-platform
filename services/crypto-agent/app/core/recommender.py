@@ -12,7 +12,10 @@ import httpx
 
 from app.core.config import settings
 from shared.regime import detect_regime, suggest_formula_type, MarketRegime
-from shared.formulas import formula_registry
+try:
+    from shared.formulas import formula_registry
+except ImportError:
+    formula_registry = None  # type: ignore
 import shared.formulas.momentum
 import shared.formulas.reversion
 import shared.formulas.breakout

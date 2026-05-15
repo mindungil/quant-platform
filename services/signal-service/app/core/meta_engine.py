@@ -91,13 +91,14 @@ class MetaSignalEngine:
         # 500 bars — too thin for stable per-regime edge estimation.
         # Blend with the 8-yr persisted snapshot written by
         # scripts/bootstrap_kelly.py + outcome_consumer.
-        self._kelly_store = kelly_store or KellyStore()
+        # KellyStore + MLRefitScheduler are private; public-only builds skip.
+        self._kelly_store = kelly_store or (KellyStore() if KellyStore else None)
         self._ttl = ttl_seconds
         self._cache: dict[tuple[str, str], _CacheEntry] = {}
         # ML alpha auto-refit scheduler. Promoted alphas are auto-included
         # in _alpha_panel. Refit itself is driven externally (async) via
         # maybe_refit_ml_alphas() — evaluate() only *reads* promoted_alphas.
-        self._ml_scheduler = ml_scheduler or MLRefitScheduler()
+        self._ml_scheduler = ml_scheduler or (MLRefitScheduler() if MLRefitScheduler else None)
 
     # ------------------------------------------------------------------
 
