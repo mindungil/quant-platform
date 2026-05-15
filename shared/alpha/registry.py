@@ -27,39 +27,46 @@ from __future__ import annotations
 from typing import Callable
 
 from shared.alpha.base import Alpha, AlphaConfig
-from shared.alpha.carry import CarryAlpha
-from shared.alpha.funding_carry import FundingCarryAlpha
-from shared.alpha.funding_momentum import FundingMomentumAlpha
-from shared.alpha.cross_sectional import CrossSectionalMomentumAlpha
-from shared.alpha.kalman_trend import KalmanTrendAlpha
-from shared.alpha.mean_reversion import MeanReversionAlpha
-from shared.alpha.ml_forest import MetaForestAlpha
-from shared.alpha.ml_meta import MetaMLAlpha
-from shared.alpha.online_rls import OnlineRLSAlpha
-from shared.alpha.momentum_ensemble import MomentumEnsembleAlpha
-from shared.alpha.stat_arb import StatArbAlpha
-from shared.alpha.trend_breakout import TrendBreakoutAlpha
-from shared.alpha.cross_sectional_ml import CrossSectionalMLAlpha
-from shared.alpha.derivatives_alpha import DerivativesAlpha
-from shared.alpha.ml_discovery import MLDiscoveryAlpha
-from shared.alpha.ml_meta_alpha import MLMetaAlpha
-from shared.alpha.fear_greed import FearGreedAlpha
-from shared.alpha.cross_asset import CrossAssetAlpha
-from shared.alpha.range_reversion import RangeReversionAlpha
-from shared.alpha.vol_breakout import VolBreakoutAlpha
-from shared.alpha.rv_ratio_breakout import RvRatioBreakoutAlpha
-from shared.alpha.oi_divergence import OiDivergenceAlpha
-from shared.alpha.lsr_contrarian import LsrContrarianAlpha
-from shared.alpha.technical_ensemble import TechnicalEnsembleAlpha
-from shared.alpha.external_context import ExternalContextAlpha
-from shared.alpha.macro_context import MacroContextAlpha
-from shared.alpha.flow_sentiment import FlowSentimentAlpha
-from shared.alpha.news_impact import NewsImpactAlpha
-
 
 # Each entry: name -> factory(config) -> Alpha
-ALPHA_REGISTRY: dict[str, Callable[..., Alpha]] = {
-    "trend_breakout": lambda cfg=None: TrendBreakoutAlpha(cfg),
+ALPHA_REGISTRY: dict[str, Callable[..., Alpha]] = {}
+
+# Built-in alpha catalogue. Wrapped in try/except so a Tier-1-only build
+# (quant-platform without the private quant-alpha repo mounted) can still
+# import this module — the catalogue just stays empty and plugins are
+# expected to populate it via QUANT_ALPHA_PLUGINS.
+try:
+    from shared.alpha.carry import CarryAlpha
+    from shared.alpha.funding_carry import FundingCarryAlpha
+    from shared.alpha.funding_momentum import FundingMomentumAlpha
+    from shared.alpha.cross_sectional import CrossSectionalMomentumAlpha
+    from shared.alpha.kalman_trend import KalmanTrendAlpha
+    from shared.alpha.mean_reversion import MeanReversionAlpha
+    from shared.alpha.ml_forest import MetaForestAlpha
+    from shared.alpha.ml_meta import MetaMLAlpha
+    from shared.alpha.online_rls import OnlineRLSAlpha
+    from shared.alpha.momentum_ensemble import MomentumEnsembleAlpha
+    from shared.alpha.stat_arb import StatArbAlpha
+    from shared.alpha.trend_breakout import TrendBreakoutAlpha
+    from shared.alpha.cross_sectional_ml import CrossSectionalMLAlpha
+    from shared.alpha.derivatives_alpha import DerivativesAlpha
+    from shared.alpha.ml_discovery import MLDiscoveryAlpha
+    from shared.alpha.ml_meta_alpha import MLMetaAlpha
+    from shared.alpha.fear_greed import FearGreedAlpha
+    from shared.alpha.cross_asset import CrossAssetAlpha
+    from shared.alpha.range_reversion import RangeReversionAlpha
+    from shared.alpha.vol_breakout import VolBreakoutAlpha
+    from shared.alpha.rv_ratio_breakout import RvRatioBreakoutAlpha
+    from shared.alpha.oi_divergence import OiDivergenceAlpha
+    from shared.alpha.lsr_contrarian import LsrContrarianAlpha
+    from shared.alpha.technical_ensemble import TechnicalEnsembleAlpha
+    from shared.alpha.external_context import ExternalContextAlpha
+    from shared.alpha.macro_context import MacroContextAlpha
+    from shared.alpha.flow_sentiment import FlowSentimentAlpha
+    from shared.alpha.news_impact import NewsImpactAlpha
+
+    ALPHA_REGISTRY.update({
+        "trend_breakout": lambda cfg=None: TrendBreakoutAlpha(cfg),
     "mean_reversion": lambda cfg=None: MeanReversionAlpha(cfg),
     "momentum_ensemble": lambda cfg=None: MomentumEnsembleAlpha(cfg),
     "vol_breakout": lambda cfg=None: VolBreakoutAlpha(cfg),
@@ -86,8 +93,12 @@ ALPHA_REGISTRY: dict[str, Callable[..., Alpha]] = {
     "external_context": lambda cfg=None: ExternalContextAlpha(cfg),
     "macro_context": lambda cfg=None: MacroContextAlpha(cfg),
     "flow_sentiment": lambda cfg=None: FlowSentimentAlpha(cfg),
-    "news_impact": lambda cfg=None: NewsImpactAlpha(cfg),
-}
+        "news_impact": lambda cfg=None: NewsImpactAlpha(cfg),
+    })
+except ImportError:
+    # Public-only build — catalogue stays empty, plugins will register via
+    # QUANT_ALPHA_PLUGINS (see load_plugins() below).
+    pass
 
 
 def list_alphas() -> list[str]:

@@ -2,27 +2,39 @@
 from __future__ import annotations
 
 from shared.factors.base import Factor
-from shared.factors.technical import TECHNICAL_FACTORS
-from shared.factors.momentum import MOMENTUM_FACTORS
-from shared.factors.mean_reversion import MEAN_REVERSION_FACTORS
-from shared.factors.volatility import VOLATILITY_FACTORS
-from shared.factors.derivatives import DERIVATIVES_FACTORS
-from shared.factors.sentiment import SENTIMENT_FACTORS
-from shared.factors.kimchi_premium import KIMCHI_PREMIUM_FACTORS
-from shared.factors.research_alpha import RESEARCH_ALPHA_FACTORS
-from shared.factors.worldquant_alphas import WORLDQUANT_ALPHA_FACTORS
 
-ALL_FACTORS: list[Factor] = (
-    TECHNICAL_FACTORS
-    + MOMENTUM_FACTORS
-    + MEAN_REVERSION_FACTORS
-    + VOLATILITY_FACTORS
-    + DERIVATIVES_FACTORS
-    + SENTIMENT_FACTORS
-    + KIMCHI_PREMIUM_FACTORS
-    + RESEARCH_ALPHA_FACTORS
-    + WORLDQUANT_ALPHA_FACTORS
-)
+ALL_FACTORS: list[Factor] = []
+
+# Built-in factor packs. Public (open) packs first — these stay in
+# quant-platform. Private packs (IC engine, kimchi premium, derivatives,
+# sentiment, research alphas, worldquant alphas) are loaded best-effort
+# and replaced/augmented by plugin modules in private builds.
+try:
+    from shared.factors.technical import TECHNICAL_FACTORS
+    from shared.factors.momentum import MOMENTUM_FACTORS
+    from shared.factors.mean_reversion import MEAN_REVERSION_FACTORS
+    from shared.factors.volatility import VOLATILITY_FACTORS
+    ALL_FACTORS.extend(TECHNICAL_FACTORS)
+    ALL_FACTORS.extend(MOMENTUM_FACTORS)
+    ALL_FACTORS.extend(MEAN_REVERSION_FACTORS)
+    ALL_FACTORS.extend(VOLATILITY_FACTORS)
+except ImportError:
+    pass
+
+try:
+    from shared.factors.derivatives import DERIVATIVES_FACTORS
+    from shared.factors.sentiment import SENTIMENT_FACTORS
+    from shared.factors.kimchi_premium import KIMCHI_PREMIUM_FACTORS
+    from shared.factors.research_alpha import RESEARCH_ALPHA_FACTORS
+    from shared.factors.worldquant_alphas import WORLDQUANT_ALPHA_FACTORS
+    ALL_FACTORS.extend(DERIVATIVES_FACTORS)
+    ALL_FACTORS.extend(SENTIMENT_FACTORS)
+    ALL_FACTORS.extend(KIMCHI_PREMIUM_FACTORS)
+    ALL_FACTORS.extend(RESEARCH_ALPHA_FACTORS)
+    ALL_FACTORS.extend(WORLDQUANT_ALPHA_FACTORS)
+except ImportError:
+    # Public-only build — IP factor packs absent. Plugins fill the gap.
+    pass
 
 
 def get_all() -> list[Factor]:
