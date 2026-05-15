@@ -13,20 +13,6 @@ strategy-registry actually persists and what the portfolio ensemble combines.
 
 from shared.alpha.base import Alpha, AlphaConfig, AlphaSignal
 from shared.alpha.registry import ALPHA_REGISTRY, get_alpha, list_alphas
-from shared.alpha.trend_breakout import TrendBreakoutAlpha
-from shared.alpha.mean_reversion import MeanReversionAlpha
-from shared.alpha.momentum_ensemble import MomentumEnsembleAlpha
-from shared.alpha.vol_breakout import VolBreakoutAlpha
-from shared.alpha.carry import CarryAlpha
-from shared.alpha.stat_arb import StatArbAlpha
-from shared.alpha.cross_sectional import CrossSectionalMomentumAlpha
-from shared.alpha.ml_meta import MetaMLAlpha
-from shared.alpha.kalman_trend import KalmanTrendAlpha
-from shared.alpha.ml_forest import MetaForestAlpha
-from shared.alpha.online_rls import OnlineRLSAlpha
-from shared.alpha.order_flow import OrderFlowAlpha
-from shared.alpha.lead_lag import LeadLagAlpha
-from shared.alpha.vwap_reversion import VWAPReversionAlpha
 
 __all__ = [
     "Alpha",
@@ -35,18 +21,32 @@ __all__ = [
     "ALPHA_REGISTRY",
     "get_alpha",
     "list_alphas",
-    "TrendBreakoutAlpha",
-    "MeanReversionAlpha",
-    "MomentumEnsembleAlpha",
-    "VolBreakoutAlpha",
-    "CarryAlpha",
-    "StatArbAlpha",
-    "CrossSectionalMomentumAlpha",
-    "MetaMLAlpha",
-    "KalmanTrendAlpha",
-    "MetaForestAlpha",
-    "OnlineRLSAlpha",
-    "OrderFlowAlpha",
-    "LeadLagAlpha",
-    "VWAPReversionAlpha",
 ]
+
+# Re-export built-in alphas when available (in-tree). In a public-only
+# build the individual alpha modules are absent — consumers should reach
+# alphas via ALPHA_REGISTRY / get_alpha() instead of direct imports.
+try:
+    from shared.alpha.trend_breakout import TrendBreakoutAlpha
+    from shared.alpha.mean_reversion import MeanReversionAlpha
+    from shared.alpha.momentum_ensemble import MomentumEnsembleAlpha
+    from shared.alpha.vol_breakout import VolBreakoutAlpha
+    from shared.alpha.carry import CarryAlpha
+    from shared.alpha.stat_arb import StatArbAlpha
+    from shared.alpha.cross_sectional import CrossSectionalMomentumAlpha
+    from shared.alpha.ml_meta import MetaMLAlpha
+    from shared.alpha.kalman_trend import KalmanTrendAlpha
+    from shared.alpha.ml_forest import MetaForestAlpha
+    from shared.alpha.online_rls import OnlineRLSAlpha
+    from shared.alpha.order_flow import OrderFlowAlpha
+    from shared.alpha.lead_lag import LeadLagAlpha
+    from shared.alpha.vwap_reversion import VWAPReversionAlpha
+    __all__.extend([
+        "TrendBreakoutAlpha", "MeanReversionAlpha", "MomentumEnsembleAlpha",
+        "VolBreakoutAlpha", "CarryAlpha", "StatArbAlpha",
+        "CrossSectionalMomentumAlpha", "MetaMLAlpha", "KalmanTrendAlpha",
+        "MetaForestAlpha", "OnlineRLSAlpha", "OrderFlowAlpha",
+        "LeadLagAlpha", "VWAPReversionAlpha",
+    ])
+except ImportError:
+    pass
