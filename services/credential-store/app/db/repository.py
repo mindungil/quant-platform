@@ -129,14 +129,23 @@ class CredentialRepository:
                 self._items[(user_id, exchange)] = value
         if value is None:
             return None
+        try:
+            api_key = decrypt(str(value["api_key"]))
+            api_secret = decrypt(str(value["api_secret"]))
+        except Exception:
+            # Encrypted blob can't be decoded with the current key — most often
+            # a key-rotation / stale-dev-data mismatch. Treat as "no credential"
+            # rather than 500'ing every caller (platform dashboard, order-svc).
+            self._log_audit(user_id, exchange, "decrypt_failed")
+            return None
         self._log_audit(user_id, exchange, "retrieve")
         return CredentialResponse(
             user_id=user_id,
             exchange=exchange,
             label=value["label"],
             sandbox=bool(value["sandbox"]),
-            api_key=decrypt(str(value["api_key"])),
-            api_secret=decrypt(str(value["api_secret"])),
+            api_key=api_key,
+            api_secret=api_secret,
         )
 
     def list_for_user(self, user_id: str) -> list[CredentialMaskedResponse]:

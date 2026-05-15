@@ -202,3 +202,59 @@ def get_alpha(
     except (TypeError, ValueError):
         pass
     return factory(config)
+
+
+# ──────────────────────────────────────────────────────────────────
+# Plugin loader (open-core seam)
+# ──────────────────────────────────────────────────────────────────
+# The built-in alpha catalogue above is the *default* registration. External
+# (private) repositories — e.g. a `quant-alpha` repo holding proprietary alpha
+# implementations — can extend the registry without forking this module by
+# pointing QUANT_ALPHA_PLUGINS at one or more importable modules whose import
+# side-effect calls register_alpha(...).
+#
+#   QUANT_ALPHA_PLUGINS=quant_alpha.alphas,my_alphas.experimental
+#
+# Plugin modules typically do, at import time:
+#   from shared.alpha.registry import register_alpha
+#   from .my_alpha import MyAlpha
+#   register_alpha("my_alpha", lambda cfg=None: MyAlpha(cfg))
+
+
+def register_alpha(name: str, factory: Callable[..., Alpha]) -> None:
+    """Register an alpha plugin from outside this module.
+
+    Idempotent — re-registering the same name overwrites the previous factory.
+    """
+    ALPHA_REGISTRY[name] = factory
+
+
+def load_plugins() -> None:
+    """Discover and load alpha plugins via QUANT_ALPHA_PLUGINS env.
+
+    Failures are warned but non-fatal — a missing plugin should not bring
+    the service down at boot; downstream code that needs the alpha will
+    surface a clearer KeyError when get_alpha() is called.
+    """
+    import importlib
+    import logging
+    import os
+
+    log = logging.getLogger(__name__)
+    plugins = os.environ.get("QUANT_ALPHA_PLUGINS", "")
+    for mod_name in plugins.split(","):
+        mod_name = mod_name.strip()
+        if not mod_name:
+            continue
+        try:
+            importlib.import_module(mod_name)
+            log.info("alpha_plugin_loaded", extra={"module": mod_name})
+        except Exception as exc:
+            log.warning(
+                "alpha_plugin_load_failed",
+                extra={"module": mod_name, "error": str(exc)[:200]},
+            )
+
+
+# Discover plugins at import time so consumers see the full registry.
+load_plugins()

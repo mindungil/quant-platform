@@ -39,23 +39,21 @@ start_service() {
     PIDS+=($!)
 }
 
-# Block until any child process exits, then exit the container so compose
-# restart policy can take over. We do NOT try to restart individual
-# processes in-place — that's docker's job.
+# Block until ANY child process exits, then exit the container so compose
+# restart policy can take over. Previously we only exited when ALL children
+# died, which let a single dead service (e.g. memory-service) silently rot
+# inside an otherwise-"healthy" container — discovered after memory-service
+# was dead for ~2 weeks while three siblings kept the container alive.
 wait_for_pids() {
     log "Domain started with ${#PIDS[@]} processes. Entering monitor loop."
     while true; do
         for i in "${!PIDS[@]}"; do
             if ! kill -0 "${PIDS[$i]}" 2>/dev/null; then
                 wait "${PIDS[$i]}" 2>/dev/null || true
-                log "WARNING: Process ${PIDS[$i]} exited"
-                unset 'PIDS[$i]'
+                log "FATAL: Process ${PIDS[$i]} exited — restarting container."
+                exit 1
             fi
         done
-        if [ ${#PIDS[@]} -eq 0 ]; then
-            log "All processes exited. Shutting down container."
-            exit 1
-        fi
         sleep 5
     done
 }

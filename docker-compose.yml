@@ -22,6 +22,7 @@ services:
   # ---- Infrastructure ----
 
   db:
+    restart: unless-stopped
     build:
       context: ./infra/db
     # 18 services × ~5-conn SQLAlchemy pool + health probes + psql clients
@@ -43,6 +44,7 @@ services:
       retries: 20
 
   redis:
+    restart: unless-stopped
     image: redis:7-alpine
     ports:
       - "127.0.0.1:6379:6379"
@@ -53,6 +55,7 @@ services:
       retries: 10
 
   nats:
+    restart: unless-stopped
     image: nats:2.11-alpine
     command: ["-js", "-m", "8222"]
     ports:
@@ -68,6 +71,7 @@ services:
 
   # ---- platform domain (Phase 1): api-gateway + auth-service ----
   platform:
+    restart: unless-stopped
     build:
       context: .
       dockerfile: docker/domains/platform.Dockerfile
@@ -112,6 +116,7 @@ services:
 
   # ---- market-pipeline domain (Phase 3): market-data + feature-store + signal-service + external-data-service ----
   market-pipeline:
+    restart: unless-stopped
     build:
       context: .
       dockerfile: docker/domains/market-pipeline.Dockerfile
@@ -163,6 +168,7 @@ services:
 
   # ---- strategy-lab domain (Phase 4): memory + strategy-registry + backtest + statistics ----
   strategy-lab:
+    restart: unless-stopped
     build:
       context: .
       dockerfile: docker/domains/strategy-lab.Dockerfile
@@ -215,6 +221,7 @@ services:
 
   # ---- execution domain (Phase 5): order + exchange-adapter + risk + credential-store + portfolio ----
   execution:
+    restart: unless-stopped
     build:
       context: .
       dockerfile: docker/domains/execution.Dockerfile
@@ -242,6 +249,11 @@ services:
       - CREDENTIAL_STORE_BASE_URL=http://execution:8010
       - ORDER_SERVICE_BASE_URL=http://execution:8011
       - PORTFOLIO_SERVICE_BASE_URL=http://execution:8012
+      # Paper-mode learning loop: relax the compliance gate's min-notional
+      # so SIMULATED_FILLED actually fires for Kelly-sized paper orders.
+      # Mirrors intelligence:MIN_ORDER_NOTIONAL — pair must move together.
+      # Bump both back to 10 when ramp_factor > 0 (live capital).
+      - COMPLIANCE_MIN_ORDER_USD=0.01
     ports:
       - "127.0.0.1:8008:8008"
       - "127.0.0.1:8009:8009"
@@ -264,6 +276,7 @@ services:
 
   # ---- intelligence domain (Phase 6): crypto-agent + stock-agent + etf-agent + orchestrator ----
   intelligence:
+    restart: unless-stopped
     build:
       context: .
       dockerfile: docker/domains/intelligence.Dockerfile
@@ -290,6 +303,12 @@ services:
       # Intra-domain.
       - CRYPTO_AGENT_BASE_URL=http://intelligence:8006
       - ORCHESTRATOR_AGENT_BASE_URL=http://intelligence:8014
+      # Paper-mode learning loop: drop the $10 min so small Kelly-sized orders
+      # actually flow into the execution pipeline. Without this, ~99% of BUY/SELL
+      # signals are rejected by _build_order_request before any SIMULATED_FILLED
+      # event fires — outcome_consumer never reinforces, MAB/IC engines starve.
+      # Bumped back to 10.0 when ramp_factor > 0.
+      - MIN_ORDER_NOTIONAL=0.01
     ports:
       - "127.0.0.1:8006:8006"
       - "127.0.0.1:8014:8014"
@@ -311,6 +330,7 @@ services:
 
   # ---- llm-tools domain (Phase 2): llm-gateway ----
   llm-tools:
+    restart: unless-stopped
     build:
       context: .
       dockerfile: docker/domains/llm-tools.Dockerfile
@@ -359,6 +379,7 @@ services:
       start_period: 20s
 
   frontend:
+    restart: unless-stopped
     build:
       context: ./services/frontend
       dockerfile: Dockerfile

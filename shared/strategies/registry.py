@@ -119,3 +119,38 @@ def get_preset_for_conditions(
         return "mean_reversion"
 
     return "balanced"
+
+
+# ──────────────────────────────────────────────────────────────────
+# Plugin loader (open-core seam)
+# ──────────────────────────────────────────────────────────────────
+# Private strategy preset packs hook in via QUANT_STRATEGY_PLUGINS. Each
+# module should, at import time, call register_preset(name, preset_dict).
+
+def register_preset(name: str, preset: dict) -> None:
+    """Add or override a strategy preset (plugin entrypoint)."""
+    STRATEGY_PRESETS[name] = preset
+
+
+def load_plugins() -> None:
+    import importlib
+    import logging
+    import os
+
+    log = logging.getLogger(__name__)
+    plugins = os.environ.get("QUANT_STRATEGY_PLUGINS", "")
+    for mod_name in plugins.split(","):
+        mod_name = mod_name.strip()
+        if not mod_name:
+            continue
+        try:
+            importlib.import_module(mod_name)
+            log.info("strategy_plugin_loaded", extra={"module": mod_name})
+        except Exception as exc:
+            log.warning(
+                "strategy_plugin_load_failed",
+                extra={"module": mod_name, "error": str(exc)[:200]},
+            )
+
+
+load_plugins()

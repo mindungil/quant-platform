@@ -52,11 +52,24 @@ def compute_embedding(text: str) -> list[float]:
         return _hash_embedding([text])
 
 
+# Cap on rows returned by list_all (OOM guard — table grew to 71k rows in prod).
+# Search paths score in Python, so the cap doubles as a hard per-call memory ceiling.
+_LIST_ALL_LIMIT = int(os.getenv("MEMORY_LIST_ALL_LIMIT", "2000"))
+# In-memory cache cap (per-process). Was unbounded → leaked across the table.
+_ITEMS_CACHE_MAX = int(os.getenv("MEMORY_ITEMS_CACHE_MAX", "1000"))
+
+
 class MemoryRepository:
     def __init__(self) -> None:
         self._items: dict[str, MemoryRecord] = {}
         self._store = SqlStore(os.getenv("POSTGRES_URL", "postgresql+psycopg://postgres:postgres@localhost:5432/platform"))
         self._ensure_schema()
+
+    def _cache_record(self, key, record: MemoryRecord) -> None:
+        if len(self._items) >= _ITEMS_CACHE_MAX:
+            # Evict oldest insertion (dict preserves insertion order in py3.7+).
+            self._items.pop(next(iter(self._items)))
+        self._items[key] = record
 
     def _ensure_schema(self) -> None:
         # Enable pgvector extension for semantic search
@@ -209,25 +222,37 @@ class MemoryRepository:
         return self._hydrate(row)
 
     def list_all(self, user_id: str | None = None) -> list[MemoryRecord]:
+        # OOM guard: drop the 384-float embedding column from the SELECT and cap
+        # the result. Search scoring (scoring.py) does not read embedding;
+        # search_similar (pgvector) reads embedding_vec via a different SQL path.
+        select_cols = (
+            "id, user_id, asset, asset_type, action, signal_score, strategy_id, "
+            "reasoning, metadata, links, link_weights, timestamp, formula_name, "
+            "regime_label, trade_outcome, outcome_sharpe, memory_type, "
+            "last_reinforced_at"
+        )
         if user_id is None:
             rows = self._store.fetch_all(
-                """
-                SELECT * FROM memory_records
+                f"""
+                SELECT {select_cols} FROM memory_records
                 ORDER BY timestamp DESC
-                """
+                LIMIT :limit
+                """,
+                {"limit": _LIST_ALL_LIMIT},
             )
         else:
             rows = self._store.fetch_all(
-                """
-                SELECT * FROM memory_records
+                f"""
+                SELECT {select_cols} FROM memory_records
                 WHERE user_id = :user_id
                 ORDER BY timestamp DESC
+                LIMIT :limit
                 """,
-                {"user_id": user_id},
+                {"user_id": user_id, "limit": _LIST_ALL_LIMIT},
                 scope_user_id=user_id,
             )
         if rows:
-            return [self._hydrate(row) for row in rows]
+            return [self._hydrate(row, include_embedding=False) for row in rows]
         items = list(self._items.values())
         if user_id is None:
             return items
@@ -304,13 +329,18 @@ class MemoryRepository:
         )
         return [self._hydrate(row) for row in rows] if rows else []
 
-    def _hydrate(self, row: dict) -> MemoryRecord:
+    def _hydrate(self, row: dict, *, include_embedding: bool = True) -> MemoryRecord:
         payload = dict(row)
         # Remove pgvector column that is not part of the Pydantic model
         payload.pop("embedding_vec", None)
         payload.pop("similarity", None)
         payload["metadata"] = deserialize_json(row["metadata"]) or {}
-        payload["embedding"] = deserialize_json(row["embedding"]) or []
+        # Embedding is 384 floats × N rows = big. Only hydrate when the caller
+        # actually needs it (semantic search). Scoring/list paths skip it.
+        if include_embedding and "embedding" in row:
+            payload["embedding"] = deserialize_json(row["embedding"]) or []
+        else:
+            payload["embedding"] = []
         payload["links"] = deserialize_json(row["links"]) or []
         payload["link_weights"] = deserialize_json(row["link_weights"]) or {}
         payload["formula_name"] = row.get("formula_name")

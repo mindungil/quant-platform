@@ -4,7 +4,7 @@ NPM ?= npm
 PYTEST ?= pytest
 DOCKER_COMPOSE ?= docker compose
 
-.PHONY: venv operator-deps install test test-integration compile smoke compose-config compose-up compose-down seed-admin seed-data demo-flow smoke-e2e release-check migration-smoke dlq-reprocess dlq-stats cycle-run cycle-report
+.PHONY: venv operator-deps install test test-integration compile smoke compose-config compose-up compose-down seed-admin seed-data demo-flow smoke-e2e release-check migration-smoke dlq-reprocess dlq-stats cycle-run cycle-report incubate-bulk-submit incubate-drain incubate-list incubate-status incubate-cycle
 
 venv:
 	$(PYTHON) -m venv $(VENV)
@@ -108,3 +108,28 @@ cycle-run:
 
 cycle-report:
 	$(PYTHON) scripts/research/cycle_report.py
+
+# ─── Alpha incubator pipeline ────────────────────────────────────────
+# Submits every registered alpha × every active asset that isn't already
+# in the incubator pipeline (idempotent — safe to re-run).
+incubate-bulk-submit:
+	$(DOCKER_COMPOSE) exec -T strategy-lab python3 scripts/incubate_alpha.py bulk-submit
+
+# Evaluates all PENDING candidates and promotes those that clear gates
+# (sharpe_full≥1.0, sharpe_oos≥0.7, max_dd≤0.30, |ic_ir|≥0.5, decay≤0.5,
+#  DSR=genuine, PBO≤0.30). Safe to run on a schedule.
+incubate-drain:
+	$(DOCKER_COMPOSE) exec -T strategy-lab python3 scripts/incubate_alpha.py drain
+
+incubate-list:
+	$(DOCKER_COMPOSE) exec -T strategy-lab python3 scripts/incubate_alpha.py list
+
+# Aggregate state — useful for cron logs.
+incubate-status:
+	$(DOCKER_COMPOSE) exec -T db psql -U postgres -d platform -c \
+	    "SELECT status, COUNT(*) FROM alpha_incubator_candidates GROUP BY status ORDER BY 2 DESC;"
+
+# Full daily cycle: bulk-submit (catches new alphas) then drain.
+# Wire this into a host crontab or systemd timer for hands-off operation:
+#   0 6 * * *  cd /home/ubuntu/quant && make incubate-cycle >> /var/log/incubate.log 2>&1
+incubate-cycle: incubate-bulk-submit incubate-drain incubate-status

@@ -20,4 +20,12 @@ start_service "strategy-registry"  "strategy-registry"  8005
 start_service "backtest-service"   "backtest-service"   8007
 start_service "statistics-service" "statistics-service" 8013
 
+# Daily alpha-incubator pipeline (bulk-submit + drain). Background daemon,
+# tracked by wait_for_pids so its death will trigger container restart.
+if [ "${INCUBATOR_CRON_ENABLED:-true}" = "true" ]; then
+    log "Starting incubator-cron daemon"
+    /code/scripts/incubator_cron.sh &
+    PIDS+=($!)
+fi
+
 wait_for_pids

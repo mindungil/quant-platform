@@ -287,12 +287,19 @@ def validate_alpha(
         "sharpe_oos_min": 0.7,
         "max_drawdown_max": 0.30,
         "ic_ir_min": 0.5,
+        # New: cap the IS→OOS Sharpe decay. A full=2.0 / oos=0.5 alpha is a
+        # red flag for overfitting even though both numbers individually pass.
+        # 0.5 absolute decay tolerated; tighter than the "20% relative" common
+        # heuristic because we already require oos≥0.7.
+        "sharpe_decay_max": 0.5,
     }
+    sharpe_decay = sharpe_full - sharpe_oos
     gates = {
         "sharpe_full": sharpe_full >= gates_cfg["sharpe_full_min"],
         "sharpe_oos": sharpe_oos >= gates_cfg["sharpe_oos_min"],
         "max_drawdown": max_dd <= gates_cfg["max_drawdown_max"],
         "ic_ir": abs(ic_ir) >= gates_cfg["ic_ir_min"],
+        "sharpe_decay": sharpe_decay <= gates_cfg["sharpe_decay_max"],
     }
 
     return AlphaValidationReport(
