@@ -11,4 +11,4 @@ try:
 except ImportError:
     formula_registry = None  # type: ignore
 
-formula_mab = FormulaMAB(formula_registry.list_names())
+formula_mab = FormulaMAB(formula_registry.list_names() if formula_registry else [])
