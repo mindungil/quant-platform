@@ -137,6 +137,18 @@ class _Arm:
 # ──────────────────────────────────────────────────────────────────
 
 
+try:
+    from shared.observability_v3 import (
+        MAKER_TAKER_ARM_MEAN_REWARD,
+        record_maker_taker_decision,
+    )
+    _METRICS_AVAILABLE = True
+except Exception:
+    MAKER_TAKER_ARM_MEAN_REWARD = None  # type: ignore
+    record_maker_taker_decision = None  # type: ignore
+    _METRICS_AVAILABLE = False
+
+
 @dataclass
 class MakerTakerBandit:
     """Per-(context, action) Thompson-sampling bandit.
@@ -166,19 +178,38 @@ class MakerTakerBandit:
         """Choose MAKER or TAKER for the given context bucket."""
         # Epsilon-greedy floor: with probability ε, force exploration.
         if random.random() < self.epsilon:
-            return random.choice(("MAKER", "TAKER"))
-        with self._lock:
-            arms = self._ensure_arms(ctx)
-            samples = {a: arms[a].sample() for a in ("MAKER", "TAKER")}
-        return max(samples, key=lambda a: samples[a])  # type: ignore[return-value]
+            choice = random.choice(("MAKER", "TAKER"))
+        else:
+            with self._lock:
+                arms = self._ensure_arms(ctx)
+                samples = {a: arms[a].sample() for a in ("MAKER", "TAKER")}
+            choice = max(samples, key=lambda a: samples[a])  # type: ignore[assignment]
+        if _METRICS_AVAILABLE and record_maker_taker_decision is not None:
+            try:
+                record_maker_taker_decision(ctx, choice, realized_slippage_bp=None)
+            except Exception:
+                pass
+        return choice  # type: ignore[return-value]
 
     def update(self, ctx: str, action: OrderType, reward: float) -> None:
-        """Push realized reward back to the chosen arm."""
+        """Push realized reward back to the chosen arm.
+
+        `reward` should be the bandit-scale reward (typically
+        -realized_slippage_bp / 100). If you want the slippage histogram
+        populated too, call `record_maker_taker_decision(ctx, action,
+        realized_slippage_bp=...)` from the execution layer at fill time.
+        """
         if action not in ("MAKER", "TAKER"):
             raise ValueError(f"action must be MAKER or TAKER, got {action!r}")
         with self._lock:
             arms = self._ensure_arms(ctx)
             arms[action].update(reward)
+            mean = arms[action].mean
+        if _METRICS_AVAILABLE and MAKER_TAKER_ARM_MEAN_REWARD is not None:
+            try:
+                MAKER_TAKER_ARM_MEAN_REWARD.labels(context=ctx, action=action).set(float(mean))
+            except Exception:
+                pass
 
     # ─── inspection ──────────────────────────────────────────────
 

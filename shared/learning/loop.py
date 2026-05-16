@@ -43,6 +43,22 @@ from shared.statistics.online_dsr import (
     OnlineDSR,
 )
 
+# Prometheus exporters (optional — only present where prometheus_client is installed)
+try:
+    from shared.observability_v3 import (
+        LEARNING_ALPHA_DSR,
+        LEARNING_ALPHA_STATE,
+        LEARNING_FACTOR_DECAYED,
+        LEARNING_FACTOR_IC_IR,
+        record_state_transition,
+    )
+    _METRICS_AVAILABLE = True
+except Exception:
+    LEARNING_ALPHA_DSR = LEARNING_ALPHA_STATE = None  # type: ignore
+    LEARNING_FACTOR_DECAYED = LEARNING_FACTOR_IC_IR = None  # type: ignore
+    record_state_transition = None  # type: ignore
+    _METRICS_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -249,6 +265,20 @@ class LearningLoop:
         new_state = decider.step(dsr_val, prev_state)
         self._alpha_state[alpha_name] = new_state
 
+        # Best-effort Prometheus metric updates
+        if _METRICS_AVAILABLE:
+            try:
+                if dsr_val is not None and LEARNING_ALPHA_DSR is not None:
+                    LEARNING_ALPHA_DSR.labels(alpha_name=alpha_name).set(float(dsr_val))
+                if LEARNING_ALPHA_STATE is not None:
+                    LEARNING_ALPHA_STATE.labels(alpha_name=alpha_name).set(
+                        1.0 if new_state == "LIVE" else 0.0
+                    )
+                if new_state != prev_state and record_state_transition is not None:
+                    record_state_transition(alpha_name, prev_state, new_state)
+            except Exception:
+                pass
+
         return AlphaLoopResult(
             alpha_name=alpha_name,
             prev_state=prev_state,
@@ -267,13 +297,27 @@ class LearningLoop:
         prev_active = self._factor_monitor.active_weight(factor_name)
         self._factor_monitor.record(factor_name, score, forward_return)
         new_active = self._factor_monitor.active_weight(factor_name)
+        ic_ir = self._factor_monitor.current_ic_ir(factor_name)
+        is_decayed = self._factor_monitor.is_decayed(factor_name)
+
+        if _METRICS_AVAILABLE:
+            try:
+                if ic_ir is not None and LEARNING_FACTOR_IC_IR is not None:
+                    LEARNING_FACTOR_IC_IR.labels(factor_name=factor_name).set(float(ic_ir))
+                if LEARNING_FACTOR_DECAYED is not None:
+                    LEARNING_FACTOR_DECAYED.labels(factor_name=factor_name).set(
+                        1.0 if is_decayed else 0.0
+                    )
+            except Exception:
+                pass
+
         return FactorLoopResult(
             factor_name=factor_name,
             prev_active_weight=prev_active,
             new_active_weight=new_active,
             weight_changed=(prev_active != new_active),
-            ic_ir=self._factor_monitor.current_ic_ir(factor_name),
-            is_decayed=self._factor_monitor.is_decayed(factor_name),
+            ic_ir=ic_ir,
+            is_decayed=is_decayed,
         )
 
     # ─── batch / inspection ──────────────────────────────────────
