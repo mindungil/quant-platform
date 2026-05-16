@@ -65,6 +65,7 @@ _BUILTIN_ALPHA_SPECS: list[tuple[str, str, str, bool]] = [
     ("macro_context",             "shared.alpha.macro_context",        "MacroContextAlpha",             False),
     ("flow_sentiment",            "shared.alpha.flow_sentiment",       "FlowSentimentAlpha",            False),
     ("news_impact",               "shared.alpha.news_impact",          "NewsImpactAlpha",               False),
+    ("basis_arb",                 "shared.alpha.basis_arb",            "BasisArbAlpha",                 False),
 ]
 
 
