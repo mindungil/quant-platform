@@ -51,3 +51,9 @@ scrape_configs:
       - targets:
         - 'llm-tools:8021'  # llm-gateway
     metrics_path: '/metrics'
+
+  - job_name: 'quant-v3-learning-loop'
+    static_configs:
+      - targets:
+        - 'learning-loop:9100'  # V3 #1 daemon — Prometheus metric exporter
+    metrics_path: '/metrics'

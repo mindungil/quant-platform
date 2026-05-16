@@ -173,8 +173,17 @@ def _run_cycle() -> dict[str, int]:
 
 def _daemon_loop() -> None:
     """Forever-loop: run one cycle, sleep, repeat. Restartable, NATS/Redis
-    losses don't kill it."""
+    losses don't kill it. Exposes /metrics on $METRICS_PORT (default 9100)
+    so Prometheus can scrape the V3 metrics without touching the
+    main service ports."""
     import time
+    try:
+        from prometheus_client import start_http_server
+        metrics_port = int(os.getenv("METRICS_PORT", "9100"))
+        start_http_server(metrics_port)
+        logger.info("learning_loop_metrics_exposed port=%s", metrics_port)
+    except Exception as exc:
+        logger.warning("metrics_server_start_failed: %s", exc)
     interval = int(os.getenv("LEARNING_LOOP_INTERVAL_SECONDS", "300"))
     logger.info("learning_loop_daemon_starting interval=%s", interval)
     while True:
