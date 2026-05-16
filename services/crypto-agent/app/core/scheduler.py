@@ -25,7 +25,10 @@ import httpx
 from app.core.config import settings
 from shared.internal_admin import build_internal_admin_headers
 from app.core.engine import run_decision_loop
-from app.core.recommender import recommend_strategies
+try:
+    from app.core.recommender import recommend_strategies
+except ImportError:
+    recommend_strategies = None  # public-only build (recommender is private IP)
 from app.core.graph import agent_graph
 from app.core.graph_state import AgentState
 
@@ -239,17 +242,18 @@ class AgentScheduler:
             await asyncio.gather(*stock_tasks, return_exceptions=True)
 
         # Also update recommendations
-        for asset in MONITORED_ASSETS:
-            try:
-                recs = await loop.run_in_executor(
-                    None, recommend_strategies, asset, "crypto", 3
-                )
-                self._last_recommendations[asset] = [
-                    {"name": r.name, "confidence": r.confidence, "formula": r.formula_name}
-                    for r in recs
-                ]
-            except Exception:
-                pass
+        if recommend_strategies is not None:
+            for asset in MONITORED_ASSETS:
+                try:
+                    recs = await loop.run_in_executor(
+                        None, recommend_strategies, asset, "crypto", 3
+                    )
+                    self._last_recommendations[asset] = [
+                        {"name": r.name, "confidence": r.confidence, "formula": r.formula_name}
+                        for r in recs
+                    ]
+                except Exception:
+                    pass
 
         # Shadow promotion check (every 12 cycles = ~1 hour at 5min interval)
         if self._cycle_count % 12 == 0:

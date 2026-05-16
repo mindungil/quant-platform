@@ -29,14 +29,20 @@ def metrics() -> Response:
 @router.get("/agent/mab-stats")
 def get_mab_stats() -> dict:
     """Inspect live MAB state — proves whether the bandit is actually learning."""
-    from app.core.mab_state import formula_mab
+    try:
+        from app.core.mab_state import formula_mab
+    except ImportError:
+        raise HTTPException(status_code=503, detail="mab_unavailable_in_public_build")
     return formula_mab.get_stats()
 
 
 @router.post("/agent/learning/run-fast")
 async def force_fast_loop() -> dict:
     """Trigger the 5-minute hindsight loop immediately (admin/debug)."""
-    from app.core.learning_scheduler import learning_scheduler
+    try:
+        from app.core.learning_scheduler import learning_scheduler
+    except ImportError:
+        raise HTTPException(status_code=503, detail="learning_scheduler_unavailable_in_public_build")
     await learning_scheduler._fast_loop()
     return {"ok": True, "loop": "fast"}
 
@@ -44,7 +50,10 @@ async def force_fast_loop() -> dict:
 @router.post("/agent/learning/run-daily")
 async def force_daily_loop() -> dict:
     """Trigger the daily factor-weight optimizer immediately (admin/debug)."""
-    from app.core.learning_scheduler import learning_scheduler
+    try:
+        from app.core.learning_scheduler import learning_scheduler
+    except ImportError:
+        raise HTTPException(status_code=503, detail="learning_scheduler_unavailable_in_public_build")
     await learning_scheduler._daily_loop()
     return {"ok": True, "loop": "daily"}
 
@@ -52,7 +61,10 @@ async def force_daily_loop() -> dict:
 @router.post("/agent/learning/run-weekly")
 async def force_weekly_loop() -> dict:
     """Trigger the weekly meta-learning loop immediately (admin/debug)."""
-    from app.core.learning_scheduler import learning_scheduler
+    try:
+        from app.core.learning_scheduler import learning_scheduler
+    except ImportError:
+        raise HTTPException(status_code=503, detail="learning_scheduler_unavailable_in_public_build")
     await learning_scheduler._weekly_loop()
     return {"ok": True, "loop": "weekly"}
 
@@ -60,11 +72,14 @@ async def force_weekly_loop() -> dict:
 @router.get("/agent/learning-status")
 def get_learning_status() -> dict:
     """High-level learning health snapshot for ops/dashboard."""
-    from app.core.mab_state import formula_mab
-    from shared.factors.dynamic_weights import (
-        get_recent_accuracy, get_active_protocol,
-        load_factor_weights, load_category_weights,
-    )
+    try:
+        from app.core.mab_state import formula_mab
+        from shared.factors.dynamic_weights import (
+            get_recent_accuracy, get_active_protocol,
+            load_factor_weights, load_category_weights,
+        )
+    except ImportError:
+        raise HTTPException(status_code=503, detail="learning_status_unavailable_in_public_build")
     stats = formula_mab.get_stats()
     global_arms = stats.get("global", {})
     total_obs = sum(a.get("n", 0) for a in global_arms.values())
@@ -109,7 +124,10 @@ def agent_status():
 
 @router.get("/recommendations/{asset}")
 def get_recommendations(asset: str, top_k: int = 3):
-    from app.core.recommender import recommend_strategies
+    try:
+        from app.core.recommender import recommend_strategies
+    except ImportError:
+        raise HTTPException(status_code=503, detail="recommender_unavailable_in_public_build")
     recs = recommend_strategies(asset=asset, top_k=top_k)
     return [
         {

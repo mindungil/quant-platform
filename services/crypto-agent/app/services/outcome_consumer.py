@@ -12,7 +12,10 @@ from __future__ import annotations
 import logging
 
 from app.core.config import settings
-from app.core.mab_state import formula_mab
+try:
+    from app.core.mab_state import formula_mab
+except ImportError:
+    formula_mab = None  # public-only build (bandit / mab_state are private IP)
 from app.db.repository import decision_repository
 from app.services.memory_client import MemoryClient
 from shared.events import JetStreamBus
@@ -181,7 +184,7 @@ class OutcomeReinforcementConsumer:
                 except (IndexError, ValueError):
                     pass
 
-            if formula_name:
+            if formula_name and formula_mab is not None:
                 try:
                     formula_mab.update(formula_name, trade_outcome, regime=regime_label)
                     logger.info("mab_updated_from_outcome", extra={
