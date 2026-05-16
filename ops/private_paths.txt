@@ -139,3 +139,22 @@ services/crypto-agent/app/core/learning_scheduler.py
 services/crypto-agent/app/core/recommender.py
 services/crypto-agent/app/core/bandit.py
 services/crypto-agent/app/core/mab_state.py
+
+# Tests that exercise IP modules (would import private code → must move with it)
+tests/alpha/
+tests/ml/
+tests/risk/
+tests/labels/test_triple_barrier.py
+tests/engine/test_alpha_miner.py
+tests/engine/test_engine.py
+tests/engine/test_funding_carry_registry.py
+tests/portfolio/test_attribution_regime.py
+tests/portfolio/test_meta_learner.py
+tests/regime/test_composite.py
+tests/test_cvar_overlay.py
+tests/test_ic_integration.py
+tests/test_ic_weight_engine.py
+
+# History-only stragglers (already absent from current HEAD, ensure they
+# never leak in older commits either)
+shared/alpha/skew_reversion.py
