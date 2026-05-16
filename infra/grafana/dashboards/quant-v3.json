@@ -1,0 +1,255 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": "-- Grafana --",
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "V3 closed-loop monitoring — learning loop state, attribution, maker/taker bandit. Pairs with shared.observability_v3 metric exporters.",
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "title": "Alpha States (LIVE=1, SHADOW=0)",
+      "type": "timeseries",
+      "id": 1,
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 1,
+            "spanNulls": false
+          },
+          "min": 0,
+          "max": 1
+        }
+      },
+      "options": {
+        "legend": {"displayMode": "table", "placement": "right", "showLegend": true},
+        "tooltip": {"mode": "multi"}
+      },
+      "targets": [
+        {
+          "expr": "quant_v3_learning_alpha_state",
+          "legendFormat": "{{alpha_name}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Alpha DSR (rolling)",
+      "type": "timeseries",
+      "id": 2,
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"fillOpacity": 5, "lineWidth": 2},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "yellow", "value": 0.5},
+              {"color": "green", "value": 0.7}
+            ]
+          }
+        }
+      },
+      "options": {
+        "legend": {"displayMode": "table", "placement": "right"},
+        "tooltip": {"mode": "multi"}
+      },
+      "targets": [
+        {
+          "expr": "quant_v3_learning_alpha_dsr",
+          "legendFormat": "{{alpha_name}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "State Transitions per hour",
+      "type": "timeseries",
+      "id": 3,
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "datasource": "Prometheus",
+      "options": {
+        "legend": {"displayMode": "table", "placement": "right"}
+      },
+      "targets": [
+        {
+          "expr": "sum by (alpha_name, from_state, to_state) (rate(quant_v3_learning_alpha_state_transitions_total[1h]))",
+          "legendFormat": "{{alpha_name}} {{from_state}}->{{to_state}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Factor IC_IR (negative = decayed)",
+      "type": "bargauge",
+      "id": 4,
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "yellow", "value": 0.2},
+              {"color": "green", "value": 0.5}
+            ]
+          },
+          "min": -1,
+          "max": 1
+        }
+      },
+      "options": {"orientation": "horizontal", "displayMode": "gradient"},
+      "targets": [
+        {
+          "expr": "quant_v3_learning_factor_ic_ir",
+          "legendFormat": "{{factor_name}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Cumulative Alpha PnL (attribution)",
+      "type": "bargauge",
+      "id": 5,
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "yellow", "value": 0},
+              {"color": "green", "value": 0.01}
+            ]
+          }
+        }
+      },
+      "options": {"orientation": "horizontal", "displayMode": "gradient"},
+      "targets": [
+        {
+          "expr": "quant_v3_attribution_alpha_cumulative_pnl",
+          "legendFormat": "{{alpha_name}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Alpha PnL by Regime",
+      "type": "heatmap",
+      "id": 6,
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "quant_v3_attribution_alpha_regime_pnl",
+          "legendFormat": "{{alpha_name}}/{{regime}}",
+          "refId": "A",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "title": "Maker/Taker Decisions per hour",
+      "type": "timeseries",
+      "id": 7,
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum by (action) (rate(quant_v3_maker_taker_decisions_total[1h]))",
+          "legendFormat": "{{action}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Realized Slippage bp by action (p50, p95)",
+      "type": "timeseries",
+      "id": 8,
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le, action) (rate(quant_v3_maker_taker_realized_slippage_bp_bucket[1h])))",
+          "legendFormat": "{{action}} p50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, action) (rate(quant_v3_maker_taker_realized_slippage_bp_bucket[1h])))",
+          "legendFormat": "{{action}} p95",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "title": "Dead Alpha Flags per day",
+      "type": "stat",
+      "id": 9,
+      "gridPos": {"h": 6, "w": 12, "x": 0, "y": 32},
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [
+            {"color": "green", "value": null},
+            {"color": "yellow", "value": 1},
+            {"color": "red", "value": 3}
+          ]}
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (alpha_name) (increase(quant_v3_attribution_dead_alpha_flagged_total[1d]))",
+          "legendFormat": "{{alpha_name}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Rolling Sharpe per Alpha",
+      "type": "timeseries",
+      "id": 10,
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 32},
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"}
+        }
+      },
+      "targets": [
+        {
+          "expr": "quant_v3_attribution_alpha_rolling_sharpe",
+          "legendFormat": "{{alpha_name}}",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "tags": ["v3", "closed-loop", "learning", "attribution", "bandit"],
+  "time": {"from": "now-24h", "to": "now"},
+  "timezone": "browser",
+  "title": "Quant V3 — Closed Loop",
+  "uid": "quant-v3",
+  "version": 1
+}
