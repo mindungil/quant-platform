@@ -17,9 +17,15 @@ import httpx
 from langgraph.graph import END, StateGraph
 
 from app.core.config import settings
-from app.core.formula_selector import rank_formulas_ml
+try:
+    from app.core.formula_selector import rank_formulas_ml
+except ImportError:
+    rank_formulas_ml = None  # public-only build (formula_selector is private IP)
 from app.core.graph_state import AgentState
-from app.core.mab_state import formula_mab
+try:
+    from app.core.mab_state import formula_mab
+except ImportError:
+    formula_mab = None  # public-only build (bandit / mab_state are private IP)
 from app.models.agent import (
     DecisionRecord,
     MemorySearchRequest,
@@ -334,7 +340,7 @@ def recall_node(state: AgentState) -> dict:
             items = data.get("items", [])
 
             # 2. Load into MAB
-            if items:
+            if items and formula_mab is not None:
                 formula_mab.load_from_memory(items)
 
             # 3. Compute composite scores
@@ -368,10 +374,11 @@ def recall_node(state: AgentState) -> dict:
         logger.warning("graph_recall_failed", extra={"error": str(exc)})
 
     # 4. Store MAB stats
-    try:
-        mab_stats = formula_mab.get_stats()
-    except Exception:
-        pass
+    if formula_mab is not None:
+        try:
+            mab_stats = formula_mab.get_stats()
+        except Exception:
+            pass
 
     duration = round((time.monotonic() - t0) * 1000, 2)
     timings = dict(state.get("phase_timings") or {})
@@ -505,7 +512,7 @@ def score_node(state: AgentState) -> dict:
     # which left the persistent MAB state untouched in production. We now use
     # the MAB on every decision so its accumulated learning + ε-greedy
     # exploration actually drives formula selection.
-    if style_formula is None:
+    if style_formula is None and formula_mab is not None and formula_registry is not None:
         # Best-effort memory bootstrap (non-fatal)
         try:
             resp = httpx.post(

@@ -19,8 +19,14 @@ from shared.logging import get_logger
 from shared.persistence import RedisStore
 from shared.realtime import RealtimeBus
 from shared.regime import detect_regime, suggest_formula_type
-from app.core.mab_state import formula_mab
-from app.core.formula_selector import rank_formulas_ml
+try:
+    from app.core.mab_state import formula_mab
+except ImportError:
+    formula_mab = None  # public-only build (bandit / mab_state are private IP)
+try:
+    from app.core.formula_selector import rank_formulas_ml
+except ImportError:
+    rank_formulas_ml = None  # public-only build (formula_selector is private IP)
 try:
     from shared.formulas import formula_registry
 except ImportError:
@@ -678,7 +684,7 @@ def _phase_score(
             logger.warning("ml_selection_failed", extra={"error": str(exc)})
 
     # Priority 2: Thompson Sampling MAB (contextual bandit)
-    if selected_formula is None and formula_scores:
+    if selected_formula is None and formula_scores and formula_mab is not None and formula_registry is not None:
         try:
             import httpx
             resp = httpx.post(

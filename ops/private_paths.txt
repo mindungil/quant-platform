@@ -130,3 +130,12 @@ scripts/incubator_cron.sh
 # Tier-3 service policy *implementations* (the policy/ skeleton itself stays public)
 # These are placeholders — the actual private impls will live in quant-alpha
 # under quant_alpha/policies/<svc>/...  No paths to remove here in the FIRST split.
+
+# crypto-agent core — proprietary tuning around the public LangGraph engine.
+# engine.py / graph.py / scheduler.py / protocol_router.py STAY public — they
+# import these via try/except guards added in the source.
+services/crypto-agent/app/core/formula_selector.py
+services/crypto-agent/app/core/learning_scheduler.py
+services/crypto-agent/app/core/recommender.py
+services/crypto-agent/app/core/bandit.py
+services/crypto-agent/app/core/mab_state.py
