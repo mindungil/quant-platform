@@ -245,11 +245,11 @@ def load_plugins() -> None:
             continue
         try:
             importlib.import_module(mod_name)
-            log.info("alpha_plugin_loaded", extra={"module": mod_name})
+            log.info("alpha_plugin_loaded", extra={"plugin_module": mod_name})
         except Exception as exc:
             log.warning(
                 "alpha_plugin_load_failed",
-                extra={"module": mod_name, "error": str(exc)[:200]},
+                extra={"plugin_module": mod_name, "error": str(exc)[:200]},
             )
 
 
