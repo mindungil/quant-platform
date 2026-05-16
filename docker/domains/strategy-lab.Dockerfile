@@ -28,6 +28,9 @@ COPY services/backtest-service/   /code/services/backtest-service/
 
 COPY scripts/_lib/ /code/scripts/_lib/
 COPY scripts/start_strategy_lab.sh /code/start_strategy_lab.sh
+# V3 #1 — learning loop daemon entry (used by the learning-loop sidecar
+# service in docker-compose.yml; same image, different command).
+COPY scripts/run_learning_loop.py /code/scripts/run_learning_loop.py
 RUN chmod +x /code/start_strategy_lab.sh /code/scripts/_lib/*.sh
 
 EXPOSE 8004 8005 8007 8013
