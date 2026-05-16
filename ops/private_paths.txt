@@ -158,3 +158,13 @@ tests/test_ic_weight_engine.py
 # History-only stragglers (already absent from current HEAD, ensure they
 # never leak in older commits either)
 shared/alpha/skew_reversion.py
+
+# V3 #5 — Real-Time Cost-Aware Rebalancer (proprietary cost model
+# coefficients + drift gating).
+shared/portfolio/rebalance.py
+tests/portfolio/test_rebalance.py
+
+# V3 #2 — additions to attribution.py are IP. The file is already
+# listed (above, in 'Portfolio IP'), but the new tests need explicit
+# entry.
+tests/portfolio/test_attribution_v3.py
