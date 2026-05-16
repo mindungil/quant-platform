@@ -171,6 +171,24 @@ def _run_cycle() -> dict[str, int]:
     }
 
 
+def _daemon_loop() -> None:
+    """Forever-loop: run one cycle, sleep, repeat. Restartable, NATS/Redis
+    losses don't kill it."""
+    import time
+    interval = int(os.getenv("LEARNING_LOOP_INTERVAL_SECONDS", "300"))
+    logger.info("learning_loop_daemon_starting interval=%s", interval)
+    while True:
+        try:
+            summary = _run_cycle()
+            logger.info("cycle_complete: %s", summary)
+        except Exception as exc:
+            logger.exception("cycle_failed: %s", exc)
+        time.sleep(interval)
+
+
 if __name__ == "__main__":
-    summary = _run_cycle()
-    logger.info("cycle_complete: %s", summary)
+    if "--daemon" in sys.argv:
+        _daemon_loop()
+    else:
+        summary = _run_cycle()
+        logger.info("cycle_complete: %s", summary)

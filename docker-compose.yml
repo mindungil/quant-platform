@@ -219,6 +219,34 @@ services:
       retries: 30
       start_period: 60s
 
+  # ---- V3 #1 Online Learning daemon — sidecar to strategy-lab ----
+  # Reuses the strategy-lab image (same Dockerfile, same shared/ tree)
+  # but runs the run_learning_loop --daemon entrypoint, calling one
+  # LearningLoop cycle every LEARNING_LOOP_INTERVAL_SECONDS seconds.
+  # Writes per-alpha DSR + state transitions to Redis and emits NATS
+  # `learning.alpha.state_changed` events.
+  learning-loop:
+    restart: unless-stopped
+    image: quant-strategy-lab
+    command: ["python", "/code/scripts/run_learning_loop.py", "--daemon"]
+    env_file:
+      - .env.example
+      - .env
+    environment:
+      - LEARNING_LOOP_INTERVAL_SECONDS=300
+      - DSR_PAUSE_THRESHOLD=0.5
+      - DSR_RECOVER_THRESHOLD=0.7
+      - DSR_CONSECUTIVE_REQUIRED=3
+      - FACTOR_IR_THRESHOLD=0.2
+      - LEARNING_LOOP_DRY_RUN=0
+    depends_on:
+      strategy-lab:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+
   # ---- execution domain (Phase 5): order + exchange-adapter + risk + credential-store + portfolio ----
   execution:
     restart: unless-stopped
