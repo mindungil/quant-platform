@@ -11,11 +11,17 @@ from __future__ import annotations
 
 import logging
 
+import os
 from app.core.config import settings
 try:
     from app.core.mab_state import formula_mab
 except ImportError:
     formula_mab = None  # public-only build (bandit / mab_state are private IP)
+from app.core.tca import compute_tca_reward
+
+# TCA cost weight — bps-for-bps penalty by default. Tune up to make the
+# bandit more slippage-averse, down (or 0) to disable the correction.
+TCA_COST_WEIGHT = float(os.getenv("TCA_COST_WEIGHT", "1.0"))
 from app.db.repository import decision_repository
 from app.services.memory_client import MemoryClient
 from shared.events import JetStreamBus
@@ -96,16 +102,16 @@ class OutcomeReinforcementConsumer:
             reference_price = float(decision_data.get("reference_price", 0))
             signal_score = float(decision_data.get("signal_score", 0))
 
-            # Calculate trade outcome
-            if pnl != 0:
-                trade_outcome = pnl
-            elif reference_price > 0 and fill_price > 0:
-                if side.upper() == "BUY":
-                    trade_outcome = (fill_price - reference_price) / reference_price
-                else:
-                    trade_outcome = (reference_price - fill_price) / reference_price
-            else:
-                trade_outcome = 0.0
+            # Calculate trade outcome using TCA-adjusted reward.
+            # See app/core/tca.py for the decomposition: pnl - cost_weight * |slippage|.
+            tca = compute_tca_reward(
+                pnl=pnl,
+                fill_price=fill_price,
+                reference_price=reference_price,
+                side=side,
+                tca_cost_weight=TCA_COST_WEIGHT,
+            )
+            trade_outcome = tca.tca_adjusted_reward
 
             # Simple Sharpe-like metric: outcome / abs(signal) as efficiency
             outcome_sharpe = trade_outcome / max(abs(signal_score), 0.01)
@@ -191,6 +197,9 @@ class OutcomeReinforcementConsumer:
                         "formula_name": formula_name,
                         "regime": regime_label,
                         "trade_outcome": f"{trade_outcome:.4f}",
+                        "realized_slippage_bp": f"{tca.realized_slippage_bp:.2f}",
+                        "tca_cost_bp": f"{tca.tca_cost_bp:.2f}",
+                        "reward_source": tca.reward_source,
                     })
                 except Exception as exc:
                     logger.warning("mab_update_failed", extra={
