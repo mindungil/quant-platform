@@ -39,6 +39,16 @@ class AlphaConfig:
     long_only: bool = False
     # Risk budget knobs (ensemble reads these)
     target_vol: float = 0.20  # annualized, used for vol-targeting
+    # Auto vol-target overlay (applied by base.generate() after smoothing).
+    # OFF by default for backward compat: alphas that already call
+    # vol_target_scale() inside _generate (e.g. vwap_reversion, order_flow,
+    # kalman_trend, lead_lag, momentum_ensemble) would otherwise double-scale.
+    # New alphas should set this True and skip manual vol-targeting.
+    auto_vol_target: bool = False
+    vol_target_lookback: int = 168          # bars (1 week on 1h)
+    vol_target_periods_per_year: int = 24 * 365
+    vol_target_cap: float = 1.5             # max scale-up multiplier
+    vol_target_floor: float = 0.0           # min scale-down (0 = fully damp)
     # Free-form strategy-specific knobs
     params: dict[str, Any] = field(default_factory=dict)
 
@@ -112,10 +122,32 @@ class Alpha:
         # Apply long-only mask
         if self.config.long_only:
             shifted = shifted.clip(lower=0.0)
+        # Auto vol-target overlay (opt-in). Skips panel inputs (multi-asset
+        # dict) since each asset has its own vol — that's an ensemble-level
+        # concern handled by EnsembleAllocator. Also skips when 'close' is
+        # absent from the frame.
+        vol_scale_last: float | None = None
+        if self.config.auto_vol_target and isinstance(df, pd.DataFrame) and "close" in df.columns:
+            scale = vol_target_scale(
+                df["close"],
+                target_vol_annual=self.config.target_vol,
+                lookback=self.config.vol_target_lookback,
+                periods_per_year=self.config.vol_target_periods_per_year,
+                cap=self.config.vol_target_cap,
+                floor=self.config.vol_target_floor,
+            )
+            # Align in case index has gaps; missing scale → 1.0 (neutral)
+            scale = scale.reindex(shifted.index).fillna(1.0)
+            shifted = shifted * scale
+            vol_scale_last = float(scale.iloc[-1]) if len(scale) else None
         # Apply gross-position cap
         cap = self.config.max_gross_position
         shifted = shifted.clip(-cap, cap)
-        return AlphaSignal(position=shifted, diagnostics=self._diagnostics(df, raw))
+        diag = self._diagnostics(df, raw)
+        if self.config.auto_vol_target:
+            diag["vol_target_applied"] = True
+            diag["vol_scale_last"] = vol_scale_last
+        return AlphaSignal(position=shifted, diagnostics=diag)
 
     # ----- subclass hooks -----
     def _generate(self, df: pd.DataFrame | dict[str, pd.DataFrame]) -> pd.Series:
