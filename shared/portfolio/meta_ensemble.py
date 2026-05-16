@@ -201,6 +201,94 @@ def drawdown_overlay(
 
 
 # ──────────────────────────────────────────────────────────────────
+# Phase G' — Regime-conditional MV weights
+# ──────────────────────────────────────────────────────────────────
+
+
+def compute_regime_alpha_weights(
+    pnl_panel: pd.DataFrame,
+    regime: pd.Series,
+    *,
+    min_regime_samples: int = 200,
+    fallback_to_global: bool = True,
+    shrinkage: float = 0.3,
+    min_weight: float = 0.0,
+    max_weight: float = 0.6,
+    min_sharpe: float = 0.0,
+) -> dict[str, pd.Series]:
+    """Per-regime alpha weights via MV optimization on regime-sliced PnL.
+
+    Returns {regime_label: weights_series indexed by pnl_panel.columns}.
+
+    For each regime with ≥ min_regime_samples bars, runs the standard
+    sharpe-filtered MV optimization on PnL restricted to that regime —
+    so an alpha that's a star in TREND_UP and a dog in RANGE gets a
+    high weight only in trending bars.
+
+    When a regime has too few samples and fallback_to_global is True,
+    that regime gets the global (pooled) MV weight instead of zero —
+    avoids zeroing out warm-up periods or rare regimes.
+    """
+    out: dict[str, pd.Series] = {}
+    if pnl_panel.empty:
+        return out
+    regime_aligned = regime.reindex(pnl_panel.index).fillna("unknown").astype(str)
+    global_w = None
+    if fallback_to_global:
+        global_w = sharpe_filtered_mv_weights(
+            pnl_panel,
+            shrinkage=shrinkage,
+            long_only=True,
+            min_weight=min_weight,
+            max_weight=max_weight,
+            min_sharpe=min_sharpe,
+        )
+    for label in regime_aligned.unique():
+        mask = regime_aligned == label
+        regime_pnl = pnl_panel.loc[mask]
+        if len(regime_pnl) < min_regime_samples:
+            if global_w is not None:
+                out[str(label)] = global_w.copy()
+            continue
+        out[str(label)] = sharpe_filtered_mv_weights(
+            regime_pnl,
+            shrinkage=shrinkage,
+            long_only=True,
+            min_weight=min_weight,
+            max_weight=max_weight,
+            min_sharpe=min_sharpe,
+        )
+    # Catch-all 'unknown' for bars whose regime never appeared in the table.
+    if "unknown" not in out and global_w is not None:
+        out["unknown"] = global_w.copy()
+    return out
+
+
+def expand_regime_weights_to_panel(
+    regime_weights: dict[str, pd.Series],
+    regime: pd.Series,
+    alpha_columns: list[str],
+) -> pd.DataFrame:
+    """Tile per-regime weight vectors out to a per-bar weight matrix.
+
+    Output shape: len(regime) × len(alpha_columns). Each bar gets the
+    weight vector of its regime label. Bars whose regime has no entry
+    fall through to 'unknown' (if present) or zeros.
+    """
+    fallback = regime_weights.get("unknown")
+    rows = []
+    for ts, label in regime.items():
+        w = regime_weights.get(str(label), fallback)
+        if w is None:
+            rows.append(pd.Series(0.0, index=alpha_columns))
+        else:
+            rows.append(w.reindex(alpha_columns).fillna(0.0))
+    out = pd.DataFrame(rows, index=regime.index)
+    out.columns = alpha_columns
+    return out
+
+
+# ──────────────────────────────────────────────────────────────────
 # Phase J — Regime-conditional Kelly sizing
 # ──────────────────────────────────────────────────────────────────
 
@@ -265,6 +353,9 @@ class MetaEnsembleConfig:
     mv_min_weight: float = 0.0
     mv_max_weight: float = 0.6
     min_alpha_sharpe: float = 0.0  # drop losing alphas before MV weighting
+    # Phase G' — Regime-conditional MV weights (opt-in)
+    use_regime_conditional_weights: bool = False
+    regime_min_samples: int = 200
     # Phase H
     warn_dd: float = 0.10
     cut_dd: float = 0.20
@@ -314,6 +405,8 @@ def combine(
     # internally by the Alpha base class, so no look-ahead here).
     pnl_panel = alpha_positions.mul(bar_returns, axis=0).fillna(0.0)
 
+    # Global (pooled) MV weights — always computed, used as fallback and
+    # also returned in the result for auditability.
     weights = sharpe_filtered_mv_weights(
         pnl_panel,
         shrinkage=cfg.mv_shrinkage,
@@ -324,8 +417,33 @@ def combine(
     )
     weights = weights.reindex(alpha_positions.columns).fillna(0.0)
 
-    # Combined position is the weight-dot-product of alpha positions.
-    raw_combined = alpha_positions.mul(weights, axis=1).sum(axis=1).fillna(0.0)
+    # Phase G': regime-conditional weights. Each bar gets the MV weight
+    # vector estimated on its regime's PnL slice — turns the meta-ensemble
+    # into a true regime rotation. Falls back to pooled weights when a
+    # regime is under-sampled, and to global behavior when disabled or
+    # when no regime series is provided.
+    regime_weights_table: dict[str, dict[str, float]] = {}
+    if cfg.use_regime_conditional_weights and regime is not None and not regime.empty:
+        regime_w = compute_regime_alpha_weights(
+            pnl_panel,
+            regime,
+            min_regime_samples=cfg.regime_min_samples,
+            fallback_to_global=True,
+            shrinkage=cfg.mv_shrinkage,
+            min_weight=cfg.mv_min_weight,
+            max_weight=cfg.mv_max_weight,
+            min_sharpe=getattr(cfg, "min_alpha_sharpe", 0.0),
+        )
+        regime_weights_table = {k: v.to_dict() for k, v in regime_w.items()}
+        weight_panel = expand_regime_weights_to_panel(
+            regime_w,
+            regime.reindex(alpha_positions.index).fillna("unknown").astype(str),
+            list(alpha_positions.columns),
+        )
+        raw_combined = (alpha_positions * weight_panel).sum(axis=1).fillna(0.0)
+    else:
+        # Combined position is the weight-dot-product of alpha positions.
+        raw_combined = alpha_positions.mul(weights, axis=1).sum(axis=1).fillna(0.0)
 
     # Combined PnL for DD overlay + Kelly table.
     combined_pnl = raw_combined * bar_returns
@@ -367,6 +485,7 @@ def combine(
         "position": position,
         "raw_combined": raw_combined,
         "alpha_weights": weights.to_dict(),
+        "regime_alpha_weights": regime_weights_table,  # {} when disabled
         "dd_multiplier": dd_mult,
         "kelly_table": kelly_table.fractions,
         "alpha_pnl_panel": pnl_panel,
