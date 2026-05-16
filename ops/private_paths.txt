@@ -150,6 +150,7 @@ tests/engine/test_engine.py
 tests/engine/test_funding_carry_registry.py
 tests/portfolio/test_attribution_regime.py
 tests/portfolio/test_meta_learner.py
+tests/portfolio/test_meta_ensemble_regime.py
 tests/regime/test_composite.py
 tests/test_cvar_overlay.py
 tests/test_ic_integration.py
