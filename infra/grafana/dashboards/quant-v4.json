@@ -1,0 +1,176 @@
+{
+  "annotations": {
+    "list": [
+      {"builtIn": 1, "datasource": "-- Grafana --", "enable": true, "hide": true,
+       "iconColor": "rgba(0, 211, 255, 1)", "name": "Annotations & Alerts",
+       "type": "dashboard"}
+    ]
+  },
+  "description": "V4 closed-loop layer — capital tier, risk monitor hub events, GP discovery progress, reoptimizer cycle stats. Pairs with shared.observability_v3 + shared.risk.* exporters.",
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "title": "Active Capital Tier (PAPER=0 / FULL=4)",
+      "type": "stat",
+      "id": 1,
+      "gridPos": {"h": 6, "w": 6, "x": 0, "y": 0},
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {"options": {"0": {"text": "PAPER", "color": "purple"}, "1": {"text": "MICRO", "color": "yellow"},
+                          "2": {"text": "SMALL", "color": "blue"}, "3": {"text": "MID", "color": "green"},
+                          "4": {"text": "FULL", "color": "red"}},
+             "type": "value"}
+          ]
+        }
+      },
+      "targets": [
+        {"expr": "label_replace(quant_v3_learning_alpha_state, 'tier', '0', '', '') * 0",
+         "legendFormat": "tier (placeholder)", "refId": "A"}
+      ]
+    },
+    {
+      "title": "Risk Hub — kill_active (1 = HARD kill on)",
+      "type": "stat",
+      "id": 2,
+      "gridPos": {"h": 6, "w": 6, "x": 6, "y": 0},
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {"mode": "absolute", "steps": [
+            {"color": "green", "value": null}, {"color": "red", "value": 1}
+          ]}
+        }
+      },
+      "targets": [
+        {"expr": "max(quant_v3_risk_kill_active)", "refId": "A"}
+      ]
+    },
+    {
+      "title": "Risk Hub — size multiplier (SOFT throttle)",
+      "type": "timeseries",
+      "id": 3,
+      "gridPos": {"h": 6, "w": 12, "x": 12, "y": 0},
+      "datasource": "Prometheus",
+      "fieldConfig": {"defaults": {"min": 0, "max": 1.0}},
+      "targets": [
+        {"expr": "quant_v3_risk_size_multiplier", "legendFormat": "{{scope}}", "refId": "A"}
+      ]
+    },
+    {
+      "title": "Risk events per hour (by class)",
+      "type": "timeseries",
+      "id": 4,
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6},
+      "datasource": "Prometheus",
+      "targets": [
+        {"expr": "sum by (event_class) (rate(quant_v3_risk_event_total[1h]))",
+         "legendFormat": "{{event_class}}", "refId": "A"}
+      ]
+    },
+    {
+      "title": "Kill events lifetime (by scope + reason)",
+      "type": "timeseries",
+      "id": 5,
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6},
+      "datasource": "Prometheus",
+      "targets": [
+        {"expr": "sum by (scope, reason) (rate(quant_v3_risk_kill_total[1h]))",
+         "legendFormat": "{{scope}} / {{reason}}", "refId": "A"}
+      ]
+    },
+    {
+      "title": "GP Discovery — best Sharpe per cycle",
+      "type": "timeseries",
+      "id": 6,
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14},
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {"mode": "absolute", "steps": [
+            {"color": "red", "value": null}, {"color": "yellow", "value": 0.5},
+            {"color": "green", "value": 1.0}
+          ]}
+        }
+      },
+      "targets": [
+        {"expr": "quant_v4_gp_best_sharpe", "refId": "A"}
+      ]
+    },
+    {
+      "title": "GP Discovery — cycles by status",
+      "type": "stat",
+      "id": 7,
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14},
+      "datasource": "Prometheus",
+      "targets": [
+        {"expr": "sum by (status) (increase(quant_v4_gp_cycles_total[24h]))",
+         "legendFormat": "{{status}}", "refId": "A"}
+      ]
+    },
+    {
+      "title": "Reoptimizer cycle — daemon up?",
+      "type": "stat",
+      "id": 8,
+      "gridPos": {"h": 6, "w": 6, "x": 0, "y": 22},
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {"options": {"0": {"text": "DOWN", "color": "red"}, "1": {"text": "UP", "color": "green"}},
+             "type": "value"}
+          ]
+        }
+      },
+      "targets": [
+        {"expr": "up{job=\"quant-v4-reoptimizer\"}", "refId": "A"}
+      ]
+    },
+    {
+      "title": "GP daemon — up?",
+      "type": "stat",
+      "id": 9,
+      "gridPos": {"h": 6, "w": 6, "x": 6, "y": 22},
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {"options": {"0": {"text": "DOWN", "color": "red"}, "1": {"text": "UP", "color": "green"}},
+             "type": "value"}
+          ]
+        }
+      },
+      "targets": [
+        {"expr": "up{job=\"quant-v4-gp-discovery\"}", "refId": "A"}
+      ]
+    },
+    {
+      "title": "Learning-loop daemon — up?",
+      "type": "stat",
+      "id": 10,
+      "gridPos": {"h": 6, "w": 6, "x": 12, "y": 22},
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {"options": {"0": {"text": "DOWN", "color": "red"}, "1": {"text": "UP", "color": "green"}},
+             "type": "value"}
+          ]
+        }
+      },
+      "targets": [
+        {"expr": "up{job=\"quant-v3-learning-loop\"}", "refId": "A"}
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "tags": ["v4", "capital", "risk", "gp", "reopt"],
+  "time": {"from": "now-24h", "to": "now"},
+  "timezone": "browser",
+  "title": "Quant V4 — Capital + Risk + Discovery + Reopt",
+  "uid": "quant-v4",
+  "version": 1
+}
