@@ -22,10 +22,14 @@ start_service "statistics-service" "statistics-service" 8013
 
 # Daily alpha-incubator pipeline (bulk-submit + drain). Background daemon,
 # tracked by wait_for_pids so its death will trigger container restart.
-if [ "${INCUBATOR_CRON_ENABLED:-true}" = "true" ]; then
+# Guarded: the script is optional and may not be present in slim builds
+# (e.g. cycles where the IP-only incubator was extracted to quant-alpha).
+if [ "${INCUBATOR_CRON_ENABLED:-true}" = "true" ] && [ -x /code/scripts/incubator_cron.sh ]; then
     log "Starting incubator-cron daemon"
     /code/scripts/incubator_cron.sh &
     PIDS+=($!)
+else
+    log "incubator_cron.sh absent or disabled — skipping"
 fi
 
 wait_for_pids
