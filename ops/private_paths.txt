@@ -169,3 +169,10 @@ tests/portfolio/test_rebalance.py
 # listed (above, in 'Portfolio IP'), but the new tests need explicit
 # entry.
 tests/portfolio/test_attribution_v3.py
+
+# V4-6 — Multi-Venue Live Arb. The execution wiring (which venues to
+# route, fee schedule, urgency mapping) encodes our routing edge.
+# Everything else in V4 (capital_tier, monitor_hub, rl_agent,
+# reoptimizer, gp_miner) is academic/library-grade and stays public.
+shared/execution/multi_venue_arb.py
+tests/test_multi_venue_arb.py
