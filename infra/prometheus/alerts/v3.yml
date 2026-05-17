@@ -1,0 +1,81 @@
+groups:
+  - name: quant_v3_learning_loop
+    interval: 60s
+    rules:
+      - alert: V3LearningLoopDown
+        expr: absent(up{job="quant-v3-learning-loop"}) or up{job="quant-v3-learning-loop"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          area: learning
+        annotations:
+          summary: "V3 learning-loop daemon is not scraped"
+          description: "learning-loop:9100 unreachable for 5+ min. Cycle won't advance, MAB stays frozen."
+
+      - alert: V3LearningLoopNoActivity
+        expr: rate(quant_v3_learning_alpha_state_transitions_total[1h]) == 0
+              and on() (sum(quant_v3_learning_alpha_state) > 0)
+        for: 6h
+        labels:
+          severity: warning
+          area: learning
+        annotations:
+          summary: "No alpha state transitions in 6h despite tracked alphas"
+          description: "AlphaPauseDecider hasn't flipped a single alpha — either the DSR thresholds are mis-tuned or the alpha PnL stream is stuck."
+
+      - alert: V3DSRPersistentlyLow
+        expr: avg by (alpha_name) (quant_v3_learning_alpha_dsr) < 0.3
+        for: 30m
+        labels:
+          severity: warning
+          area: alpha_health
+        annotations:
+          summary: "Alpha {{ $labels.alpha_name }} DSR below 0.3 for 30+ min"
+          description: "DSR={{ $value }} — alpha is statistically indistinguishable from a multi-test artifact. Auto-pause should fire on the next decider step."
+
+      - alert: V3FactorDecayed
+        expr: quant_v3_learning_factor_decayed == 1
+        for: 1h
+        labels:
+          severity: info
+          area: factor_health
+        annotations:
+          summary: "Factor {{ $labels.factor_name }} has been decayed for 1h"
+          description: "IC_IR persistently below threshold. Active weight is 0. Consider deprecating from the registry."
+
+  - name: quant_v3_execution
+    interval: 60s
+    rules:
+      - alert: V3NoFillsLast4Hours
+        expr: (time() - max(quant_v3_maker_taker_decisions_total) * 0) > 14400
+              or absent(rate(quant_v3_maker_taker_decisions_total[1h]))
+        for: 4h
+        labels:
+          severity: warning
+          area: execution
+        annotations:
+          summary: "No maker/taker decisions logged in 4h"
+          description: "Either no trades are flowing through the bandit, or the bandit isn't wired into execution yet."
+
+      - alert: V3HighRealizedSlippage
+        expr: histogram_quantile(0.95, sum by (le, action) (rate(quant_v3_maker_taker_realized_slippage_bp_bucket[1h]))) > 50
+        for: 30m
+        labels:
+          severity: warning
+          area: execution
+        annotations:
+          summary: "p95 slippage > 50bp for {{ $labels.action }}"
+          description: "Realized slippage p95={{ $value }}bp — beyond typical 10-30bp range. Check liquidity / venue routing."
+
+  - name: quant_v3_attribution
+    interval: 120s
+    rules:
+      - alert: V3DeadAlphaFlagged
+        expr: increase(quant_v3_attribution_dead_alpha_flagged_total[1d]) >= 1
+        for: 1m
+        labels:
+          severity: info
+          area: alpha_health
+        annotations:
+          summary: "Alpha {{ $labels.alpha_name }} flagged dead today"
+          description: "Attribution gate (sharpe<=0, pnl<=0, hit_ratio<0.40) tripped — review for deactivation."
