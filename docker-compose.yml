@@ -337,6 +337,11 @@ services:
       # event fires — outcome_consumer never reinforces, MAB/IC engines starve.
       # Bumped back to 10.0 when ramp_factor > 0.
       - MIN_ORDER_NOTIONAL=0.01
+      # Mirrors execution:COMPLIANCE_MIN_ORDER_USD — the compliance check
+      # runs on both sides of the order pipeline. Mismatch (intelligence=1.0,
+      # execution=0.01 from .env) silently blocked publish at the intelligence
+      # gate, leaving shadow_fills dormant for 24h.
+      - COMPLIANCE_MIN_ORDER_USD=0.01
     ports:
       - "127.0.0.1:8006:8006"
       - "127.0.0.1:8014:8014"
