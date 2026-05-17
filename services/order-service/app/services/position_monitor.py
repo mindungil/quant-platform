@@ -41,14 +41,23 @@ def _delete_trailing_state(order_id: str) -> None:
 
 
 def _fetch_current_price(asset: str) -> float | None:
-    market_data_url = getattr(settings, "market_data_base_url", None) or "http://localhost:8001"
+    # order-service.config doesn't declare market_data_base_url, so we hit
+    # localhost:8001 (= self) every call → ConnectError → no protection
+    # triggers. Read the env directly (compose sets MARKET_DATA_BASE_URL).
+    import os as _os
+    market_data_url = (
+        _os.environ.get("MARKET_DATA_BASE_URL")
+        or getattr(settings, "market_data_base_url", None)
+        or "http://market-pipeline:8001"
+    )
     try:
         resp = httpx.get(f"{market_data_url}/candles/{asset}/latest", timeout=5.0)
         if resp.status_code == 200:
             data = resp.json()
             return float(data.get("close") or data.get("price", 0))
-    except Exception:
-        logger.warning("position_monitor_price_fetch_failed", extra={"asset": asset})
+    except Exception as exc:
+        logger.warning("position_monitor_price_fetch_failed",
+                       extra={"asset": asset, "error": str(exc)[:120]})
     return None
 
 
