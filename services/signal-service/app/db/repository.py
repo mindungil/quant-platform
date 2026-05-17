@@ -92,22 +92,38 @@ class SignalRepository:
                 """,
                 {"asset": asset, "user_id": user_id},
             )
-            # D10 fix: if no user-specific signal exists, fall back to the
-            # global anonymous signal. Without this, every user_id='bootstrap'
-            # query returns the 40-day-stale row from before the scheduler
-            # switched to anonymous evaluation, blocking the entire learning
-            # loop downstream (decision → fill → MAB reward).
+            # D10 fix: fall back to anonymous signal when the user-specific
+            # row is missing OR materially staler than the anonymous one
+            # (the scheduler writes anonymous now; per-user rows persist
+            # from earlier cycles and would otherwise pin a 40-day-stale
+            # signal in graph.gather → trigger SIGNAL_STALENESS abort).
+            anon_row = self._store.fetch_one(
+                """
+                SELECT payload::text AS payload, timestamp
+                FROM signal_history
+                WHERE asset = :asset
+                ORDER BY timestamp DESC
+                LIMIT 1
+                """,
+                {"asset": asset},
+            )
             if row is None:
-                row = self._store.fetch_one(
+                row = anon_row
+            elif anon_row is not None:
+                # Prefer anonymous when it's significantly fresher (> 1h).
+                user_row = self._store.fetch_one(
                     """
-                    SELECT payload::text AS payload
-                    FROM signal_history
-                    WHERE asset = :asset
+                    SELECT timestamp
+                    FROM signal_history_v2
+                    WHERE asset = :asset AND user_id = :user_id
                     ORDER BY timestamp DESC
                     LIMIT 1
                     """,
-                    {"asset": asset},
+                    {"asset": asset, "user_id": user_id},
                 )
+                if user_row is not None and anon_row.get("timestamp") and user_row.get("timestamp"):
+                    if anon_row["timestamp"] > user_row["timestamp"]:
+                        row = anon_row
         if row is None:
             return None
         payload = deserialize_json(row["payload"])
