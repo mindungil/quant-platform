@@ -19,6 +19,30 @@ class SignalSnapshot(BaseModel):
     components: dict[str, float]
     feature_timestamp: datetime
     reference_price: float | None = None
+    # Raw indicator pass-through (signal-service already produces these in its
+    # FeatureSnapshot model; this layer needs them so formula.compute() in
+    # graph.detect_node can call features.get('ema_9') and friends — without
+    # these, every formula returns confidence=0 → every decision becomes HOLD →
+    # no fills → MAB starves → V3 learning loop processes 0 alphas.
+    close: float | None = None
+    volume: float | None = None
+    rsi_14: float | None = None
+    macd: float | None = None
+    macd_signal: float | None = None
+    bb_upper: float | None = None
+    bb_lower: float | None = None
+    ema_9: float | None = None
+    ema_21: float | None = None
+    ema_50: float | None = None
+    ema_200: float | None = None
+    sma_20: float | None = None
+    sma_50: float | None = None
+    stochastic_k: float | None = None
+    stochastic_d: float | None = None
+    vwap: float | None = None
+    atr_14: float | None = None
+    adx_14: float | None = None
+    obv: float | None = None
 
 
 class StrategySnapshot(BaseModel):

@@ -169,14 +169,35 @@ def detect_node(state: AgentState) -> dict:
     signal = SignalSnapshot.model_validate(state["signal"])
 
     features = {"asset": state.get("asset", "default")}
-    for field_name in (
+    indicator_fields = (
         "close", "volume", "rsi_14", "macd", "macd_signal",
         "bb_upper", "bb_lower", "ema_9", "ema_21", "ema_50",
         "sma_20", "atr_14", "adx_14", "stochastic_k", "stochastic_d", "vwap",
-    ):
+    )
+    for field_name in indicator_fields:
         val = getattr(signal, field_name, None)
         if val is not None:
             features[field_name] = val
+
+    # Augment from feature-store — signal-service's response model historically
+    # drops the raw indicators, which left formula.compute() seeing None for
+    # ema_9/ema_21/atr_14/macd_signal/etc and returning confidence=0 for every
+    # bar. Pulling them from feature-store directly fixes the cold-start trap
+    # where the MAB never gets a non-HOLD outcome to learn from.
+    try:
+        fs_resp = httpx.get(
+            f"{settings.feature_store_base_url}/features/{state['asset']}/latest",
+            timeout=3.0,
+        )
+        if fs_resp.status_code == 200:
+            fs_payload = fs_resp.json()
+            for field_name in indicator_fields:
+                if features.get(field_name) is None and fs_payload.get(field_name) is not None:
+                    features[field_name] = fs_payload[field_name]
+    except Exception as exc:
+        logger.debug("graph_detect_feature_store_skipped", extra={
+            "asset": state["asset"], "error": str(exc)[:100],
+        })
 
     # Hydrate lookback closes for time-series momentum factors
     # (Liu & Tsyvinski 2021 — research-backed alpha; non-fatal)
