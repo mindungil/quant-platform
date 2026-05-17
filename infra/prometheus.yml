@@ -67,3 +67,9 @@ scrape_configs:
       - targets:
         - 'reoptimizer:9101'  # V4-4 reopt daemon
     metrics_path: '/metrics'
+
+  - job_name: 'quant-v4-gp-discovery'
+    static_configs:
+      - targets:
+        - 'gp-discovery:9102'  # V4-3 GP miner daemon
+    metrics_path: '/metrics'

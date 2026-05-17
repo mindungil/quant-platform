@@ -247,6 +247,29 @@ services:
       nats:
         condition: service_healthy
 
+  # ---- V4-3 GP Discovery daemon — symbolic-regression alpha mining ----
+  gp-discovery:
+    restart: unless-stopped
+    image: quant-strategy-lab
+    command: ["python", "/code/scripts/run_gp_discovery.py", "--daemon"]
+    env_file:
+      - .env.example
+      - .env
+    environment:
+      - GP_DISCOVERY_INTERVAL_SECONDS=3600
+      - GP_POPULATION=30
+      - GP_GENERATIONS=10
+      - GP_MIN_SHARPE=1.0
+      - GP_DISCOVERY_DRY_RUN=1
+      - METRICS_PORT=9102
+    depends_on:
+      strategy-lab:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   # ---- V4-4 Reoptimizer daemon — meta_ensemble + rebalance + router cycle ----
   reoptimizer:
     restart: unless-stopped

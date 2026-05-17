@@ -33,6 +33,8 @@ COPY scripts/start_strategy_lab.sh /code/start_strategy_lab.sh
 COPY scripts/run_learning_loop.py /code/scripts/run_learning_loop.py
 # V4-4 — reoptimizer daemon entry (sidecar service).
 COPY scripts/run_reoptimizer_daemon.py /code/scripts/run_reoptimizer_daemon.py
+# V4-3 — GP discovery daemon entry (sidecar service).
+COPY scripts/run_gp_discovery.py /code/scripts/run_gp_discovery.py
 RUN chmod +x /code/start_strategy_lab.sh /code/scripts/_lib/*.sh
 
 EXPOSE 8004 8005 8007 8013
