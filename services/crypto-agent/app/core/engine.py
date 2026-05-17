@@ -96,8 +96,8 @@ from app.core.graph_state import AgentState  # noqa: E402
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-SIGNAL_STALENESS_SECONDS = 300  # 5 minutes
-DUPLICATE_WINDOW_SECONDS = 60  # 1 minute
+SIGNAL_STALENESS_SECONDS = int(os.environ.get("SIGNAL_STALENESS_SECONDS", "300"))  # 5 minutes default
+DUPLICATE_WINDOW_SECONDS = int(os.environ.get("DUPLICATE_WINDOW_SECONDS", "60"))
 
 
 # ---------------------------------------------------------------------------
