@@ -577,7 +577,13 @@ def score_node(state: AgentState) -> dict:
     action = state.get("action", "HOLD")
     threshold_crossed = state.get("threshold_crossed", False)
 
-    if formula_confidence >= 0.3:
+    # Confidence gate — formula must be at least this confident to trigger
+    # a non-HOLD action. Default 0.3 is the production threshold; lower
+    # values during paper-soak / cold-start let weak signals through so the
+    # MAB + outcome_consumer can begin accumulating reinforcement data.
+    # Set FORMULA_CONFIDENCE_THRESHOLD=0.05 in .env for cold-start mode.
+    _fc_gate = float(os.environ.get("FORMULA_CONFIDENCE_THRESHOLD", "0.3"))
+    if formula_confidence >= _fc_gate:
         # Base threshold from strategy config
         strategy_threshold = abs(
             strategy_dict.get("thresholds", {}).get("entry", 0.6)
