@@ -92,6 +92,22 @@ class SignalRepository:
                 """,
                 {"asset": asset, "user_id": user_id},
             )
+            # D10 fix: if no user-specific signal exists, fall back to the
+            # global anonymous signal. Without this, every user_id='bootstrap'
+            # query returns the 40-day-stale row from before the scheduler
+            # switched to anonymous evaluation, blocking the entire learning
+            # loop downstream (decision → fill → MAB reward).
+            if row is None:
+                row = self._store.fetch_one(
+                    """
+                    SELECT payload::text AS payload
+                    FROM signal_history
+                    WHERE asset = :asset
+                    ORDER BY timestamp DESC
+                    LIMIT 1
+                    """,
+                    {"asset": asset},
+                )
         if row is None:
             return None
         payload = deserialize_json(row["payload"])
