@@ -161,7 +161,17 @@ class AgentScheduler:
         if self._should_skip_asset(asset):
             return
         try:
-            decision = await loop.run_in_executor(None, run_decision_loop, asset)
+            # D11 fix: use the bootstrap paper-trading user so portfolio_balance
+            # resolves to a seeded value ($10k+ paper). Without a user_id, the
+            # cycle resolves to 'anonymous' whose paper portfolio is empty
+            # ($0.11) → every order falls below min_order_notional → no fills
+            # → MAB never gets a reward → learning loop starves.
+            import functools
+            scheduler_user = os.environ.get("SCHEDULER_USER_ID", "bootstrap")
+            decision = await loop.run_in_executor(
+                None,
+                functools.partial(run_decision_loop, asset, user_id=scheduler_user),
+            )
             phase_timings = {}
             for phase in (decision.decision_phases or []):
                 if phase.name and phase.duration_ms is not None:
