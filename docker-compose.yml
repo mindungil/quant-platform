@@ -247,6 +247,24 @@ services:
       nats:
         condition: service_healthy
 
+  # ---- V4-4 Reoptimizer daemon — meta_ensemble + rebalance + router cycle ----
+  reoptimizer:
+    restart: unless-stopped
+    image: quant-strategy-lab
+    command: ["python", "/code/scripts/run_reoptimizer_daemon.py", "--daemon"]
+    env_file:
+      - .env.example
+      - .env
+    environment:
+      - REOPTIMIZER_INTERVAL_SECONDS=300
+      - REOPTIMIZER_DRY_RUN=1
+      - METRICS_PORT=9101
+    depends_on:
+      strategy-lab:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   # ---- execution domain (Phase 5): order + exchange-adapter + risk + credential-store + portfolio ----
   execution:
     restart: unless-stopped

@@ -452,6 +452,23 @@ def _build_order_request(decision: DecisionRecord, *, shadow_override: bool = Fa
     # Cap at max_notional hard limit
     requested_notional = min(requested_notional, settings.default_max_notional)
 
+    # V4-2 / V4-5 wiring: Capital tier cap (paper/micro/small/mid/full) and
+    # risk-monitor-hub soft-throttle. Kill events from the hub force PAPER
+    # via capital_tier.register_kill_from_risk_hub, so just reading the
+    # tier-aware cap here covers both layers.
+    try:
+        from shared.risk import capital_tier
+        from shared.risk.monitor_hub import current_size_multiplier
+        soft_mult = current_size_multiplier(scope="crypto-agent")
+        if soft_mult <= 0:
+            logger.warning("order_throttled_to_zero", extra={"asset": decision.asset})
+            return None
+        requested_notional = capital_tier.cap_order_notional(requested_notional * soft_mult)
+        if requested_notional < settings.min_order_notional:
+            return None
+    except ImportError:
+        pass  # public-only build — V4 modules absent
+
     quantity = round(requested_notional / reference_price, 6) if reference_price > 0 else 0.01
     return {
         "user_id": decision.user_id,

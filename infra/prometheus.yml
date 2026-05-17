@@ -61,3 +61,9 @@ scrape_configs:
       - targets:
         - 'learning-loop:9100'  # V3 #1 daemon — Prometheus metric exporter
     metrics_path: '/metrics'
+
+  - job_name: 'quant-v4-reoptimizer'
+    static_configs:
+      - targets:
+        - 'reoptimizer:9101'  # V4-4 reopt daemon
+    metrics_path: '/metrics'
