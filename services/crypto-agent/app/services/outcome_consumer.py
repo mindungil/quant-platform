@@ -206,6 +206,44 @@ class OutcomeReinforcementConsumer:
                         "formula_name": formula_name, "error": str(exc)[:100],
                     })
 
+            # ── D9: V3 maker_taker bandit production wire ──
+            # Every fill feeds the per-context bandit. Context = (spread,
+            # vol_regime, order_size, urgency). Reward = -realized_slippage / 100.
+            # First cycles → bandit posteriors start populated; subsequent
+            # cycles → maker/taker decision quality measurable in Grafana.
+            try:
+                from shared.execution.maker_taker_bandit import (
+                    context_key, slippage_to_reward, MakerTakerBandit,
+                )
+                # Lazy module-level singleton (mirrors mab_state.py pattern)
+                global _MT_BANDIT  # type: ignore
+                try:
+                    _MT_BANDIT  # type: ignore[used-before-assignment]
+                except NameError:
+                    _MT_BANDIT = MakerTakerBandit(
+                        epsilon=float(os.getenv("MAKER_TAKER_EPSILON", "0.15")),
+                    )
+                # Bucket size by USD notional from fill price × quantity
+                qty = float(data.get("filled_quantity") or data.get("quantity") or 0)
+                size_usd = abs(qty * fill_price) if fill_price else 0.0
+                # Default conservative regime values when missing — bandit
+                # learns the right action per bucket regardless.
+                ctx = context_key(
+                    spread_bp=float(data.get("spread_bp", 10.0)),
+                    annualized_vol=float(data.get("annualized_vol", 0.30)),
+                    order_size_usd=size_usd,
+                    urgency=str(data.get("urgency", "normal")),
+                )
+                # If order_type label present, use it; else fall back to TAKER
+                # (most paper-fills are simulated market orders).
+                action = str(data.get("order_type", "TAKER")).upper()
+                if action not in ("MAKER", "TAKER"):
+                    action = "TAKER"
+                reward = slippage_to_reward(tca.realized_slippage_bp)
+                _MT_BANDIT.update(ctx, action, reward)
+            except Exception as exc:
+                logger.debug("maker_taker_bandit_update_skipped: %s", str(exc)[:120])
+
             # ── IC Engine: feed real fill outcome for factor weight learning ──
             # This is the highest-quality signal: actual trade result, not hindsight.
             try:
