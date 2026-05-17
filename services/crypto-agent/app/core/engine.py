@@ -552,12 +552,34 @@ def _phase_detect(
 
     # Build features dict from signal snapshot
     features = {}
-    for field_name in ("close", "volume", "rsi_14", "macd", "macd_signal",
+    indicator_fields = ("close", "volume", "rsi_14", "macd", "macd_signal",
                         "bb_upper", "bb_lower", "ema_9", "ema_21", "ema_50",
-                        "sma_20", "atr_14", "adx_14", "stochastic_k", "stochastic_d", "vwap"):
+                        "sma_20", "atr_14", "adx_14", "stochastic_k", "stochastic_d", "vwap")
+    for field_name in indicator_fields:
         val = getattr(signal, field_name, None)
         if val is not None:
             features[field_name] = val
+
+    # Augment from feature-store: signal-service's response model drops the
+    # raw indicators, so without this fallback formula.compute() sees None
+    # for ema_9/atr_14/macd_signal/etc and returns confidence=0 for every
+    # bar — every decision becomes HOLD, FormulaMAB never gets a reward,
+    # the entire learning loop starves. See commit 3a39a87 / P1 plan.
+    try:
+        import httpx as _httpx
+        fs_resp = _httpx.get(
+            f"{settings.feature_store_base_url}/features/{signal.asset}/latest",
+            timeout=3.0,
+        )
+        if fs_resp.status_code == 200:
+            fs_payload = fs_resp.json()
+            for field_name in indicator_fields:
+                if features.get(field_name) is None and fs_payload.get(field_name) is not None:
+                    features[field_name] = fs_payload[field_name]
+    except Exception as exc:
+        logger.debug("phase_detect_feature_store_skipped", extra={
+            "asset": signal.asset, "error": str(exc)[:100],
+        })
 
     regime = detect_regime(features, asset=signal.asset)
     suggested_type = suggest_formula_type(regime)
