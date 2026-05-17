@@ -61,7 +61,10 @@ def _clients():
     import app.core.engine as _engine_mod
     return _engine_mod.signal_client, _engine_mod.memory_client, _engine_mod.strategy_client, _engine_mod.llm_gateway_client, _engine_mod.publisher
 
-SIGNAL_STALENESS_SECONDS = 300
+# Stale gate — old signals trigger graph abort before detect/score even run.
+# Default 300s (5min) is production-tight; raise via env when the upstream
+# signal-eval cadence is slow (cold-start, weekend, market-pipeline rebuild).
+SIGNAL_STALENESS_SECONDS = int(os.environ.get("SIGNAL_STALENESS_SECONDS", "300"))
 
 
 # ---------------------------------------------------------------------------
