@@ -633,6 +633,14 @@ def score_node(state: AgentState) -> dict:
         except Exception:
             pos_threshold = strategy_threshold
 
+        # Env override — cold-start / paper-soak mode lets weak signals through
+        # so the MAB can start accumulating reward data. Set
+        # STRATEGY_ENTRY_THRESHOLD_OVERRIDE to a small positive value (e.g.
+        # 0.05) in .env to bypass the strategy/protocol gates entirely.
+        _env_override = float(os.environ.get("STRATEGY_ENTRY_THRESHOLD_OVERRIDE", "0") or "0")
+        if _env_override > 0:
+            pos_threshold = _env_override
+
         # A2: Asymmetric thresholds — make SELL much easier to trigger than BUY
         # so we exit losing positions quickly. BUY uses the full threshold while
         # SELL fires at ~58% of it (e.g. 0.6 BUY vs -0.35 SELL).
