@@ -41,57 +41,60 @@ LOOKBACK_BARS = int(os.getenv("LEARNING_LOOP_LOOKBACK_BARS", "1"))
 DRY_RUN = os.getenv("LEARNING_LOOP_DRY_RUN", "0") == "1"
 
 
-def _fetch_alpha_pnl(lookback_bars: int) -> list[tuple[str, float]]:
-    """Return [(alpha_name, latest_bar_pnl), ...] from the ledger.
+def _psycopg_url() -> str | None:
+    """Return a raw psycopg URL (strip SQLAlchemy driver prefix if present)."""
+    url = os.getenv("POSTGRES_URL")
+    if not url:
+        return None
+    # psycopg only accepts the bare `postgresql://` scheme.
+    return url.replace("postgresql+psycopg://", "postgresql://", 1)
 
-    Replace the SQL with your actual ledger schema. The expected output
-    is a single (alpha_name, pnl) tuple per active alpha per cycle.
+
+def _fetch_alpha_pnl(lookback_bars: int) -> list[tuple[str, float]]:
+    """Return [(strategy_id, latest_pnl_sum), ...] from shadow_fills.
+
+    Uses `strategy_id` as the learning key. Once we add a true
+    per-alpha PnL ledger (e.g. extract alpha_name from
+    signal_history.payload), point this query at it instead.
+
+    `lookback_bars` is in bars; we use 5min per bar as a default
+    cadence and convert to interval seconds.
     """
+    url = _psycopg_url()
+    if not url:
+        return []
     try:
         import psycopg
-        url = os.getenv("POSTGRES_URL")
-        if not url:
-            return []
-        with psycopg.connect(url, autocommit=True) as conn:
+        seconds = lookback_bars * 300  # 5min/bar
+        with psycopg.connect(url, autocommit=True, connect_timeout=5) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT alpha_name, sum(bar_pnl) as pnl
-                    FROM alpha_bar_pnl
-                    WHERE bar_ts > now() - interval '%s minutes'
-                    GROUP BY alpha_name
+                    SELECT strategy_id, COALESCE(SUM(pnl), 0) AS pnl
+                    FROM shadow_fills
+                    WHERE realized = true
+                      AND pnl IS NOT NULL
+                      AND ts > now() - make_interval(secs => %s)
+                    GROUP BY strategy_id
                     """,
-                    (lookback_bars * 5,),
+                    (seconds,),
                 )
-                return [(row[0], float(row[1])) for row in cur.fetchall()]
+                return [(str(row[0]), float(row[1])) for row in cur.fetchall()]
     except Exception as exc:
         logger.warning("alpha_pnl_fetch_failed: %s", exc)
         return []
 
 
 def _fetch_factor_ic_inputs() -> list[tuple[str, float, float]]:
-    """Return [(factor_name, latest_score, latest_forward_return), ...].
+    """Return [(factor_name, score, forward_return), ...].
 
-    Same as above — adapt the SQL to your factor scoring ledger.
+    No dedicated factor scoring ledger yet — this stays a no-op until
+    we add one. The signal-service writes scores to signal_history.payload
+    but joining against the next-bar return is non-trivial in SQL; an
+    in-memory consumer would be a better fit. Returning [] keeps the
+    learning loop cycle clean.
     """
-    try:
-        import psycopg
-        url = os.getenv("POSTGRES_URL")
-        if not url:
-            return []
-        with psycopg.connect(url, autocommit=True) as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    SELECT factor_name, score, forward_return
-                    FROM factor_scoring_ledger
-                    WHERE bar_ts > now() - interval '15 minutes'
-                    """
-                )
-                return [(row[0], float(row[1]), float(row[2])) for row in cur.fetchall()]
-    except Exception as exc:
-        logger.warning("factor_ic_fetch_failed: %s", exc)
-        return []
+    return []
 
 
 async def _publish_state_change(event: dict[str, Any]) -> None:
