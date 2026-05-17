@@ -247,6 +247,26 @@ services:
       nats:
         condition: service_healthy
 
+  # ---- D8 — Attribution per-cycle daemon ----
+  attribution-daemon:
+    restart: unless-stopped
+    image: quant-strategy-lab
+    command: ["python", "/code/scripts/run_attribution_daemon.py", "--daemon"]
+    env_file:
+      - .env.example
+      - .env
+    environment:
+      - ATTRIBUTION_INTERVAL_SECONDS=300
+      - ATTRIBUTION_LOOKBACK_HOURS=24
+      - METRICS_PORT=9104
+    depends_on:
+      strategy-lab:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   # ---- D7 — Drawdown auto-kill daemon ----
   drawdown-monitor:
     restart: unless-stopped

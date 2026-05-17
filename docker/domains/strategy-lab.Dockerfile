@@ -37,6 +37,8 @@ COPY scripts/run_reoptimizer_daemon.py /code/scripts/run_reoptimizer_daemon.py
 COPY scripts/run_gp_discovery.py /code/scripts/run_gp_discovery.py
 # D7 — drawdown auto-kill daemon entry.
 COPY scripts/run_drawdown_monitor.py /code/scripts/run_drawdown_monitor.py
+# D8 — attribution per-cycle daemon.
+COPY scripts/run_attribution_daemon.py /code/scripts/run_attribution_daemon.py
 RUN chmod +x /code/start_strategy_lab.sh /code/scripts/_lib/*.sh
 
 EXPOSE 8004 8005 8007 8013

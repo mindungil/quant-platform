@@ -79,3 +79,9 @@ scrape_configs:
       - targets:
         - 'drawdown-monitor:9103'  # D7 DD auto-kill daemon
     metrics_path: '/metrics'
+
+  - job_name: 'quant-d8-attribution'
+    static_configs:
+      - targets:
+        - 'attribution-daemon:9104'
+    metrics_path: '/metrics'
