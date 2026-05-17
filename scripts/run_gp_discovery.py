@@ -49,9 +49,18 @@ def _psycopg_url() -> str | None:
 def _fetch_features_and_returns():
     """Return (features_df, forward_returns_series).
 
-    Strategy: pull (created_at, components, signal_score) from
-    crypto_decisions for the last 7d, then use signal_score velocity as
-    a forward-return proxy (same trick as the factor IC ledger).
+    D13: forward_return is now joined against the *actual* next-bar
+    price return from the market candles table, instead of using the
+    signal_score velocity proxy (which yielded an unrealistic
+    Sharpe ~90 in the first cycle — the proxy was almost perfectly
+    self-correlated).
+
+    SQL pattern:
+      1. CTE 'dec': pick the components + reference_price + timestamp
+         per decision in the last 7d for BTCUSDT.
+      2. CTE 'fwd': LEAD(reference_price) → next decision's price for
+         the same asset, ordered chronologically.
+      3. forward_return = (next_ref_price - ref_price) / ref_price.
     """
     url = _psycopg_url()
     if not url:
@@ -63,12 +72,25 @@ def _fetch_features_and_returns():
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT created_at, asset,
-                           (payload->>'signal_score')::float AS score,
-                           payload->'components' AS comps
-                    FROM crypto_decisions
-                    WHERE created_at > now() - interval '7 days'
-                      AND asset = 'BTCUSDT'
+                    WITH dec AS (
+                      SELECT created_at, asset,
+                             (payload->>'reference_price')::float AS ref_price,
+                             payload->'components' AS comps
+                      FROM crypto_decisions
+                      WHERE created_at > now() - interval '7 days'
+                        AND asset = 'BTCUSDT'
+                        AND (payload->>'reference_price')::float > 0
+                    ),
+                    fwd AS (
+                      SELECT created_at, ref_price, comps,
+                        LEAD(ref_price) OVER (ORDER BY created_at) AS next_ref_price
+                      FROM dec
+                    )
+                    SELECT created_at, ref_price, comps,
+                           (next_ref_price - ref_price) / NULLIF(ref_price, 0) AS forward_return
+                    FROM fwd
+                    WHERE next_ref_price IS NOT NULL
+                      AND ref_price > 0
                     ORDER BY created_at
                     """
                 )
@@ -76,10 +98,9 @@ def _fetch_features_and_returns():
         if len(rows) < 100:
             logger.warning("not_enough_data rows=%s", len(rows))
             return None, None
-        # Build features DataFrame from the components dict
         records = []
-        scores = []
-        for ts, _asset, score, comps in rows:
+        rets = []
+        for ts, _ref_price, comps, fwd_ret in rows:
             rec = {"timestamp": ts}
             for k, v in (comps or {}).items():
                 if k.startswith("_") or k in ("formula_confidence", "style_score",
@@ -91,9 +112,9 @@ def _fetch_features_and_returns():
                 except (TypeError, ValueError):
                     continue
             records.append(rec)
-            scores.append(float(score))
+            rets.append(float(fwd_ret or 0.0))
         features = pd.DataFrame(records).set_index("timestamp").sort_index()
-        forward_returns = pd.Series(scores, index=features.index).diff().fillna(0.0)
+        forward_returns = pd.Series(rets, index=features.index)
         return features, forward_returns
     except Exception as exc:
         logger.warning("fetch_failed: %s", exc)
