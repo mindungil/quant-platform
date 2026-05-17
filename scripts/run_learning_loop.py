@@ -86,15 +86,58 @@ def _fetch_alpha_pnl(lookback_bars: int) -> list[tuple[str, float]]:
 
 
 def _fetch_factor_ic_inputs() -> list[tuple[str, float, float]]:
-    """Return [(factor_name, score, forward_return), ...].
+    """Return [(factor_name, score, forward_return), ...] from crypto_decisions.
 
-    No dedicated factor scoring ledger yet — this stays a no-op until
-    we add one. The signal-service writes scores to signal_history.payload
-    but joining against the next-bar return is non-trivial in SQL; an
-    in-memory consumer would be a better fit. Returning [] keeps the
-    learning loop cycle clean.
+    P3 implementation: leverages the components dict that crypto-agent
+    already writes to crypto_decisions.payload (rsi, macd, vwap, bollinger,
+    fear_greed_index, etc.) and joins each decision against the *next*
+    decision for the same asset to compute a forward return proxy
+    (delta in signal_score, scaled).
+
+    The forward_return is a noisy proxy — true alpha factor IC would need
+    next-bar realized return, but signal_score velocity captures most of
+    the same signal. Good enough for FactorDecayMonitor to start
+    distinguishing live factors from dead ones.
     """
-    return []
+    url = _psycopg_url()
+    if not url:
+        return []
+    try:
+        import psycopg
+        with psycopg.connect(url, autocommit=True, connect_timeout=5) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    WITH dec AS (
+                      SELECT created_at, asset,
+                             (payload->>'signal_score')::float AS score,
+                             payload->'components' AS comps
+                      FROM crypto_decisions
+                      WHERE created_at > now() - interval '1 hour'
+                    ),
+                    fwd AS (
+                      SELECT *,
+                        LEAD(score) OVER (PARTITION BY asset ORDER BY created_at) AS next_score
+                      FROM dec
+                    )
+                    SELECT
+                      key AS factor_name,
+                      (comps->>key)::float AS factor_score,
+                      (next_score - score) AS forward_return
+                    FROM fwd, jsonb_object_keys(comps) AS key
+                    WHERE next_score IS NOT NULL
+                      AND comps ? key
+                      AND (comps->>key) ~ '^-?[0-9]+\\.?[0-9]*$'
+                      AND key NOT IN ('formula_confidence', '_regime_code', '_weight_mode',
+                                       '_n_components', '_agreement_bonus',
+                                       'style_score', 'ensemble_score', 'style_formula', 'regime')
+                    LIMIT 5000
+                    """
+                )
+                return [(str(r[0]), float(r[1]), float(r[2])) for r in cur.fetchall()]
+    except Exception as exc:
+        logger.warning("factor_ic_fetch_failed: %s", exc)
+        return []
 
 
 async def _publish_state_change(event: dict[str, Any]) -> None:
