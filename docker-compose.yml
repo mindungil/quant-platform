@@ -247,6 +247,27 @@ services:
       nats:
         condition: service_healthy
 
+  # ---- D7 — Drawdown auto-kill daemon ----
+  drawdown-monitor:
+    restart: unless-stopped
+    image: quant-strategy-lab
+    command: ["python", "/code/scripts/run_drawdown_monitor.py", "--daemon"]
+    env_file:
+      - .env.example
+      - .env
+    environment:
+      - DRAWDOWN_MONITOR_INTERVAL_SECONDS=60
+      - DRAWDOWN_SOFT_THROTTLE_PCT=0.05
+      - DRAWDOWN_SOFT_THROTTLE_MULT=0.5
+      - DRAWDOWN_KILL_PCT=0.15
+      - DRAWDOWN_MONITOR_USER=bootstrap
+      - METRICS_PORT=9103
+    depends_on:
+      strategy-lab:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   # ---- V4-3 GP Discovery daemon — symbolic-regression alpha mining ----
   gp-discovery:
     restart: unless-stopped

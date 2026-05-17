@@ -73,3 +73,9 @@ scrape_configs:
       - targets:
         - 'gp-discovery:9102'  # V4-3 GP miner daemon
     metrics_path: '/metrics'
+
+  - job_name: 'quant-v4-drawdown-monitor'
+    static_configs:
+      - targets:
+        - 'drawdown-monitor:9103'  # D7 DD auto-kill daemon
+    metrics_path: '/metrics'
