@@ -437,6 +437,28 @@ def _build_order_request(decision: DecisionRecord, *, shadow_override: bool = Fa
         decision.signal_score, portfolio_balance, win_rate, payoff_ratio, realized_vol
     )
 
+    # D16: floor Kelly sizing at min_order_notional for micro portfolios so
+    # weak-but-valid signals still produce flow. Decision already passed the
+    # graph entry threshold by the time we get here, so the signal is "valid";
+    # we just need a sane safety check that the floor isn't oversized for
+    # the portfolio (require portfolio >= floor × safety_mult).
+    if (
+        getattr(settings, "order_size_floor_enabled", False)
+        and requested_notional < settings.min_order_notional
+        and portfolio_balance >= settings.min_order_notional * settings.order_size_floor_safety_mult
+    ):
+        logger.info(
+            "order_size_floored",
+            extra={
+                "kelly_notional": requested_notional,
+                "floored_to": settings.min_order_notional,
+                "portfolio_balance": portfolio_balance,
+                "asset": decision.asset,
+                "user_id": decision.user_id,
+            },
+        )
+        requested_notional = settings.min_order_notional
+
     # Skip if below minimum
     if requested_notional < settings.min_order_notional:
         logger.info(
@@ -444,7 +466,9 @@ def _build_order_request(decision: DecisionRecord, *, shadow_override: bool = Fa
             extra={
                 "requested_notional": requested_notional,
                 "min_order_notional": settings.min_order_notional,
+                "portfolio_balance": portfolio_balance,
                 "asset": decision.asset,
+                "user_id": decision.user_id,
             },
         )
         return None

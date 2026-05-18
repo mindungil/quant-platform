@@ -31,6 +31,12 @@ class Settings:
     kelly_fraction: float = float(os.getenv("KELLY_FRACTION", "0.5"))
     target_vol: float = float(os.getenv("TARGET_VOLATILITY", "0.15"))
     min_order_notional: float = float(os.getenv("MIN_ORDER_NOTIONAL", "10.0"))
+    # D16: floor the order at min_order_notional when Kelly sizing falls below
+    # min but the portfolio could still afford the floor amount with reasonable
+    # safety margin. Unlocks micro-portfolio users so closed-loop activates
+    # for all 4 user_ids instead of only bootstrap.
+    order_size_floor_enabled: bool = os.getenv("ORDER_SIZE_FLOOR_ENABLED", "true").lower() == "true"
+    order_size_floor_safety_mult: float = float(os.getenv("ORDER_SIZE_FLOOR_SAFETY_MULT", "5.0"))
     default_stop_loss_pct: float = float(os.getenv("DEFAULT_AGENT_STOP_LOSS_PCT", "0.02"))
     default_take_profit_pct: float = float(os.getenv("DEFAULT_AGENT_TAKE_PROFIT_PCT", "0.05"))
     default_trailing_stop_pct: float = float(os.getenv("DEFAULT_AGENT_TRAILING_STOP_PCT", "0.03"))
