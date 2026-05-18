@@ -52,16 +52,24 @@ def _redis():
 
 
 def _fetch_balance() -> float | None:
-    """Pull current portfolio NAV from portfolio-service."""
+    """Pull current portfolio NAV from portfolio-service.
+
+    D18: the bare /portfolio/{user_id} endpoint returns the persisted snapshot
+    which has positions/exposure/realized_pnl but no NAV-like equity field, so
+    every cycle returned no_balance. /portfolio/{user_id}/live computes
+    total_value at current market prices (positions + unrealized_pnl), which
+    matches what drawdown should track.
+    """
     import httpx
     url = os.getenv("PORTFOLIO_SERVICE_BASE_URL", "http://execution:8012")
     try:
-        r = httpx.get(f"{url}/portfolio/{USER_ID}", timeout=3.0)
+        r = httpx.get(f"{url}/portfolio/{USER_ID}/live", timeout=3.0)
         if r.status_code != 200:
+            logger.debug("balance_fetch_non_200 status=%s body=%s",
+                         r.status_code, r.text[:120])
             return None
         data = r.json()
-        # Common field names — adapt to your portfolio-service shape
-        for k in ("total_equity", "nav", "balance", "total_value"):
+        for k in ("total_value", "total_equity", "nav", "balance"):
             if k in data and data[k] is not None:
                 return float(data[k])
         return None

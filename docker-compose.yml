@@ -282,6 +282,11 @@ services:
       - DRAWDOWN_KILL_PCT=0.15
       - DRAWDOWN_MONITOR_USER=bootstrap
       - METRICS_PORT=9103
+      # D18: .env defaults PORTFOLIO_SERVICE_BASE_URL to localhost:8012, which
+      # resolves to the monitor container itself inside the docker network.
+      # Pin to the execution service so the balance fetch actually reaches
+      # portfolio-service.
+      - PORTFOLIO_SERVICE_BASE_URL=http://execution:8012
     depends_on:
       strategy-lab:
         condition: service_healthy
