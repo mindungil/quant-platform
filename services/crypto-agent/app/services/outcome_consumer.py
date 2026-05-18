@@ -81,9 +81,24 @@ class OutcomeReinforcementConsumer:
             order_id = data.get("order_id", "")
             asset = data.get("asset", "")
             side = data.get("side", "")
-            fill_price = float(data.get("fill_price", 0) or data.get("price", 0))
-            quantity = float(data.get("quantity", 0))
-            pnl = float(data.get("pnl", 0))
+            # D20: the order.filled NATS event carries OrderResponse.model_dump()
+            # which nests fill data under `fill`. fall back to top-level keys
+            # for older event shapes.
+            fill = data.get("fill") or {}
+            fill_price = float(
+                fill.get("filled_price")
+                or data.get("fill_price", 0)
+                or data.get("price", 0)
+            )
+            quantity = float(
+                fill.get("filled_quantity")
+                or data.get("quantity", 0)
+            )
+            # D20: pnl now flows from the shadow recorder via FillSnapshot.pnl.
+            pnl = float(
+                fill.get("pnl")
+                or data.get("pnl", 0)
+            )
 
             if not correlation_id:
                 logger.debug("order_filled_no_correlation", extra={"order_id": order_id})
@@ -169,13 +184,19 @@ class OutcomeReinforcementConsumer:
 
             # Update MAB with trade outcome for formula learning
             components = decision_data.get("components", {})
+            # D20: graph.py writes the formula key as "style_formula" and the
+            # regime key as "regime". Older code paths used "formula_name" /
+            # "regime_label" — accept both so the MAB receives outcomes from
+            # whichever publisher produced the decision.
             formula_name = (
                 decision_data.get("formula_name")
                 or components.get("formula_name")
+                or components.get("style_formula")
             )
             regime_label = (
                 decision_data.get("regime_label")
                 or components.get("regime_label")
+                or components.get("regime")
             )
             # Extract formula name from reasoning prefix if not in components
             reasoning = decision_data.get("reasoning", "")
@@ -192,7 +213,14 @@ class OutcomeReinforcementConsumer:
 
             if formula_name and formula_mab is not None:
                 try:
-                    formula_mab.update(formula_name, trade_outcome, regime=regime_label)
+                    # D20: graph.py stores the display name "ensemble+<arm>".
+                    # MAB arms are registered with the raw name (e.g. "macd_histogram").
+                    # Strip the prefix so the right arm receives the reward;
+                    # without this every update is silently dropped.
+                    mab_arm = formula_name
+                    if isinstance(mab_arm, str) and mab_arm.startswith("ensemble+"):
+                        mab_arm = mab_arm[len("ensemble+"):]
+                    formula_mab.update(mab_arm, trade_outcome, regime=regime_label)
                     logger.info("mab_updated_from_outcome", extra={
                         "formula_name": formula_name,
                         "regime": regime_label,

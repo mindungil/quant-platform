@@ -54,6 +54,10 @@ class FillSnapshot(BaseModel):
     filled_price: float
     exchange_order_id: str | None = None
     fees: float = 0.0
+    # D20: realized pnl from the shadow recorder, populated before publish so
+    # the order.filled NATS event carries a real reward signal to MAB. Stays
+    # 0.0 for opening legs (no prior opposite fill found).
+    pnl: float = 0.0
 
 
 class PortfolioSnapshot(BaseModel):

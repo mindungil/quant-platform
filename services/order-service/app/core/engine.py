@@ -718,15 +718,9 @@ def _process_order_impl(payload: OrderRequest) -> OrderResponse:
         },
         idempotency_key=payload.idempotency_key,
     )
-    if fill_recorded:
-        if response.status == "PARTIALLY_FILLED":
-            publisher.publish_order_partially_filled(payload, response)
-        else:
-            publisher.publish_order_filled(payload, response)
-
-    # Shadow ledger: when a strategy is in shadow/paper mode, every "fill" is
-    # a paper trade. Record it so the strategy-registry's promotion gate has
-    # real metrics to evaluate. This closes the SHADOW → ACTIVE loop.
+    # D20: shadow ledger MUST run before publish so the recorder's pnl lands
+    # in response.fill.pnl, which the NATS event carries to outcome_consumer.
+    # Without this the MAB sees pnl=0 forever and never learns from outcomes.
     if (
         payload.shadow_mode
         and response.status in {"FILLED", "SIMULATED_FILLED", "PARTIALLY_FILLED"}
@@ -737,20 +731,9 @@ def _process_order_impl(payload: OrderRequest) -> OrderResponse:
             from shared.shadow import ShadowFill
             from shared.shadow.recorder import get_recorder
             recorder = get_recorder()
-            # Heuristic realized PnL: if there's an existing open position from
-            # the portfolio snapshot, treat this fill as a close. Otherwise it's
-            # an open. We don't have full per-strategy position bookkeeping in
-            # the order-service so we use a simple "every fill is a round-trip
-            # at the requested notional" model — the goal is to *track relative
-            # performance*, not to be a portfolio accountant.
             entry = float(response.fill.filled_price or payload.price or 0.0)
             qty = float(response.fill.filled_quantity or payload.quantity or 0.0)
-            # PnL approximation: for a closing fill, pnl_pct from previous mark.
-            # We don't have a previous mark, so for the shadow ledger we record
-            # signed notional change driven by direction; the recorder uses
-            # this as the "trade outcome" series to compute Sharpe over time.
             sign = 1.0 if payload.side.upper() == "BUY" else -1.0
-            # Pull most recent quote for a quick-and-dirty mark via portfolio snapshot
             mark = entry
             if response.portfolio is not None:
                 try:
@@ -759,25 +742,23 @@ def _process_order_impl(payload: OrderRequest) -> OrderResponse:
                         mark = float(pos.average_price)
                 except Exception:
                     mark = entry
-            # The shadow ledger needs realized pnl to compute metrics; for the
-            # bar-by-bar shadow strategy this is approximated as 0 on open
-            # fills and pnl_pct * notional on closing ones. We mark every fill
-            # as realized=True with pnl=0 by default; the orchestrator promotes
-            # by counting trades + checking subsequent strategy state.
-            recorder.record_fill(
-                ShadowFill(
-                    strategy_id=str(payload.strategy_id),
-                    user_id=str(payload.user_id),
-                    asset=str(payload.asset),
-                    side=str(payload.side).upper(),
-                    quantity=qty,
-                    entry_price=entry,
-                    exit_price=mark if mark != entry else None,
-                    pnl=(mark - entry) * qty * sign if mark != entry else 0.0,
-                    realized=True,
-                )
+            shadow_fill = ShadowFill(
+                strategy_id=str(payload.strategy_id),
+                user_id=str(payload.user_id),
+                asset=str(payload.asset),
+                side=str(payload.side).upper(),
+                quantity=qty,
+                entry_price=entry,
+                exit_price=mark if mark != entry else None,
+                pnl=(mark - entry) * qty * sign if mark != entry else 0.0,
+                realized=True,
             )
-            # Best-effort push to registry — don't block the order path
+            # record_fill mutates shadow_fill.pnl via _compute_pnl_from_prior_fill
+            # when the heuristic pnl is 0 (i.e., mark == entry).
+            recorder.record_fill(shadow_fill)
+            # Propagate realized pnl into the response so publish_order_filled's
+            # event payload carries a real reward signal — closes the MAB loop.
+            response.fill.pnl = float(shadow_fill.pnl or 0.0)
             recorder.push_snapshot(str(payload.strategy_id))
         except Exception:
             logger.exception(
@@ -788,6 +769,12 @@ def _process_order_impl(payload: OrderRequest) -> OrderResponse:
                     "strategy_id": payload.strategy_id,
                 },
             )
+
+    if fill_recorded:
+        if response.status == "PARTIALLY_FILLED":
+            publisher.publish_order_partially_filled(payload, response)
+        else:
+            publisher.publish_order_filled(payload, response)
 
     # Create protective orders (stop-loss, take-profit, trailing stop) for filled orders
     if response.status in {"FILLED", "SIMULATED_FILLED", "PARTIALLY_FILLED"} and response.fill is not None:

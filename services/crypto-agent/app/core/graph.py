@@ -975,6 +975,10 @@ def record_node(state: AgentState) -> dict:
 
     components = dict(signal.components)
     components["formula_confidence"] = round(formula_confidence, 4)
+    # D20: persist formula+regime so outcome_consumer can route the realized
+    # pnl into the correct MAB arm. Without these the MAB never learns.
+    components["style_formula"] = formula_name
+    components["regime"] = regime_label
 
     decision = DecisionRecord(
         decision_id=decision_id,
