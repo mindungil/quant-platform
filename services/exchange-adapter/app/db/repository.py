@@ -95,6 +95,13 @@ class ExchangeRepository:
 
     @staticmethod
     def _default_fill_price(payload: ExchangeOrderRequest) -> float:
+        # D17b: prefer the requested price (truth) over back-computing from
+        # notional/quantity (which loses precision at micro-notional scale —
+        # round(qty, 6) collapses BTC quantities to 0 and ETH quantities to
+        # near-integer multiples, producing fake fill prices).
+        price = getattr(payload, "price", 0.0) or 0.0
+        if price > 0:
+            return float(price)
         if payload.quantity > 0 and payload.requested_notional > 0:
             return round(payload.requested_notional / payload.quantity, 8)
         return 0.0

@@ -181,6 +181,13 @@ class ShadowRecorder:
     # ----- public API -----
 
     def record_fill(self, fill: ShadowFill) -> None:
+        # D17: derive realized PnL from prior opposite-side fill (the caller
+        # used to set pnl=0 because it couldn't see prior positions). Closes
+        # the loop so MAB outcome update has a real reward signal instead of
+        # 0 forever.
+        if fill.realized and (fill.pnl is None or fill.pnl == 0.0):
+            self._compute_pnl_from_prior_fill(fill)
+
         with self._lock:
             ledger = self._fills[fill.strategy_id]
             ledger.append(fill)
@@ -188,6 +195,55 @@ class ShadowRecorder:
             if len(ledger) > self._rolling_window * 2:
                 self._fills[fill.strategy_id] = ledger[-self._rolling_window :]
         self._persist(fill)
+
+    def _compute_pnl_from_prior_fill(self, fill: ShadowFill) -> None:
+        """Find most recent opposite-side fill for same (strategy, user, asset)
+        within a sliding window and compute realized pnl from it.
+
+        Sign convention:
+          BUY closes a short  → pnl = (entry - exit) * qty   (entry_short > exit_buy = profit)
+          SELL closes a long  → pnl = (exit - entry) * qty   (exit_sell > entry_long = profit)
+
+        If no opposite prior fill is found, the fill is treated as an opening
+        leg and pnl stays at 0.
+        """
+        if not self._sql:
+            return
+        opposite = "SELL" if fill.side.upper() == "BUY" else "BUY"
+        try:
+            row = self._sql.fetch_one(
+                """
+                SELECT entry_price, quantity
+                FROM shadow_fills
+                WHERE strategy_id = :strategy_id
+                  AND user_id = :user_id
+                  AND asset = :asset
+                  AND side = :side
+                  AND ts > NOW() - INTERVAL '24 hours'
+                ORDER BY ts DESC
+                LIMIT 1
+                """,
+                {
+                    "strategy_id": fill.strategy_id,
+                    "user_id": fill.user_id,
+                    "asset": fill.asset,
+                    "side": opposite,
+                },
+            )
+            if row is None:
+                return  # opening leg — pnl stays at 0
+            prior_entry = float(row["entry_price"])
+            prior_qty = float(row["quantity"])
+            closed_qty = min(fill.quantity, prior_qty)
+            current_price = fill.entry_price  # caller writes fill_price into entry_price
+            if fill.side.upper() == "SELL":
+                pnl = (current_price - prior_entry) * closed_qty
+            else:  # BUY closes a short
+                pnl = (prior_entry - current_price) * closed_qty
+            fill.exit_price = current_price
+            fill.pnl = float(pnl)
+        except Exception as exc:
+            logger.warning("compute_pnl_failed", extra={"error": str(exc)[:200]})
 
     def snapshot(self, strategy_id: str) -> ShadowSnapshot | None:
         with self._lock:

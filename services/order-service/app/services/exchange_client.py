@@ -41,6 +41,7 @@ class ExchangeClient:
                 "side": payload.side,
                 "quantity": payload.quantity,
                 "requested_notional": payload.requested_notional,
+                "price": getattr(payload, "price", 0.0) or 0.0,
                 "shadow_mode": payload.shadow_mode,
                 "api_key": getattr(payload, "api_key", None),
                 "api_secret": getattr(payload, "api_secret", None),

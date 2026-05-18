@@ -13,6 +13,11 @@ class ExchangeOrderRequest(BaseModel):
     side: str
     quantity: float
     requested_notional: float = 0.0
+    # D17b: pass the intended market price through so the shadow adapter can
+    # echo it back as the fill price. Back-computing notional/quantity loses
+    # precision at micro-notional ($0.01) scale and synthesizes wrong prices
+    # (e.g. ETH @ $2000 when real market is $2109).
+    price: float = 0.0
     shadow_mode: bool = False
     api_key: str | None = None
     api_secret: str | None = None
