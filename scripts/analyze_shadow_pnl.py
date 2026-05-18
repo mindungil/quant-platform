@@ -29,20 +29,26 @@ def _connect():
 
 
 def _aggregate(hours: int) -> list[dict]:
+    # D19: LEFT JOIN strategies so the report shows the human-readable name
+    # next to (or instead of) the opaque UUID. Strategies live in the
+    # registry, fills carry strategy_id only — join here keeps the script
+    # self-contained.
     sql = """
-    SELECT strategy_id,
+    SELECT sf.strategy_id,
+           COALESCE(s.name, '(unknown)') AS strategy_name,
            COUNT(*) AS fills,
-           COUNT(*) FILTER (WHERE pnl IS NOT NULL AND pnl != 0) AS nz_pnl_fills,
-           COALESCE(SUM(pnl), 0)::float AS cum_pnl,
-           COALESCE(AVG(pnl), 0)::float AS mean_pnl,
-           COALESCE(STDDEV(pnl), 0)::float AS std_pnl,
-           COUNT(*) FILTER (WHERE pnl > 0) AS wins,
-           COUNT(*) FILTER (WHERE pnl < 0) AS losses,
-           MIN(ts) AS first_fill,
-           MAX(ts) AS last_fill
-    FROM shadow_fills
-    WHERE ts > NOW() - (%s || ' hours')::interval
-    GROUP BY strategy_id
+           COUNT(*) FILTER (WHERE sf.pnl IS NOT NULL AND sf.pnl != 0) AS nz_pnl_fills,
+           COALESCE(SUM(sf.pnl), 0)::float AS cum_pnl,
+           COALESCE(AVG(sf.pnl), 0)::float AS mean_pnl,
+           COALESCE(STDDEV(sf.pnl), 0)::float AS std_pnl,
+           COUNT(*) FILTER (WHERE sf.pnl > 0) AS wins,
+           COUNT(*) FILTER (WHERE sf.pnl < 0) AS losses,
+           MIN(sf.ts) AS first_fill,
+           MAX(sf.ts) AS last_fill
+    FROM shadow_fills sf
+    LEFT JOIN strategies s ON s.id = sf.strategy_id
+    WHERE sf.ts > NOW() - (%s || ' hours')::interval
+    GROUP BY sf.strategy_id, s.name
     HAVING COUNT(*) > 0
     ORDER BY cum_pnl DESC
     """
@@ -70,16 +76,20 @@ def _print_table(rows: list[dict]) -> None:
     if not rows:
         print("(no fills in window)")
         return
-    # Header
-    print(f"{'strategy_id':<40} {'fills':>6} {'nz':>4} "
+    # D19: show "name (uuid_prefix)" so the same name across different
+    # strategy_ids is still distinguishable (3 of 4 active strategies share
+    # the default "Crypto Momentum Bootstrap" name).
+    print(f"{'strategy':<40} {'fills':>6} {'nz':>4} "
           f"{'cum_pnl':>14} {'mean':>12} {'std':>12} "
           f"{'win%':>6} {'naive_SR':>9}")
     print("-" * 120)
     total_cum = 0.0
     for r in rows:
-        sid = r["strategy_id"]
-        sid_disp = sid if len(sid) <= 40 else sid[:37] + "..."
-        print(f"{sid_disp:<40} {r['fills']:>6} {r['nz_pnl_fills']:>4} "
+        name = r.get("strategy_name") or "(unknown)"
+        sid_short = (r["strategy_id"] or "")[:8]
+        label = f"{name} ({sid_short})"
+        label = label if len(label) <= 40 else label[:37] + "..."
+        print(f"{label:<40} {r['fills']:>6} {r['nz_pnl_fills']:>4} "
               f"{r['cum_pnl']:>14.6f} {r['mean_pnl']:>12.6f} {r['std_pnl']:>12.6f} "
               f"{r['win_rate']*100:>5.1f}% {r['naive_sharpe']:>9.4f}")
         total_cum += r["cum_pnl"]
