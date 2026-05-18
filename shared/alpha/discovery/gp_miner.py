@@ -252,6 +252,16 @@ class GPConfig:
     mutation_rate: float = 0.20
     max_tree_depth: int = 3
     seed: Optional[int] = None
+    # D6: annualization factor for fitness Sharpe. The default 8760 assumes
+    # hourly bars; for 10-minute forward-return sampling use 52560
+    # (= 365 * 24 * 6). Mismatched periods_per_year vs actual sampling rate
+    # is the largest source of inflated Sharpe in this pipeline.
+    periods_per_year: float = 24 * 365
+    # D6: hard reject Sharpe above this when scoring — anything above ~5 in
+    # crypto on minute-scale returns implies same-bar leakage. Keep
+    # finite to surface candidates that are clearly broken, instead of
+    # rewarding them.
+    sharpe_outlier_cap: float = 10.0
 
 
 @dataclass
@@ -284,7 +294,16 @@ def evolve(
     best_sharpe = float("-inf")
 
     for gen in range(cfg.n_generations):
-        scored = [(t, fitness_sharpe(t, features, forward_returns)) for t in population]
+        # D6: pass periods_per_year + apply outlier cap (Sharpe > cap is
+        # almost certainly leakage; punish during evolution so the search
+        # doesn't chase it).
+        scored = []
+        for t in population:
+            s = fitness_sharpe(t, features, forward_returns,
+                                periods_per_year=cfg.periods_per_year)
+            if s > cfg.sharpe_outlier_cap:
+                s = -abs(s)  # convert suspicious win to loss
+            scored.append((t, s))
         scored.sort(key=lambda x: x[1], reverse=True)
         if scored[0][1] > best_sharpe:
             best_sharpe = scored[0][1]

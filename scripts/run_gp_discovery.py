@@ -49,29 +49,26 @@ def _psycopg_url() -> str | None:
 def _fetch_features_and_returns():
     """Return (features_df, forward_returns_series).
 
-    D13: forward_return is now joined against the *actual* next-bar
-    price return from the market candles table, instead of using the
-    signal_score velocity proxy (which yielded an unrealistic
-    Sharpe ~90 in the first cycle — the proxy was almost perfectly
-    self-correlated).
+    D13: forward_return derived from next-bar reference_price delta.
 
-    SQL pattern:
-      1. CTE 'dec': pick the components + reference_price + timestamp
-         per decision in the last 7d for BTCUSDT.
-      2. CTE 'fwd': LEAD(reference_price) → next decision's price for
-         the same asset, ordered chronologically.
-      3. forward_return = (next_ref_price - ref_price) / ref_price.
+    D6: switched from row-wise LEAD to a time-windowed lateral join that
+    finds the first decision at least FORWARD_HORIZON_MINUTES later
+    (default 10). Row-wise LEAD over ~70-second-apart decisions made the
+    "forward return" mostly noise that the features (RSI/bollinger)
+    partially encode — same-bar leakage producing Sharpe ~80. A 10-min
+    horizon forces the prediction over a meaningful window.
     """
     url = _psycopg_url()
     if not url:
         return None, None
+    horizon = int(os.getenv("GP_FORWARD_HORIZON_MINUTES", "10"))
     try:
         import psycopg
         import pandas as pd
         with psycopg.connect(url, autocommit=True, connect_timeout=5) as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    """
+                    f"""
                     WITH dec AS (
                       SELECT created_at, asset,
                              (payload->>'reference_price')::float AS ref_price,
@@ -82,9 +79,14 @@ def _fetch_features_and_returns():
                         AND (payload->>'reference_price')::float > 0
                     ),
                     fwd AS (
-                      SELECT created_at, ref_price, comps,
-                        LEAD(ref_price) OVER (ORDER BY created_at) AS next_ref_price
-                      FROM dec
+                      SELECT d.created_at, d.ref_price, d.comps,
+                        (
+                          SELECT d2.ref_price FROM dec d2
+                          WHERE d2.created_at >= d.created_at
+                                              + interval '{horizon} minutes'
+                          ORDER BY d2.created_at ASC LIMIT 1
+                        ) AS next_ref_price
+                      FROM dec d
                     )
                     SELECT created_at, ref_price, comps,
                            (next_ref_price - ref_price) / NULLIF(ref_price, 0) AS forward_return
@@ -150,10 +152,17 @@ def _run_cycle() -> dict:
     if features is None or features.empty:
         return {"status": "no_data"}
 
+    # D6: annualization that actually matches the forward-return horizon.
+    # 10-minute horizon → 6 buckets/hour × 24h × 365 = 52560.
+    horizon = int(os.getenv("GP_FORWARD_HORIZON_MINUTES", "10"))
+    periods_per_year = (365 * 24 * 60) / max(horizon, 1)
+
     factors = list(features.columns)
     cfg = GPConfig(
         population_size=POPULATION, n_generations=GENERATIONS,
         max_tree_depth=3, seed=int(time.time()) % 10_000,
+        periods_per_year=periods_per_year,
+        sharpe_outlier_cap=float(os.getenv("GP_SHARPE_OUTLIER_CAP", "10.0")),
     )
     result = evolve(factors=factors, features=features,
                     forward_returns=forward_returns, config=cfg)
@@ -165,12 +174,14 @@ def _run_cycle() -> dict:
         "n_factors": len(factors),
         "history_min": min(result.history),
         "history_max": max(result.history),
+        "forward_horizon_min": horizon,
     }
 
     # Gate check
     if result.best_sharpe >= MIN_SHARPE:
         ok, diag = passes_gate(result.best_tree, features, forward_returns,
-                                min_sharpe=MIN_SHARPE)
+                                min_sharpe=MIN_SHARPE,
+                                periods_per_year=periods_per_year)
         summary.update({"gate_passed": ok, "gate_diag": diag})
         if ok and not DRY_RUN:
             _persist_winner(result.best_str, result.best_sharpe, diag)
