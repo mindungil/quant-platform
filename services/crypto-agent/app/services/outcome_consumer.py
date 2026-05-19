@@ -43,6 +43,19 @@ outcome_reinforcement_pnl_total = Gauge(
     "outcome_reinforcement_pnl_total",
     "Cumulative PnL from reinforced outcomes",
 )
+# F3: visibility into the D20 wiring — how often does a realized order fill
+# actually translate into a MAB.update call? Labeled by status so we can tell
+# the difference between "wired correctly" and "silently dropped at every
+# guard along the way".
+mab_outcome_update_total = Counter(
+    "mab_outcome_update_total",
+    "MAB updates triggered by realized outcomes",
+    ["status"],  # success | no_formula | mab_unavailable | exception
+)
+mab_outcome_update_reward = Gauge(
+    "mab_outcome_update_reward_last",
+    "Last reward value passed to formula_mab.update from outcome consumer",
+)
 
 memory_client = MemoryClient(settings.memory_service_base_url)
 
@@ -117,10 +130,16 @@ class OutcomeReinforcementConsumer:
             reference_price = float(decision_data.get("reference_price", 0))
             signal_score = float(decision_data.get("signal_score", 0))
 
-            # Calculate trade outcome using TCA-adjusted reward.
-            # See app/core/tca.py for the decomposition: pnl - cost_weight * |slippage|.
+            # F1c: TCA expects `pnl` as a fractional return (e.g. 0.012 = +1.2%),
+            # but the shadow recorder emits raw-dollar PnL. On testnet notional
+            # of ~$0.1, that produced ~1e-5-magnitude rewards — three orders of
+            # magnitude smaller than hindsight, so the MAB barely learned from
+            # realized outcomes. Normalize by notional here so realized and
+            # hindsight rewards live on the same scale.
+            notional = abs(fill_price * quantity) if (fill_price and quantity) else 0.0
+            pnl_fraction = pnl / notional if notional > 0 else pnl
             tca = compute_tca_reward(
-                pnl=pnl,
+                pnl=pnl_fraction,
                 fill_price=fill_price,
                 reference_price=reference_price,
                 side=side,
@@ -221,6 +240,8 @@ class OutcomeReinforcementConsumer:
                     if isinstance(mab_arm, str) and mab_arm.startswith("ensemble+"):
                         mab_arm = mab_arm[len("ensemble+"):]
                     formula_mab.update(mab_arm, trade_outcome, regime=regime_label)
+                    mab_outcome_update_total.labels(status="success").inc()
+                    mab_outcome_update_reward.set(trade_outcome)
                     logger.info("mab_updated_from_outcome", extra={
                         "formula_name": formula_name,
                         "regime": regime_label,
@@ -230,9 +251,14 @@ class OutcomeReinforcementConsumer:
                         "reward_source": tca.reward_source,
                     })
                 except Exception as exc:
+                    mab_outcome_update_total.labels(status="exception").inc()
                     logger.warning("mab_update_failed", extra={
                         "formula_name": formula_name, "error": str(exc)[:100],
                     })
+            elif not formula_name:
+                mab_outcome_update_total.labels(status="no_formula").inc()
+            else:
+                mab_outcome_update_total.labels(status="mab_unavailable").inc()
 
             # ── D9: V3 maker_taker bandit production wire ──
             # Every fill feeds the per-context bandit. Context = (spread,

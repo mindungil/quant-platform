@@ -126,13 +126,18 @@ class LearningScheduler:
                 price_change_pct = ((current_price - ref_price) / ref_price) * 100
                 action = d.get("action", "HOLD")
 
-                # Determine reward
+                # Action-aware reward in [-1, 1]. Denominator 2.0 makes a 2% move
+                # the full reward, which roughly matches the 1-sigma range of BTC
+                # over the 1-48h hindsight window — gives the MAB a stronger
+                # gradient than the previous /5.0 (which spent most of its range
+                # on outliers).
+                REWARD_DENOM = 2.0
                 if action == "BUY":
-                    reward = price_change_pct / 5.0  # 5% = full reward
+                    reward = price_change_pct / REWARD_DENOM
                 elif action == "SELL":
-                    reward = -price_change_pct / 5.0
+                    reward = -price_change_pct / REWARD_DENOM
                 else:  # HOLD
-                    reward = max(0, 1 - abs(price_change_pct) / 5.0) * 0.3  # small reward for correct hold
+                    reward = max(0, 1 - abs(price_change_pct) / REWARD_DENOM) * 0.3
 
                 reward = max(-1.0, min(1.0, reward))
 
@@ -141,13 +146,15 @@ class LearningScheduler:
                 formula_name = components.get("style_formula")
                 regime = components.get("regime") or d.get("regime") or ""
 
-                # Update MAB — skip if decision didn't record a formula. Previously
-                # this defaulted to "composite_adaptive", which silently attributed
-                # every formula-less decision to that arm and was the primary source
-                # of its ~21M-pull inflation.
+                # F1: pass the already-normalized, action-aware reward. The previous
+                # call sent raw price_change_pct, which (a) ignored action sign
+                # (SELL decisions got their reward inverted) and (b) re-applied the
+                # /5.0 normalization inside update_from_hindsight. Skip when the
+                # decision didn't record a formula — the old "composite_adaptive"
+                # default was the source of the 21M-pull runaway.
                 if formula_name:
                     try:
-                        formula_mab.update_from_hindsight(formula_name, price_change_pct, regime=regime)
+                        formula_mab.update(formula_name, reward, regime=regime or None)
                         verified_count += 1
                     except Exception:
                         pass

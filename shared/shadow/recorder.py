@@ -86,6 +86,12 @@ class ShadowRecorder:
         self._lock = threading.Lock()
         self._fills: dict[str, list[ShadowFill]] = defaultdict(list)
         self._last_snapshot: dict[str, ShadowSnapshot] = {}
+        # F2: FIFO open-leg queue per (strategy_id, user_id, asset).
+        # Each entry: {"side": "BUY"|"SELL", "qty": float, "entry_price": float}.
+        # Used to correctly pair consecutive fills: the previous logic
+        # (most-recent-opposite SELECT … LIMIT 1) re-paired against the same
+        # stale leg on runs of same-side fills, producing phantom pnl.
+        self._open_legs: dict[tuple[str, str, str], list[dict]] = defaultdict(list)
         self._rolling_window = rolling_window
         self._registry_base = registry_base_url or os.getenv(
             "STRATEGY_REGISTRY_BASE_URL", "http://localhost:8005"
@@ -157,8 +163,28 @@ class ShadowRecorder:
                     timestamp=r["ts"] if isinstance(r["ts"], datetime) else datetime.now(UTC),
                 )
                 self._fills[fill.strategy_id].append(fill)
+            # F2: replay loaded fills through the FIFO matcher to rebuild the
+            # open-leg queue so subsequent new fills pair against the right
+            # historical positions (rather than starting from an empty book).
+            self._rebuild_open_legs()
         except Exception as exc:
             logger.warning("shadow_recorder_reload_failed", extra={"error": str(exc)[:200]})
+
+    def _rebuild_open_legs(self) -> None:
+        """Replay all loaded fills in timestamp order to reconstruct FIFO state.
+
+        Doesn't mutate stored pnl on disk — only updates self._open_legs so
+        future calls to record_fill have the correct queue context.
+        """
+        self._open_legs.clear()
+        all_fills: list[ShadowFill] = []
+        for ledger in self._fills.values():
+            all_fills.extend(ledger)
+        all_fills.sort(key=lambda f: f.timestamp)
+        for f in all_fills:
+            if f.realized:
+                key = (f.strategy_id, f.user_id, f.asset)
+                self._fifo_match(f.side, f.quantity, f.entry_price, key)
 
     def _persist(self, fill: ShadowFill) -> None:
         if not self._sql:
@@ -181,12 +207,20 @@ class ShadowRecorder:
     # ----- public API -----
 
     def record_fill(self, fill: ShadowFill) -> None:
-        # D17: derive realized PnL from prior opposite-side fill (the caller
-        # used to set pnl=0 because it couldn't see prior positions). Closes
-        # the loop so MAB outcome update has a real reward signal instead of
-        # 0 forever.
-        if fill.realized and (fill.pnl is None or fill.pnl == 0.0):
-            self._compute_pnl_from_prior_fill(fill)
+        # F2: always run the FIFO matcher for realized fills so the open-leg
+        # queue stays consistent with the actual fill sequence. Only overwrite
+        # pnl when the caller didn't compute one — preserves upstream PnL but
+        # keeps the queue authoritative for future pairings.
+        if fill.realized:
+            had_pnl = fill.pnl not in (None, 0.0)
+            key = (fill.strategy_id, fill.user_id, fill.asset)
+            with self._lock:
+                matched_qty, pnl = self._fifo_match(
+                    fill.side, fill.quantity, fill.entry_price, key
+                )
+            if matched_qty > 0 and not had_pnl:
+                fill.exit_price = fill.entry_price
+                fill.pnl = float(pnl)
 
         with self._lock:
             ledger = self._fills[fill.strategy_id]
@@ -196,54 +230,42 @@ class ShadowRecorder:
                 self._fills[fill.strategy_id] = ledger[-self._rolling_window :]
         self._persist(fill)
 
-    def _compute_pnl_from_prior_fill(self, fill: ShadowFill) -> None:
-        """Find most recent opposite-side fill for same (strategy, user, asset)
-        within a sliding window and compute realized pnl from it.
+    def _fifo_match(
+        self, side: str, qty: float, price: float, key: tuple[str, str, str]
+    ) -> tuple[float, float]:
+        """FIFO-match an incoming fill against opposite-side open legs.
 
-        Sign convention:
-          BUY closes a short  → pnl = (entry - exit) * qty   (entry_short > exit_buy = profit)
-          SELL closes a long  → pnl = (exit - entry) * qty   (exit_sell > entry_long = profit)
+        Mutates self._open_legs[key]: drains matched legs from the front and
+        appends a new leg on the same side when qty exceeds the matched book.
+        Returns (matched_qty, realized_pnl).
 
-        If no opposite prior fill is found, the fill is treated as an opening
-        leg and pnl stays at 0.
+        Sign convention (price = incoming fill price):
+          SELL closes a long  → pnl = (price - entry) * qty
+          BUY  closes a short → pnl = (entry - price) * qty
         """
-        if not self._sql:
-            return
-        opposite = "SELL" if fill.side.upper() == "BUY" else "BUY"
-        try:
-            row = self._sql.fetch_one(
-                """
-                SELECT entry_price, quantity
-                FROM shadow_fills
-                WHERE strategy_id = :strategy_id
-                  AND user_id = :user_id
-                  AND asset = :asset
-                  AND side = :side
-                  AND ts > NOW() - INTERVAL '24 hours'
-                ORDER BY ts DESC
-                LIMIT 1
-                """,
-                {
-                    "strategy_id": fill.strategy_id,
-                    "user_id": fill.user_id,
-                    "asset": fill.asset,
-                    "side": opposite,
-                },
-            )
-            if row is None:
-                return  # opening leg — pnl stays at 0
-            prior_entry = float(row["entry_price"])
-            prior_qty = float(row["quantity"])
-            closed_qty = min(fill.quantity, prior_qty)
-            current_price = fill.entry_price  # caller writes fill_price into entry_price
-            if fill.side.upper() == "SELL":
-                pnl = (current_price - prior_entry) * closed_qty
+        queue = self._open_legs[key]
+        incoming_qty = float(qty)
+        incoming_side = side.upper()
+        pnl = 0.0
+        matched_qty = 0.0
+        EPS = 1e-12
+        while incoming_qty > EPS and queue and queue[0]["side"] != incoming_side:
+            leg = queue[0]
+            take = min(incoming_qty, leg["qty"])
+            if incoming_side == "SELL":
+                pnl += (price - leg["entry_price"]) * take
             else:  # BUY closes a short
-                pnl = (prior_entry - current_price) * closed_qty
-            fill.exit_price = current_price
-            fill.pnl = float(pnl)
-        except Exception as exc:
-            logger.warning("compute_pnl_failed", extra={"error": str(exc)[:200]})
+                pnl += (leg["entry_price"] - price) * take
+            leg["qty"] -= take
+            incoming_qty -= take
+            matched_qty += take
+            if leg["qty"] < EPS:
+                queue.pop(0)
+        if incoming_qty > EPS:
+            queue.append(
+                {"side": incoming_side, "qty": incoming_qty, "entry_price": float(price)}
+            )
+        return matched_qty, pnl
 
     def snapshot(self, strategy_id: str) -> ShadowSnapshot | None:
         with self._lock:

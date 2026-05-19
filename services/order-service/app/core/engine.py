@@ -753,8 +753,9 @@ def _process_order_impl(payload: OrderRequest) -> OrderResponse:
                 pnl=(mark - entry) * qty * sign if mark != entry else 0.0,
                 realized=True,
             )
-            # record_fill mutates shadow_fill.pnl via _compute_pnl_from_prior_fill
-            # when the heuristic pnl is 0 (i.e., mark == entry).
+            # record_fill runs the FIFO matcher against prior opposite-side
+            # open legs and overwrites shadow_fill.pnl when the upstream
+            # heuristic pnl is 0 (i.e., mark == entry).
             recorder.record_fill(shadow_fill)
             # Propagate realized pnl into the response so publish_order_filled's
             # event payload carries a real reward signal — closes the MAB loop.
