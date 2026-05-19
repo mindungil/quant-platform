@@ -363,9 +363,12 @@ def recall_node(state: AgentState) -> dict:
             data = resp.json()
             items = data.get("items", [])
 
-            # 2. Load into MAB
-            if items and formula_mab is not None:
-                formula_mab.load_from_memory(items)
+            # 2. (Removed) MAB bootstrap from memory per-decision.
+            # The MAB is updated authoritatively by the hindsight loop in
+            # learning_scheduler.fast_loop and persists to Redis. Reloading
+            # the same memory items every decision double-counted each
+            # outcome and inflated arm pulls (notably composite_adaptive
+            # to ~21M). Redis restart-survival happens in FormulaMAB.__init__.
 
             # 3. Compute composite scores
             formula_rankings: dict[str, list] = {}
@@ -537,19 +540,9 @@ def score_node(state: AgentState) -> dict:
     # the MAB on every decision so its accumulated learning + ε-greedy
     # exploration actually drives formula selection.
     if style_formula is None and formula_mab is not None and formula_registry is not None:
-        # Best-effort memory bootstrap (non-fatal)
-        try:
-            resp = httpx.post(
-                f"{settings.memory_service_base_url}/memory/search/formula-outcomes",
-                json={"regime_label": suggested_type, "top_k": 200},
-                timeout=5.0,
-            )
-            if resp.status_code == 200:
-                items = resp.json().get("items", [])
-                if items:
-                    formula_mab.load_from_memory(items)
-        except Exception:
-            pass
+        # (Removed) per-decision load_from_memory bootstrap — see recall_node.
+        # MAB state is hydrated from Redis on construction and updated by the
+        # hindsight loop. Loading memory items here was double-counting.
 
         # Eligible = all registered formulas if we have no scores yet,
         # else the subset that memory has data for.

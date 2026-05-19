@@ -749,19 +749,10 @@ def _phase_score(
 
     # Priority 2: Thompson Sampling MAB (contextual bandit)
     if selected_formula is None and formula_scores and formula_mab is not None and formula_registry is not None:
-        try:
-            import httpx
-            resp = httpx.post(
-                f"{settings.memory_service_base_url}/memory/search/formula-outcomes",
-                json={"regime_label": suggested_type, "top_k": 200},
-                timeout=5.0,
-            )
-            if resp.status_code == 200:
-                items = resp.json().get("items", [])
-                if items:
-                    formula_mab.load_from_memory(items)
-        except Exception as exc:
-            logger.debug("mab_memory_fetch_failed", extra={"error": str(exc)[:100]})
+        # (Removed) per-decision load_from_memory bootstrap — see graph.py.
+        # MAB state hydrates from Redis on construction and updates via the
+        # hindsight loop. Reloading memory items each decision caused arm
+        # state to grow unbounded (composite_adaptive hit ~21M pulls).
 
         mab_choice = formula_mab.select(
             regime=suggested_type,

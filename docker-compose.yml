@@ -429,6 +429,12 @@ services:
       # execution=0.01 from .env) silently blocked publish at the intelligence
       # gate, leaving shadow_fills dormant for 24h.
       - COMPLIANCE_MIN_ORDER_USD=0.01
+      # E5: Block arms with consistently-negative observed mean from being
+      # selected. After 24h of natural accumulation only mean_reversion_bb and
+      # vwap_reversion had positive mean; the remaining six bled small but
+      # consistent losses. They keep receiving updates so they can recover and
+      # be re-enabled later by removing them from this list.
+      - MAB_DISABLED_ARMS=rsi_divergence,macd_histogram,volatility_breakout,factor_ensemble,stochastic_momentum,momentum_ema_cross
     ports:
       - "127.0.0.1:8006:8006"
       - "127.0.0.1:8014:8014"

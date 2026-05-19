@@ -130,6 +130,14 @@ class FormulaMAB:
         }
         # Per-regime arm states for contextual bandits
         self._regime_arms: dict[str, dict[str, ArmState]] = {}
+        # Disabled arms: never selected, but still updated so they can recover later.
+        # Configured via env var MAB_DISABLED_ARMS=name1,name2 (comma-separated).
+        raw_disabled = os.getenv("MAB_DISABLED_ARMS", "")
+        self._disabled_arms: set[str] = {
+            n.strip() for n in raw_disabled.split(",") if n.strip()
+        }
+        if self._disabled_arms:
+            logger.info("mab_disabled_arms", extra={"disabled": sorted(self._disabled_arms)})
         # Persistence: try to load from Redis at construction time
         self._update_counter = 0
         try:
@@ -247,6 +255,13 @@ class FormulaMAB:
                 candidates = {k: v for k, v in arms.items() if k in eligible}
             if not candidates:
                 candidates = arms
+
+            # Drop disabled arms. If everything is disabled, fall through to all
+            # candidates so the system stays functional rather than crashing.
+            if self._disabled_arms:
+                filtered = {k: v for k, v in candidates.items() if k not in self._disabled_arms}
+                if filtered:
+                    candidates = filtered
 
             # ε-greedy: with prob EPSILON, force uniform random exploration
             if random.random() < EPSILON and len(candidates) > 1:

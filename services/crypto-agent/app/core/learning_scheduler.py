@@ -138,15 +138,19 @@ class LearningScheduler:
 
                 # Get formula name + regime from components (now embedded by graph.py)
                 components = d.get("components") or {}
-                formula_name = components.get("style_formula", "composite_adaptive")
+                formula_name = components.get("style_formula")
                 regime = components.get("regime") or d.get("regime") or ""
 
-                # Update MAB
-                try:
-                    formula_mab.update_from_hindsight(formula_name, price_change_pct, regime=regime)
-                    verified_count += 1
-                except Exception:
-                    pass
+                # Update MAB — skip if decision didn't record a formula. Previously
+                # this defaulted to "composite_adaptive", which silently attributed
+                # every formula-less decision to that arm and was the primary source
+                # of its ~21M-pull inflation.
+                if formula_name:
+                    try:
+                        formula_mab.update_from_hindsight(formula_name, price_change_pct, regime=regime)
+                        verified_count += 1
+                    except Exception:
+                        pass
 
                 # Track accuracy with asymmetric HOLD scoring (matches hindsight.py).
                 # HOLD only counts (correct OR incorrect) when the market was actually
