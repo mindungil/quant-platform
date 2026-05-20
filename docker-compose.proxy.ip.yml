@@ -1,0 +1,44 @@
+services:
+  reverse-proxy:
+    image: caddy:2.8
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    env_file:
+      - .env
+    volumes:
+      - ./infra/reverse-proxy/Caddyfile.ip:/etc/caddy/Caddyfile:ro
+      - ./infra/reverse-proxy/certs:/etc/caddy/certs:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      platform:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+
+  platform:
+    ports: !override
+      - "127.0.0.1:8017:8017"
+      - "127.0.0.1:8019:8019"
+
+  frontend:
+    ports: !override
+      - "127.0.0.1:8018:3000"
+
+  grafana:
+    environment:
+      - GF_SERVER_ROOT_URL=/grafana
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+    ports: !override
+      - "127.0.0.1:3001:3000"
+
+  prometheus:
+    ports: !override
+      - "127.0.0.1:9090:9090"
+
+volumes:
+  caddy-data:
+  caddy-config:

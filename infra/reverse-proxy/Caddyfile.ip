@@ -1,0 +1,46 @@
+{
+    auto_https disable_redirects
+}
+
+:443 {
+    tls /etc/caddy/certs/cert.pem /etc/caddy/certs/key.pem
+    encode gzip zstd
+
+    handle_path /grafana/* {
+        basic_auth {
+            admin {$ADMIN_BASICAUTH_HASH}
+        }
+        reverse_proxy grafana:3000
+    }
+
+    handle_path /prom/* {
+        basic_auth {
+            admin {$ADMIN_BASICAUTH_HASH}
+        }
+        reverse_proxy prometheus:9090
+    }
+
+    handle /api/* {
+        reverse_proxy platform:8017
+    }
+
+    handle {
+        reverse_proxy frontend:3000
+    }
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        -Server
+    }
+
+    log {
+        output stdout
+        format console
+    }
+}
+
+:80 {
+    redir https://113.198.66.77:17098{uri} permanent
+}

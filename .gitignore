@@ -35,3 +35,6 @@ data/virtual/
 
 # Real credentials (use *.env.example to commit templates)
 infra/sentiment-daemon.env
+
+# Self-signed certs for non-DNS deployments (never commit)
+infra/reverse-proxy/certs/
