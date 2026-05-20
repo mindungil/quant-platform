@@ -1,0 +1,77 @@
+# Reverse-proxy overlay for target (single-port-443) deployments.
+#
+# Usage on target host (in addition to the main compose file):
+#   docker compose \
+#     -f docker-compose.yml \
+#     -f docker-compose.proxy.yml \
+#     --profile observability \
+#     up -d
+#
+# What it does:
+#   - Adds a Caddy reverse-proxy on host :80 and :443.
+#   - Hides platform / frontend / grafana / prometheus from the public
+#     interface by re-binding their host ports to 127.0.0.1 (so only
+#     Caddy on the docker network can reach them externally).
+#   - Wires the grafana container to live under /grafana/* sub-path.
+#
+# Required env (in .env):
+#   DOMAIN, ACME_EMAIL, ADMIN_BASICAUTH_HASH
+# See infra/reverse-proxy/Caddyfile for what each is used for.
+
+services:
+  reverse-proxy:
+    image: caddy:2.8
+    restart: unless-stopped
+    ports:
+      - "80:80"     # HTTP-01 ACME + redirect to 443
+      - "443:443"
+      - "443:443/udp"  # HTTP/3
+    environment:
+      # All three required — see .env.example for setup notes.
+      # Compose will fail with "variable is not set" if missing.
+      DOMAIN: ${DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+      ADMIN_BASICAUTH_HASH: ${ADMIN_BASICAUTH_HASH}
+    volumes:
+      - ./infra/reverse-proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data         # certs + ACME account
+      - caddy-config:/config
+    depends_on:
+      platform:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:80/"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  # --- Re-bind upstreams to localhost only (override main compose) ---
+
+  platform:
+    ports: !override
+      - "127.0.0.1:8017:8017"
+      - "127.0.0.1:8019:8019"
+
+  frontend:
+    ports: !override
+      - "127.0.0.1:8018:3000"
+
+  grafana:
+    environment:
+      - GF_SERVER_ROOT_URL=https://${DOMAIN}/grafana
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+    ports: !override
+      - "127.0.0.1:3001:3000"
+
+  prometheus:
+    # Prometheus serves at root; Caddy strips /prom prefix via handle_path,
+    # so no --web.external-url is needed for backend; only the UI's internal
+    # links may show absolute paths — fine for team use.
+    ports: !override
+      - "127.0.0.1:9090:9090"
+
+volumes:
+  caddy-data:
+  caddy-config:

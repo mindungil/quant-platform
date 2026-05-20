@@ -1,0 +1,62 @@
+# Reverse proxy for the migrated/target instance.
+#
+# Required env (passed via docker-compose.proxy.yml):
+#   DOMAIN                 public hostname (single DNS, e.g. quant.example.com)
+#   ACME_EMAIL             contact for Let's Encrypt
+#   ADMIN_BASICAUTH_HASH   bcrypt hash for /grafana + /prom gate
+#                          generate with: docker run --rm caddy:2 caddy hash-password
+#
+# All upstream service names are docker-compose service names — Caddy resolves
+# them via the shared compose network. Host port mappings on those services
+# are NOT required (and the overlay removes them from the public interface).
+
+{
+	email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+	encode gzip zstd
+
+	# --- Team-only paths: gate first, strip prefix, proxy upstream ---
+	# Order matters in Caddy: more specific handle_path blocks must come
+	# before the catch-all reverse_proxy to frontend.
+
+	handle_path /grafana/* {
+		basicauth {
+			admin {$ADMIN_BASICAUTH_HASH}
+		}
+		reverse_proxy grafana:3000
+	}
+
+	handle_path /prom/* {
+		basicauth {
+			admin {$ADMIN_BASICAUTH_HASH}
+		}
+		reverse_proxy prometheus:9090
+	}
+
+	# --- Public API ---
+	# api-gateway already serves under /api/* internally, so DON'T strip.
+	handle /api/* {
+		reverse_proxy platform:8017
+	}
+
+	# --- Frontend catch-all ---
+	handle {
+		reverse_proxy frontend:3000
+	}
+
+	# Sensible defaults
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# Caddy auto-removes the Server header anyway, but be explicit.
+		-Server
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}
