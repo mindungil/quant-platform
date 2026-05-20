@@ -23,9 +23,13 @@ services:
     image: caddy:2.8
     restart: unless-stopped
     ports:
-      - "80:80"     # HTTP-01 ACME + redirect to 443
-      - "443:443"
-      - "443:443/udp"  # HTTP/3
+      # Host ports default to 80/443. Override via .env if the host sits
+      # behind a router that port-forwards e.g. external:443 → host:19443.
+      # In that case set HOST_HTTPS_PORT=19443 / HOST_HTTP_PORT=18080.
+      # Caddy inside the container always listens on 80 + 443.
+      - "${HOST_HTTP_PORT:-80}:80"
+      - "${HOST_HTTPS_PORT:-443}:443"
+      - "${HOST_HTTPS_PORT:-443}:443/udp"  # HTTP/3
     environment:
       # All three required — see .env.example for setup notes.
       # Compose will fail with "variable is not set" if missing.
