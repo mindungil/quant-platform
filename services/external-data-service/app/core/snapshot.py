@@ -10,6 +10,18 @@ from app.models.external_data import ExternalContextSnapshot
 
 logger = logging.getLogger("external-data-service")
 
+# V8: all external HTTP fetches use this. Was 5.0 — under transient TLS
+# handshake issues from this container's egress (same pattern as the G1
+# stream.binance.com WS issue), every /signals/evaluate could stack up
+# 10 × 5s = 50s of timeout latency in worst case. 2s is enough for a
+# healthy handshake and bounds the worst case at 10 × 2 = 20s, but
+# negative caching below should keep most failures from repeating.
+_FETCH_TIMEOUT = 2.0
+
+# V8: failed-fetch entries get cached with this TTL so a transient
+# upstream outage doesn't make every call pay the timeout cost.
+_NEG_CACHE_TTL = 60
+
 _cache: dict = {}  # {cache_key: (data, expires_at)}
 
 
@@ -48,7 +60,7 @@ def _fetch_fear_greed() -> tuple[int, float]:
 
     try:
         resp = httpx.get(
-            "https://api.alternative.me/fng/?limit=1", timeout=5.0,
+            "https://api.alternative.me/fng/?limit=1", timeout=_FETCH_TIMEOUT,
         )
         resp.raise_for_status()
         data = resp.json()["data"][0]
@@ -59,7 +71,12 @@ def _fetch_fear_greed() -> tuple[int, float]:
         return result
     except Exception as exc:
         logger.warning("FearGreed fetch failed: %s", exc)
-        return (50, 0.0)
+        # V8: negative-cache the fallback so a transient upstream failure
+        # doesn't make every subsequent signal evaluation pay the
+        # _FETCH_TIMEOUT cost.
+        fallback = (50, 0.0)
+        _set_cached("fear_greed", fallback, _NEG_CACHE_TTL)
+        return fallback
 
 
 # ---------------------------------------------------------------------------
@@ -92,7 +109,7 @@ def _fetch_coingecko_sentiment(asset: str) -> tuple[float, float | None]:
                 "community_data": "true",
                 "developer_data": "false",
             },
-            timeout=8.0,
+            timeout=_FETCH_TIMEOUT,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -108,7 +125,9 @@ def _fetch_coingecko_sentiment(asset: str) -> tuple[float, float | None]:
         return result
     except Exception as exc:
         logger.warning("CoinGecko sentiment fetch failed: %s", exc)
-        return (0.0, None)
+        fallback = (0.0, None)
+        _set_cached(cache_key, fallback, _NEG_CACHE_TTL)
+        return fallback
 
 
 # ---------------------------------------------------------------------------
@@ -123,7 +142,7 @@ def _fetch_global_dominance() -> tuple[float | None, float | None, bool | None]:
 
     try:
         resp = httpx.get(
-            "https://api.coingecko.com/api/v3/global", timeout=8.0,
+            "https://api.coingecko.com/api/v3/global", timeout=_FETCH_TIMEOUT,
         )
         resp.raise_for_status()
         gdata = resp.json().get("data", {})
@@ -137,7 +156,9 @@ def _fetch_global_dominance() -> tuple[float | None, float | None, bool | None]:
         return result
     except Exception as exc:
         logger.warning("CoinGecko global fetch failed: %s", exc)
-        return (None, None, None)
+        fallback = (None, None, None)
+        _set_cached("cg_global", fallback, _NEG_CACHE_TTL)
+        return fallback
 
 
 # ---------------------------------------------------------------------------
@@ -152,7 +173,7 @@ def _fetch_onchain_btc() -> tuple[float, float, float]:
 
     try:
         resp = httpx.get(
-            "https://api.blockchain.info/stats", timeout=5.0,
+            "https://api.blockchain.info/stats", timeout=_FETCH_TIMEOUT,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -174,7 +195,9 @@ def _fetch_onchain_btc() -> tuple[float, float, float]:
         return result
     except Exception as exc:
         logger.warning("Blockchain.info fetch failed: %s", exc)
-        return (0.0, 0.0, 0.0)
+        fallback = (0.0, 0.0, 0.0)
+        _set_cached("onchain_btc", fallback, _NEG_CACHE_TTL)
+        return fallback
 
 
 # ---------------------------------------------------------------------------
@@ -210,7 +233,7 @@ def _fetch_coinpaprika_volume(asset: str) -> tuple[float, float | None]:
     try:
         resp = httpx.get(
             f"https://api.coinpaprika.com/v1/tickers/{ticker_id}",
-            timeout=5.0,
+            timeout=_FETCH_TIMEOUT,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -227,7 +250,9 @@ def _fetch_coinpaprika_volume(asset: str) -> tuple[float, float | None]:
         return result
     except Exception as exc:
         logger.warning("CoinPaprika fetch failed: %s", exc)
-        return (0.0, None)
+        fallback = (0.0, None)
+        _set_cached(cache_key, fallback, _NEG_CACHE_TTL)
+        return fallback
 
 
 # ---------------------------------------------------------------------------
@@ -259,7 +284,7 @@ def _fetch_funding_rate(asset: str) -> tuple[float | None, float | None]:
         resp = httpx.get(
             "https://fapi.binance.com/fapi/v1/fundingRate",
             params={"symbol": symbol, "limit": 1},
-            timeout=5.0,
+            timeout=_FETCH_TIMEOUT,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -272,7 +297,9 @@ def _fetch_funding_rate(asset: str) -> tuple[float | None, float | None]:
         return result
     except Exception as exc:
         logger.warning("Binance funding rate fetch failed: %s", exc)
-        return (None, None)
+        fallback = (None, None)
+        _set_cached(cache_key, fallback, _NEG_CACHE_TTL)
+        return fallback
 
 
 def _fetch_open_interest(asset: str) -> float | None:
@@ -294,7 +321,7 @@ def _fetch_open_interest(asset: str) -> float | None:
         resp = httpx.get(
             "https://fapi.binance.com/fapi/v1/openInterest",
             params={"symbol": symbol},
-            timeout=5.0,
+            timeout=_FETCH_TIMEOUT,
         )
         resp.raise_for_status()
         oi = float(resp.json()["openInterest"])
@@ -303,6 +330,7 @@ def _fetch_open_interest(asset: str) -> float | None:
         return score
     except Exception as exc:
         logger.warning("Binance open interest fetch failed: %s", exc)
+        _set_cached(cache_key, None, _NEG_CACHE_TTL)
         return None
 
 
@@ -320,7 +348,7 @@ def _fetch_long_short_ratio(asset: str) -> tuple[float | None, float | None]:
         resp = httpx.get(
             "https://fapi.binance.com/futures/data/globalLongShortAccountRatio",
             params={"symbol": symbol, "period": "1h", "limit": 1},
-            timeout=5.0,
+            timeout=_FETCH_TIMEOUT,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -333,7 +361,9 @@ def _fetch_long_short_ratio(asset: str) -> tuple[float | None, float | None]:
         return result
     except Exception as exc:
         logger.warning("Binance long/short ratio fetch failed: %s", exc)
-        return (None, None)
+        fallback = (None, None)
+        _set_cached(cache_key, fallback, _NEG_CACHE_TTL)
+        return fallback
 
 
 def _fetch_taker_buy_sell_ratio(asset: str) -> tuple[float | None, float | None]:
@@ -350,7 +380,7 @@ def _fetch_taker_buy_sell_ratio(asset: str) -> tuple[float | None, float | None]
         resp = httpx.get(
             "https://fapi.binance.com/futures/data/takerlongshortRatio",
             params={"symbol": symbol, "period": "1h", "limit": 1},
-            timeout=5.0,
+            timeout=_FETCH_TIMEOUT,
         )
         resp.raise_for_status()
         data = resp.json()
@@ -363,7 +393,9 @@ def _fetch_taker_buy_sell_ratio(asset: str) -> tuple[float | None, float | None]
         return result
     except Exception as exc:
         logger.warning("Binance taker buy/sell ratio fetch failed: %s", exc)
-        return (None, None)
+        fallback = (None, None)
+        _set_cached(cache_key, fallback, _NEG_CACHE_TTL)
+        return fallback
 
 
 def _derivatives_weighted_avg(
@@ -399,7 +431,7 @@ def _fetch_news_sentiment(asset: str) -> float:
     try:
         resp = httpx.get(
             f"https://cryptopanic.com/api/free/v1/posts/?currencies={symbol}&public=true",
-            timeout=8.0,
+            timeout=_FETCH_TIMEOUT,
         )
         if resp.status_code == 200:
             data = resp.json()
@@ -421,7 +453,7 @@ def _fetch_news_sentiment(asset: str) -> float:
             import re
             resp = httpx.get(
                 "https://www.coindesk.com/arc/outboundfeeds/rss/",
-                timeout=8.0,
+                timeout=_FETCH_TIMEOUT,
             )
             if resp.status_code == 200:
                 titles = re.findall(r"<title><!\[CDATA\[(.*?)\]\]></title>", resp.text)
