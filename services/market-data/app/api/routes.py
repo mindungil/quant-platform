@@ -1,5 +1,7 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, HTTPException, Response
-from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from prometheus_client import CONTENT_TYPE_LATEST, Gauge, generate_latest
 
 from app.core.config import settings
 from app.core.validator import detect_gaps, validate_candle_transition
@@ -12,10 +14,46 @@ from shared.health import check_redis, check_sql, check_tcp, health_payload
 router = APIRouter()
 _last_candles: dict[str, CandlePayload] = {}
 
+# G5: per-venue, per-asset tick age. Surfaced in /health for ops and as a
+# Prometheus gauge for the coverage dashboard (G10).
+venue_tick_age_seconds = Gauge(
+    "venue_tick_age_seconds",
+    "Age of the most recent candle (seconds), per venue + asset.",
+    ["venue", "asset"],
+)
+
+# Venue mapping by asset-name convention. Extend if a new venue uses a
+# distinct symbol shape.
+_VENUE_ASSETS: dict[str, tuple[str, ...]] = {
+    "binance": ("BTCUSDT", "ETHUSDT", "SOLUSDT"),
+    "upbit": ("KRW-BTC", "KRW-ETH", "KRW-SOL"),
+}
+
+
+def _compute_venue_tick_ages() -> dict[str, dict[str, dict]]:
+    """For each (venue, asset), compute age of latest candle and update gauge."""
+    now = datetime.now(timezone.utc)
+    out: dict[str, dict[str, dict]] = {}
+    for venue, assets in _VENUE_ASSETS.items():
+        out[venue] = {}
+        for asset in assets:
+            candle = market_data_repository.get_latest(asset)
+            if candle is None:
+                venue_tick_age_seconds.labels(venue=venue, asset=asset).set(float("inf"))
+                out[venue][asset] = {"age_seconds": None, "ts": None}
+                continue
+            ts = candle.timestamp
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+            age = (now - ts).total_seconds()
+            venue_tick_age_seconds.labels(venue=venue, asset=asset).set(age)
+            out[venue][asset] = {"age_seconds": round(age, 1), "ts": ts.isoformat()}
+    return out
+
 
 @router.get("/health")
 def health() -> dict:
-    return health_payload(
+    payload = health_payload(
         "market-data",
         {
             "timescaledb": check_sql("timescaledb", settings.timescale_url),
@@ -23,6 +61,8 @@ def health() -> dict:
             "nats": check_tcp("nats", settings.nats_url, default_port=4222),
         },
     )
+    payload["venues"] = _compute_venue_tick_ages()
+    return payload
 
 
 @router.get("/metrics")
