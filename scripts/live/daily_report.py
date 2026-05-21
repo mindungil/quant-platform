@@ -100,6 +100,88 @@ def _fmt_float(v, decimals: int = 4) -> str:
 
 
 # ──────────────────────────────────────────────────────────────────
+# Section: Tier promotion candidate (G24)
+# ──────────────────────────────────────────────────────────────────
+
+
+@safe
+def section_tier_promotion() -> str:
+    """Read the promoter's verdict from Redis and surface it as the
+    human-approval gate. The promoter never auto-applies; this section
+    is the operator-facing visibility into the suggestion.
+    """
+    try:
+        import redis
+        r = redis.Redis.from_url(
+            os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0"),
+            decode_responses=True,
+            socket_timeout=2,
+        )
+        raw = r.get("capital_tier:promotion_candidate")
+    except Exception as exc:
+        return f"## Tier promotion candidate\n\n_redis read failed: {exc}_\n"
+
+    if not raw:
+        return ("## Tier promotion candidate\n\n"
+                "_no promoter run on record — invoke "
+                "`scripts/live/capital_tier_promoter.py` (cron candidate)_\n")
+
+    try:
+        v = json.loads(raw)
+    except Exception:
+        return "## Tier promotion candidate\n\n_promoter payload corrupt_\n"
+
+    current = v.get("current_tier", "?")
+    suggested = v.get("suggested_tier")
+    ts = v.get("timestamp", "?")
+    stats = v.get("stats", {})
+    reasons = v.get("reasons", [])
+
+    out = ["## Tier promotion candidate", ""]
+    out.append(f"_Last evaluated: {ts} (window {v.get('window_hours')}h)_")
+    out.append("")
+    if suggested is None:
+        out.append(f"**Verdict**: stay at **{current}**")
+    else:
+        # Decide promote vs demote by index ordering
+        order = ("PAPER", "MICRO", "SMALL", "MID", "FULL")
+        try:
+            promoting = order.index(suggested) > order.index(current)
+        except ValueError:
+            promoting = False
+        if promoting:
+            out.append(
+                f"### 🟢 READY TO PROMOTE: **{current} → {suggested}**"
+            )
+        else:
+            out.append(
+                f"### 🔴 DEMOTE REQUIRED: **{current} → {suggested}**"
+            )
+        out.append("")
+        out.append("**Manual application**:")
+        out.append("```")
+        out.append("# Set CAPITAL_TIER env in the intelligence container,")
+        out.append("# or call shared.risk.capital_tier.set_active_tier()")
+        out.append("# via /risk/capital-tier admin endpoint.")
+        out.append("```")
+    out.append("")
+    out.append(
+        f"**Stats**: trades={stats.get('n_trades')}, "
+        f"Sharpe={_fmt_float(stats.get('realized_sharpe'), 2)}, "
+        f"maxDD={_fmt_float(stats.get('realized_max_dd', 0)*100, 2)}%, "
+        f"hard_kills={stats.get('hard_kill_events')}, "
+        f"NAV=${_fmt_float(v.get('meta', {}).get('nav_usd', 0), 0)}"
+    )
+    if reasons:
+        out.append("")
+        out.append("**Trigger reasons**:")
+        for r_ in reasons:
+            out.append(f"- {r_}")
+    out.append("")
+    return "\n".join(out)
+
+
+# ──────────────────────────────────────────────────────────────────
 # Section: Capital + Portfolio (G9)
 # ──────────────────────────────────────────────────────────────────
 
@@ -588,6 +670,7 @@ def compose_report(hours: int = 24) -> str:
         "",
         f"_Window: last {hours}h_",
         "",
+        section_tier_promotion(),
         section_capital(),
         section_data_coverage(),
         section_alpha_attribution(),
