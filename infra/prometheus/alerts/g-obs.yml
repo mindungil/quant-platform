@@ -145,7 +145,11 @@ groups:
           description: "One position dominates the book — either intentional (concentrated bet) or other positions decayed to dust. Re-balance if unintentional."
 
       - alert: GOBSExposureExceedsDailyCap
-        expr: portfolio_total_exposure_usd > capital_tier_max_daily_notional_usd * 10
+        # Comparing across services (portfolio-service vs intelligence) so
+        # the gauges carry different instance/job labels — drop labels
+        # entirely with on() so the comparison resolves to a single
+        # boolean sample.
+        expr: portfolio_total_exposure_usd > on () capital_tier_max_daily_notional_usd * 10
         for: 10m
         labels:
           severity: warning
