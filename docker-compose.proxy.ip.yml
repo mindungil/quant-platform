@@ -39,6 +39,10 @@ services:
     ports: !override
       - "127.0.0.1:9090:9090"
 
+  alertmanager:
+    ports: !override
+      - "127.0.0.1:9093:9093"
+
 volumes:
   caddy-data:
   caddy-config:

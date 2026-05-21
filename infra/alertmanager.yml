@@ -1,0 +1,39 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  group_by: ['alertname', 'severity']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 12h
+  receiver: 'null-sink'
+  routes:
+    - matchers:
+        - severity = "critical"
+      receiver: 'critical-log'
+      group_wait: 10s
+      repeat_interval: 1h
+
+receivers:
+  # No external delivery configured yet. Inspect via:
+  #   curl -s http://alertmanager:9093/api/v2/alerts | jq
+  # or the Alertmanager UI on port 9093.
+  # Add slack_configs / discord webhook here when credentials are ready.
+  - name: 'null-sink'
+
+  - name: 'critical-log'
+
+inhibit_rules:
+  # If a parent venue is down, suppress per-asset staleness alerts from
+  # the same venue to avoid noise during outages.
+  - source_matchers:
+      - alertname = "GMVBinanceIngestStopped"
+    target_matchers:
+      - alertname = "GMVVenueTickStalled"
+    equal: ['phase']
+
+  - source_matchers:
+      - alertname = "GMVUpbitIngestStopped"
+    target_matchers:
+      - alertname = "GMVVenueTickStalled"
+    equal: ['phase']

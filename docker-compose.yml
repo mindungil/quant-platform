@@ -542,7 +542,9 @@ services:
   prometheus:
     image: prom/prometheus:v3.4.1
     profiles: ["observability"]
-    command: ["--config.file=/etc/prometheus/prometheus.yml"]
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--web.enable-lifecycle"
     volumes:
       - ./infra/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./infra/prometheus/alerts:/etc/prometheus/alerts:ro
@@ -562,6 +564,18 @@ services:
       llm-tools:
         condition: service_healthy
 
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    profiles: ["observability"]
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+    volumes:
+      - ./infra/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+    ports:
+      - "9093:9093"
+
   grafana:
     image: grafana/grafana:11.6.0
     profiles: ["observability"]
@@ -576,3 +590,4 @@ services:
 
 volumes:
   db-data:
+  alertmanager-data:
