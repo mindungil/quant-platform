@@ -1,0 +1,171 @@
+{
+  "uid": "g-obs-ic-decay",
+  "title": "G-OBS — IC Decay",
+  "tags": ["quant", "g-obs", "ic", "factors"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Decayed factors (count)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "sum(quant_v3_learning_factor_decayed)", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 1, "color": "yellow" },
+              { "value": 3, "color": "red" }
+            ]
+          }
+        }
+      },
+      "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "id": 2,
+      "title": "Tracked factors (total)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "count(quant_v3_learning_factor_ic_ir)", "refId": "A" }
+      ],
+      "options": { "colorMode": "value", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "id": 3,
+      "title": "Median |IC_IR|",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "quantile(0.5, abs(quant_v3_learning_factor_ic_ir))", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 3,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "red" },
+              { "value": 0.05, "color": "yellow" },
+              { "value": 0.15, "color": "green" }
+            ]
+          }
+        }
+      },
+      "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "id": 4,
+      "title": "Factors with |IC_IR| < 0.05 (noise floor)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "count(abs(quant_v3_learning_factor_ic_ir) < 0.05) OR vector(0)", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 2, "color": "yellow" },
+              { "value": 4, "color": "red" }
+            ]
+          }
+        }
+      },
+      "options": { "colorMode": "background", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "id": 5,
+      "title": "Factor IC_IR — 7-day trajectory",
+      "type": "timeseries",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 4 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "quant_v3_learning_factor_ic_ir", "legendFormat": "{{factor_name}}", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 3,
+          "custom": { "drawStyle": "line", "fillOpacity": 5, "lineWidth": 1 },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "transparent" },
+              { "value": -0.05, "color": "yellow" },
+              { "value": 0.05, "color": "green" }
+            ]
+          }
+        }
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "mean", "diff"] } }
+    },
+    {
+      "id": 6,
+      "title": "IC_IR 1-day decay rate (delta vs 24h ago)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "quant_v3_learning_factor_ic_ir - quant_v3_learning_factor_ic_ir offset 1d", "legendFormat": "{{factor_name}}", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 3,
+          "custom": { "drawStyle": "line", "fillOpacity": 5 }
+        }
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull"] } }
+    },
+    {
+      "id": 7,
+      "title": "Decayed factor count over time",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "sum(quant_v3_learning_factor_decayed)", "legendFormat": "decayed total", "refId": "A" },
+        { "expr": "count(quant_v3_learning_factor_decayed)", "legendFormat": "tracked total", "refId": "B" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 }
+        }
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 8,
+      "title": "Factor snapshot — IC_IR + decay status",
+      "type": "table",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 22 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "quant_v3_learning_factor_ic_ir", "format": "table", "instant": true, "refId": "ic" },
+        { "expr": "quant_v3_learning_factor_decayed", "format": "table", "instant": true, "refId": "dec" },
+        { "expr": "quant_v3_learning_factor_ic_ir - quant_v3_learning_factor_ic_ir offset 1d", "format": "table", "instant": true, "refId": "delta" }
+      ],
+      "transformations": [
+        { "id": "joinByField", "options": { "byField": "factor_name", "mode": "outer" } },
+        { "id": "organize", "options": { "excludeByName": { "Time": true, "Time 1": true, "Time 2": true, "Time 3": true, "job": true, "job 1": true, "job 2": true, "job 3": true, "instance": true, "instance 1": true, "instance 2": true, "instance 3": true } } }
+      ]
+    }
+  ]
+}
