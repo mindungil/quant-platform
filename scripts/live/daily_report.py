@@ -400,10 +400,53 @@ def section_alpha_state() -> str:
     out.append("")
     out.append(f"**Summary**: {n_live} LIVE, {n_shadow} SHADOW")
     out.append("")
-    out.append("_(DSR / PBO metrics not yet populated — "
-               "`quant_v3_learning_alpha_dsr` defined but empty.)_")
-    out.append("")
+
+    # Surface DSR warmup status so the empty Prometheus gauge is
+    # contextualized (V5 finding: OnlineDSR needs ≥30 returns before
+    # emitting; alphas were 17-20/30 at last check).
+    dsr_warmup = _dsr_warmup_progress()
+    if dsr_warmup:
+        out.append("**DSR warmup** (need ≥30 returns to populate "
+                   "`quant_v3_learning_alpha_dsr`):")
+        out.append("")
+        out.append("| Alpha (id prefix) | Returns | Progress |")
+        out.append("|---|---:|:--|")
+        for alpha_id, n in dsr_warmup:
+            prefix = alpha_id[:8]
+            pct = min(100, int(n / 30 * 100))
+            bar = "▰" * (pct // 10) + "▱" * (10 - pct // 10)
+            out.append(f"| {prefix} | {n}/30 | {bar} {pct}% |")
+        out.append("")
+    else:
+        out.append("_(DSR warmup state unavailable from Redis.)_")
+        out.append("")
     return "\n".join(out)
+
+
+def _dsr_warmup_progress() -> list[tuple[str, int]]:
+    """Read per-alpha returns count from Redis. Returns [] on any error."""
+    try:
+        import redis
+        r = redis.Redis.from_url(
+            os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0"),
+            decode_responses=True,
+            socket_timeout=2,
+        )
+        out: list[tuple[str, int]] = []
+        for key in r.scan_iter(match="learning:alpha:*:dsr"):
+            raw = r.get(key)
+            if not raw:
+                continue
+            try:
+                d = json.loads(raw)
+                n = len(d.get("returns", []))
+                alpha_id = key.replace("learning:alpha:", "").replace(":dsr", "")
+                out.append((alpha_id, n))
+            except Exception:
+                continue
+        return sorted(out, key=lambda x: -x[1])
+    except Exception:
+        return []
 
 
 # ──────────────────────────────────────────────────────────────────
