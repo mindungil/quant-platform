@@ -1,5 +1,8 @@
 # Quant Platform
 
+[![CI develop](https://github.com/mindungil/quant-platform/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/mindungil/quant-platform/actions/workflows/ci.yml?query=branch%3Adevelop)
+[![CI main](https://github.com/mindungil/quant-platform/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mindungil/quant-platform/actions/workflows/ci.yml?query=branch%3Amain)
+
 Docker Compose productionization runtime for the startup-club autonomous trading platform.
 
 ## What Is Included
