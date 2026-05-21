@@ -87,15 +87,28 @@ class LiveDriftMonitor:
         var_ratio = (live_vol ** 2) / max(self.backtest_volatility ** 2, 1e-12)
         winrate = float(np.mean(self._wins)) if self._wins else 0.0
 
+        # V7 fix: NaN/Inf leak through to starlette JSONResponse which
+        # uses allow_nan=False — every /signals/meta/drift/{asset}/observe
+        # would 500 the moment arr.std==0 (constant window) makes live_sr
+        # NaN or var_ratio Inf. Sanitize at the boundary.
+        def _safe(v):
+            if v is None:
+                return None
+            try:
+                fv = float(v)
+            except (TypeError, ValueError):
+                return None
+            return None if (math.isnan(fv) or math.isinf(fv)) else fv
+
         metrics = {
             "n": n,
-            "live_sharpe": round(live_sr, 3),
+            "live_sharpe": _safe(round(live_sr, 3)),
             "backtest_sharpe": round(self.backtest_sharpe, 3),
-            "sharpe_z": round(float(z), 2),
-            "psr_vs_backtest": round(psr, 4) if psr is not None else None,
-            "live_vol": round(live_vol, 5),
-            "var_ratio": round(var_ratio, 2),
-            "winrate": round(winrate, 3),
+            "sharpe_z": _safe(round(float(z), 2)),
+            "psr_vs_backtest": _safe(round(psr, 4) if psr is not None else None),
+            "live_vol": _safe(round(live_vol, 5)),
+            "var_ratio": _safe(round(var_ratio, 2)),
+            "winrate": _safe(round(winrate, 3)),
         }
 
         if psr_reject or abs(z) >= self.breach_z:
