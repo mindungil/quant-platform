@@ -295,6 +295,22 @@ class OutcomeReinforcementConsumer:
                     action = "TAKER"
                 reward = slippage_to_reward(tca.realized_slippage_bp)
                 _MT_BANDIT.update(ctx, action, reward)
+
+                # V12: emit the maker/taker decision metric directly. Until
+                # MakerTakerBandit.select() is wired at the order-placement
+                # layer, the canonical decision counter
+                # quant_v3_maker_taker_decisions_total was structurally
+                # always 0 (V6). Recording the actual executed action here
+                # closes that gap and also populates the realized-slippage
+                # histogram that V3HighRealizedSlippage depends on.
+                try:
+                    from shared.observability_v3 import record_maker_taker_decision
+                    record_maker_taker_decision(
+                        ctx, action,
+                        realized_slippage_bp=tca.realized_slippage_bp,
+                    )
+                except Exception:
+                    pass
             except Exception as exc:
                 logger.debug("maker_taker_bandit_update_skipped: %s", str(exc)[:120])
 
