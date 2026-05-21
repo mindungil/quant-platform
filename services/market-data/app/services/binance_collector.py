@@ -1,30 +1,32 @@
-"""Binance WebSocket real-time kline (candlestick) collector.
+"""Binance REST-polling kline collector.
 
-Connects to Binance public WebSocket stream for BTCUSDT 1h candles.
-When a candle closes (kline.x == true), posts the data to the local
-ingestion API endpoint ``POST /candles/BTCUSDT``.
+Polls Binance ``GET /api/v3/klines`` for the most recent closed candle of each
+monitored asset. When a new closed candle appears, posts it to the local
+ingestion API endpoint ``POST /candles/{asset}``.
+
+History (G1): the original implementation used ``wss://stream.binance.com``
+WebSocket streams. The container egress can complete TCP to that host but the
+TLS handshake to the WS endpoints (both :9443 and :443) hangs indefinitely,
+while the REST host (``api.binance.com:443``) handshakes normally and returns
+200 within 200ms. REST polling sidesteps the WS-edge filtering entirely.
 
 Controlled via environment variable ``ENABLE_BINANCE_COLLECTOR``.
-Defaults to ``false`` so that it must be opted-in explicitly.
 """
 
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import os
 from datetime import datetime, timezone
 
 UTC = timezone.utc
 
-import websockets
-import websockets.exceptions
+import httpx
 from prometheus_client import Counter
 
 from app.models.candle import CandlePayload
-from shared.events import EventEnvelope, JetStreamBus
-from shared.persistence import RedisStore
+from shared.events import JetStreamBus
 
 logger = logging.getLogger("binance_collector")
 
@@ -35,8 +37,10 @@ candle_ingest_total = Counter(
 )
 
 LOCAL_INGEST_BASE = os.getenv("LOCAL_INGEST_BASE", "http://127.0.0.1:8001")
+BINANCE_REST_BASE = os.getenv("BINANCE_API_BASE_URL", "https://api.binance.com")
 MONITORED_ASSETS = os.getenv("BINANCE_COLLECTOR_ASSETS", "BTCUSDT,ETHUSDT,SOLUSDT")
-INTERVAL = os.getenv("BINANCE_COLLECTOR_INTERVAL", "1h")
+INTERVAL = os.getenv("BINANCE_COLLECTOR_INTERVAL", "1m")
+POLL_INTERVAL_SECONDS = float(os.getenv("BINANCE_COLLECTOR_POLL_SECONDS", "30"))
 RECONNECT_DELAY_SECONDS = 5
 MAX_RECONNECT_DELAY_SECONDS = 120
 NATS_URL = os.getenv("NATS_URL", "nats://localhost:4222")
@@ -44,32 +48,27 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 _event_bus: JetStreamBus | None = None
 
 
-def _build_ws_url(assets: list[str], interval: str) -> str:
-    """Build combined stream URL for multiple assets."""
-    streams = "/".join(f"{a.lower()}@kline_{interval}" for a in assets)
-    return f"wss://stream.binance.com:9443/stream?streams={streams}"
-
-
 def is_enabled() -> bool:
     return os.getenv("ENABLE_BINANCE_COLLECTOR", "true").lower() == "true"
 
 
-def _kline_to_candle(kline: dict) -> CandlePayload:
-    """Convert a Binance kline payload to a ``CandlePayload``."""
+def _kline_row_to_candle(row: list) -> CandlePayload:
+    """Convert a Binance REST kline row to a ``CandlePayload``.
+
+    Schema: [open_time_ms, open, high, low, close, volume, close_time_ms, ...]
+    """
     return CandlePayload(
-        timestamp=datetime.fromtimestamp(kline["t"] / 1000, tz=UTC),
-        open=float(kline["o"]),
-        high=float(kline["h"]),
-        low=float(kline["l"]),
-        close=float(kline["c"]),
-        volume=float(kline["v"]),
+        timestamp=datetime.fromtimestamp(row[0] / 1000, tz=UTC),
+        open=float(row[1]),
+        high=float(row[2]),
+        low=float(row[3]),
+        close=float(row[4]),
+        volume=float(row[5]),
     )
 
 
 async def _post_candle(asset: str, candle: CandlePayload) -> None:
     """POST a closed candle to the local market-data ingestion API."""
-    import httpx
-
     url = f"{LOCAL_INGEST_BASE}/candles/{asset}"
     payload = candle.model_dump(mode="json")
     payload["timestamp"] = candle.timestamp.isoformat()
@@ -79,12 +78,6 @@ async def _post_candle(asset: str, candle: CandlePayload) -> None:
             if response.status_code < 300:
                 logger.info("Ingested candle %s at %s", asset, candle.timestamp.isoformat())
                 candle_ingest_total.labels(asset=asset, status="success").inc()
-                # Note: The HTTP ingestion endpoint (market-data routes.py)
-                # already publishes market.candle.updated.{asset} to the
-                # MARKET_DATA JetStream. The previous redundant publish of
-                # market.candle.ingested was dropped — no stream claimed that
-                # subject, which produced NoRespondersError noise on every
-                # candle without adding any downstream value.
             else:
                 logger.warning("Ingest rejected %s (status=%d)", asset, response.status_code)
                 candle_ingest_total.labels(asset=asset, status="failed").inc()
@@ -93,71 +86,85 @@ async def _post_candle(asset: str, candle: CandlePayload) -> None:
         candle_ingest_total.labels(asset=asset, status="failed").inc()
 
 
-async def _run_ws_loop() -> None:
-    """Multi-asset WebSocket loop with exponential-backoff reconnection."""
+async def _fetch_klines(client: httpx.AsyncClient, asset: str, interval: str) -> list[list] | None:
+    """Fetch the last 2 klines for an asset. Returns None on error."""
+    url = f"{BINANCE_REST_BASE}/api/v3/klines"
+    params = {"symbol": asset, "interval": interval, "limit": 2}
+    try:
+        response = await client.get(url, params=params, timeout=10.0)
+        if response.status_code != 200:
+            logger.warning("Binance klines %s status=%d body=%s", asset, response.status_code, response.text[:200])
+            return None
+        return response.json()
+    except Exception:
+        logger.exception("Binance klines fetch failed for %s", asset)
+        return None
+
+
+async def _run_poll_loop() -> None:
+    """REST polling loop. Per-asset last-seen close_time prevents duplicate ingest."""
     assets = [a.strip() for a in MONITORED_ASSETS.split(",") if a.strip()]
     if not assets:
         logger.warning("No assets configured for Binance collector")
         return
 
-    ws_url = _build_ws_url(assets, INTERVAL)
+    last_close_ms: dict[str, int] = {}
     delay = RECONNECT_DELAY_SECONDS
 
-    while True:
-        try:
-            logger.info("Connecting to Binance WebSocket for %d assets: %s", len(assets), assets)
-            async with websockets.connect(ws_url, ping_interval=20, ping_timeout=10) as ws:
-                delay = RECONNECT_DELAY_SECONDS
-                logger.info("Connected to Binance combined stream")
-                async for raw_message in ws:
+    logger.info(
+        "Starting Binance REST poll loop: assets=%s interval=%s poll_every=%ss base=%s",
+        assets, INTERVAL, POLL_INTERVAL_SECONDS, BINANCE_REST_BASE,
+    )
+
+    async with httpx.AsyncClient() as client:
+        while True:
+            try:
+                for asset in assets:
+                    klines = await _fetch_klines(client, asset, INTERVAL)
+                    if not klines or len(klines) < 1:
+                        continue
+
+                    # klines is oldest→newest. The last entry may be the
+                    # in-progress (still-forming) candle; the one before it is
+                    # the most recently closed. Use whichever is genuinely
+                    # closed: a candle is closed when close_time_ms < now_ms.
+                    now_ms = int(datetime.now(UTC).timestamp() * 1000)
+                    closed_row = None
+                    for row in reversed(klines):
+                        if row[6] < now_ms:
+                            closed_row = row
+                            break
+                    if closed_row is None:
+                        continue
+
+                    close_ms = closed_row[6]
+                    if close_ms <= last_close_ms.get(asset, 0):
+                        continue  # already ingested
+
                     try:
-                        message = json.loads(raw_message)
-                    except json.JSONDecodeError:
-                        continue
-
-                    # Combined stream wraps data in {"stream": "...", "data": {...}}
-                    data = message.get("data", message)
-                    kline = data.get("k")
-                    if kline is None:
-                        continue
-
-                    if not kline.get("x", False):
-                        continue
-
-                    # Extract asset from stream name or kline symbol
-                    asset = kline.get("s", "").upper()
-                    if not asset:
-                        stream = message.get("stream", "")
-                        asset = stream.split("@")[0].upper() if "@" in stream else "UNKNOWN"
-
-                    logger.info("Candle closed: %s at kline.t=%s", asset, kline.get("t"))
-                    try:
-                        candle = _kline_to_candle(kline)
+                        candle = _kline_row_to_candle(closed_row)
+                        logger.info("Candle closed: %s at kline.t=%s", asset, closed_row[0])
                         await _post_candle(asset, candle)
+                        last_close_ms[asset] = close_ms
                     except Exception:
                         logger.exception("Error processing kline for %s", asset)
 
-        except asyncio.CancelledError:
-            logger.info("Binance collector task cancelled, shutting down")
-            return
-        except (
-            websockets.exceptions.ConnectionClosed,
-            websockets.exceptions.InvalidURI,
-            OSError,
-        ) as exc:
-            logger.warning(
-                "WebSocket disconnected (%s). Reconnecting in %ds...",
-                exc,
-                delay,
-            )
-        except Exception:
-            logger.exception(
-                "Unexpected error in Binance collector. Reconnecting in %ds...",
-                delay,
-            )
+                # successful pass — reset backoff
+                delay = RECONNECT_DELAY_SECONDS
 
-        await asyncio.sleep(delay)
-        delay = min(delay * 2, MAX_RECONNECT_DELAY_SECONDS)
+            except asyncio.CancelledError:
+                logger.info("Binance collector task cancelled, shutting down")
+                return
+            except Exception:
+                logger.exception(
+                    "Unexpected error in Binance collector. Backing off %ds...",
+                    delay,
+                )
+                await asyncio.sleep(delay)
+                delay = min(delay * 2, MAX_RECONNECT_DELAY_SECONDS)
+                continue
+
+            await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
 
 _task: asyncio.Task[None] | None = None
@@ -170,12 +177,10 @@ async def start() -> None:
         logger.warning("Binance collector already running")
         return
     # Collector no longer publishes directly to NATS — the HTTP ingest route
-    # owns the market.candle.updated.* publish. Keeping _event_bus unset
-    # avoids creating a redundant JetStream connection and the "MARKET"
-    # stream attempt that conflicts with MARKET_DATA subjects.
+    # owns the market.candle.updated.* publish.
     _event_bus = None
-    logger.info("Starting Binance WebSocket collector background task")
-    _task = asyncio.create_task(_run_ws_loop())
+    logger.info("Starting Binance REST poll collector background task")
+    _task = asyncio.create_task(_run_poll_loop())
 
 
 async def stop() -> None:
