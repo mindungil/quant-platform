@@ -29,6 +29,11 @@ def metrics() -> Response:
     except Exception:
         # Metrics scrape must never fail because of refresh issues.
         pass
+    try:
+        from app.core.capital_metrics import refresh_capital_tier_metrics
+        refresh_capital_tier_metrics()
+    except Exception:
+        pass
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 

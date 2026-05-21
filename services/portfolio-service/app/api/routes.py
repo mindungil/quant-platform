@@ -24,6 +24,11 @@ def health() -> dict:
 
 @router.get("/metrics")
 def metrics() -> Response:
+    try:
+        from app.core.portfolio_metrics import refresh_portfolio_metrics
+        refresh_portfolio_metrics()
+    except Exception:
+        pass
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 

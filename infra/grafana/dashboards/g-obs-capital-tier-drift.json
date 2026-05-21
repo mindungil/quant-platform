@@ -1,0 +1,189 @@
+{
+  "uid": "g-obs-capital-tier",
+  "title": "G-OBS — Capital Tier Drift",
+  "tags": ["quant", "g-obs", "capital", "portfolio"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Active capital tier",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 0 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "capital_tier_active", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "PAPER", "color": "purple" },
+                "1": { "text": "MICRO", "color": "yellow" },
+                "2": { "text": "SMALL", "color": "blue" },
+                "3": { "text": "MID", "color": "green" },
+                "4": { "text": "FULL", "color": "red" }
+              }
+            }
+          ]
+        }
+      },
+      "options": { "colorMode": "background", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "id": 2,
+      "title": "Total exposure (USD)",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 0 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "portfolio_total_exposure_usd", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "decimals": 2
+        }
+      },
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "id": 3,
+      "title": "Exposure vs tier cap (× daily cap)",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 0 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "portfolio_total_exposure_usd / capital_tier_max_daily_notional_usd", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 2,
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 1, "color": "yellow" },
+              { "value": 5, "color": "orange" },
+              { "value": 50, "color": "red" }
+            ]
+          }
+        }
+      },
+      "options": { "colorMode": "background", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "id": 4,
+      "title": "Position count",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 0 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "portfolio_position_count", "refId": "A" }
+      ],
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "id": 5,
+      "title": "Total exposure over time",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "portfolio_total_exposure_usd", "legendFormat": "exposure", "refId": "A" },
+        { "expr": "capital_tier_max_daily_notional_usd", "legendFormat": "daily cap", "refId": "B" },
+        { "expr": "capital_tier_max_order_notional_usd", "legendFormat": "per-order cap", "refId": "C" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "custom": { "drawStyle": "line", "fillOpacity": 5, "lineWidth": 2 }
+        }
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 6,
+      "title": "Concentration — max single-asset weight",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "portfolio_concentration_max_weight", "legendFormat": "max weight", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 3,
+          "min": 0,
+          "max": 1,
+          "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "green" },
+              { "value": 0.5, "color": "yellow" },
+              { "value": 0.8, "color": "red" }
+            ]
+          }
+        }
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    },
+    {
+      "id": 7,
+      "title": "Cumulative PnL by alpha (attribution)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 13 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "quant_v3_attribution_alpha_cumulative_pnl", "legendFormat": "{{alpha}}", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 4,
+          "custom": { "drawStyle": "line", "fillOpacity": 5 }
+        }
+      },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max", "min"] } }
+    },
+    {
+      "id": 8,
+      "title": "Capital tier transitions (history)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 21 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "capital_tier_active", "legendFormat": "tier", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 4,
+          "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 3, "lineInterpolation": "stepAfter" },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "PAPER" },
+                "1": { "text": "MICRO" },
+                "2": { "text": "SMALL" },
+                "3": { "text": "MID" },
+                "4": { "text": "FULL" }
+              }
+            }
+          ]
+        }
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+    }
+  ]
+}
