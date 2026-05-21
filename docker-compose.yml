@@ -591,3 +591,18 @@ services:
 volumes:
   db-data:
   alertmanager-data:
+
+# V11: OpenStack VXLAN overlay has effective MTU 1450 (docker0 picked
+# this up automatically — see /etc/docker/daemon.json or kernel auto-
+# negotiation). The default compose-created network previously used
+# 1500, causing TLS ClientHello packets to fragment / drop and yielding
+# 5-second handshake timeouts to alternative.me, blockchain.info, etc.
+# Pinning the network MTU to 1450 matches docker0 and lets PMTU work
+# correctly. (stream.binance.com:9443 still fails — separate edge issue
+# documented in G1, mitigated by G2 REST polling.)
+networks:
+  default:
+    name: quant_default
+    driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: "1450"
