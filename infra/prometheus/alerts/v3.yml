@@ -47,15 +47,25 @@ groups:
     interval: 60s
     rules:
       - alert: V3NoFillsLast4Hours
-        expr: (time() - max(quant_v3_maker_taker_decisions_total) * 0) > 14400
-              or absent(rate(quant_v3_maker_taker_decisions_total[1h]))
+        # V6 fix: was monitoring quant_v3_maker_taker_decisions_total which
+        # is only emitted on the select() path of the maker/taker bandit;
+        # outcome_consumer only calls update() (paper mode hardcodes TAKER)
+        # so that counter is structurally always zero and the alert was
+        # permanently pending. Also the prior expression
+        # `(time() - max(metric) * 0) > 14400` is mathematically broken
+        # (multiplied by 0 → constant), so it would fire whenever the
+        # metric existed too.
+        #
+        # Repoint at portfolio_fills_total — the canonical "fill landed"
+        # counter, written by portfolio-service on every apply_fill().
+        expr: sum(rate(portfolio_fills_total[1h])) == 0
         for: 4h
         labels:
           severity: warning
           area: execution
         annotations:
-          summary: "No maker/taker decisions logged in 4h"
-          description: "Either no trades are flowing through the bandit, or the bandit isn't wired into execution yet."
+          summary: "No portfolio fills in 4h"
+          description: "portfolio_fills_total rate dropped to 0 for 4h. Either signal_to_order_bridge has stopped, the paper portfolio cron is dead, or fills aren't being applied. Check data/logs/bridge_virtual.log + data/logs/paper.log."
 
       - alert: V3HighRealizedSlippage
         expr: histogram_quantile(0.95, sum by (le, action) (rate(quant_v3_maker_taker_realized_slippage_bp_bucket[1h]))) > 50
