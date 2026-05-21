@@ -155,6 +155,20 @@ def main():
                         help="Fetch all types for all default symbols")
     args = parser.parse_args()
 
+    # V10: cron entry passes "--types oi,lsr,top,taker" (comma-separated
+    # single token), but nargs="+" only splits on whitespace, so the
+    # whole CSV string ended up as one list element and the ENDPOINTS
+    # lookup KeyError'd on every 6h fire (silent — derivatives.log
+    # didn't even exist until V1 explained why). Accept both formats.
+    def _flatten_csv(items):
+        out = []
+        for it in items:
+            out.extend(p.strip() for p in str(it).split(",") if p.strip())
+        return out
+
+    args.symbols = _flatten_csv(args.symbols)
+    args.types = _flatten_csv(args.types)
+
     if args.all:
         args.symbols = DEFAULT_SYMBOLS
         args.types = ["oi", "lsr", "top", "taker"]
