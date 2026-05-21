@@ -7,6 +7,8 @@ stays single-sourced.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import httpx
 import pandas as pd
 
@@ -15,6 +17,28 @@ class MarketDataClient:
     def __init__(self, base_url: str, timeout: float = 5.0) -> None:
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
+
+    def get_latest_timestamp(self, asset: str) -> datetime | None:
+        """Return UTC timestamp of the most recent candle, or None if absent.
+
+        G4 staleness gate uses this to detect a dead venue feed even when
+        feature-store still serves cached values.
+        """
+        try:
+            resp = httpx.get(
+                f"{self._base_url}/candles/{asset}/latest",
+                timeout=self._timeout,
+            )
+            if resp.status_code == 404:
+                return None
+            resp.raise_for_status()
+            ts = resp.json().get("timestamp")
+            if not ts:
+                return None
+            parsed = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            return parsed.astimezone(timezone.utc) if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+        except Exception:
+            return None
 
     def get_history(self, asset: str, limit: int = 500, interval: str = "1h") -> pd.DataFrame:
         """Return an OHLCV DataFrame indexed by timestamp, sorted ascending.

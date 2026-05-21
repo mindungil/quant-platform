@@ -1,5 +1,6 @@
+import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Header, HTTPException, Response
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, generate_latest
@@ -44,6 +45,26 @@ compliance_decisions_total = Counter(
 )
 _DRIFT_LEVEL_MAP = {"ok": 0, "warn": 1, "breach": 2}
 
+# G4: per-asset data-staleness guard. The existing SIGNAL_STALENESS_SECONDS in
+# crypto-agent gates on the *signal* timestamp; this gate watches the candle
+# timestamp directly so a stalled venue feed doesn't silently produce stale
+# signals while feature-store keeps serving the last cached row.
+SIGNAL_DATA_STALENESS_SECONDS = int(os.environ.get("SIGNAL_DATA_STALENESS_SECONDS", "300"))
+SIGNAL_BLOCK_ON_STALE_DATA = os.environ.get("SIGNAL_BLOCK_ON_STALE_DATA", "false").lower() == "true"
+
+signal_data_staleness_seconds = Gauge(
+    "signal_data_staleness_seconds",
+    "Age of the latest candle (seconds) at signal evaluation time, per asset.",
+    ["asset"],
+)
+signals_skipped_stale_data_total = Counter(
+    "signals_skipped_stale_data_total",
+    "Signal evaluations rejected because candle data was stale.",
+    ["asset"],
+)
+
+_g4_log = logging.getLogger("signal-service.staleness")
+
 router = APIRouter()
 client = FeatureStoreClient(base_url=settings.feature_store_base_url)
 external_client = ExternalDataClient(base_url=settings.external_data_service_base_url)
@@ -72,6 +93,30 @@ def metrics() -> Response:
 
 @router.post("/signals/evaluate/{asset}")
 def evaluate_signal(asset: str, x_user_id: str | None = Header(default=None)):
+    # G4: data-staleness guard — fail fast on dead venue feed.
+    candle_ts = market_data_client.get_latest_timestamp(asset)
+    if candle_ts is not None:
+        age = (datetime.now(timezone.utc) - candle_ts).total_seconds()
+        signal_data_staleness_seconds.labels(asset=asset).set(age)
+        if age > SIGNAL_DATA_STALENESS_SECONDS:
+            _g4_log.warning(
+                "stale candle for %s: age=%.0fs limit=%ds block=%s",
+                asset, age, SIGNAL_DATA_STALENESS_SECONDS, SIGNAL_BLOCK_ON_STALE_DATA,
+            )
+            if SIGNAL_BLOCK_ON_STALE_DATA:
+                signals_skipped_stale_data_total.labels(asset=asset).inc()
+                raise HTTPException(
+                    status_code=503,
+                    detail={
+                        "code": "candle_stale",
+                        "asset": asset,
+                        "age_seconds": round(age),
+                        "limit_seconds": SIGNAL_DATA_STALENESS_SECONDS,
+                    },
+                )
+    else:
+        signal_data_staleness_seconds.labels(asset=asset).set(float("inf"))
+
     features = client.get_latest_features(asset)
     external_context = external_client.get_external_context(asset)
     asset_type = "crypto" if asset.endswith("USDT") or asset.endswith("KRW") else "stock"
