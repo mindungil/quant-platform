@@ -196,6 +196,75 @@ def section_strategy_pnl(hours: int = 24) -> str:
 
 
 # ──────────────────────────────────────────────────────────────────
+# Section: Per-alpha attribution PnL (G16)
+# ──────────────────────────────────────────────────────────────────
+
+
+@safe
+def section_alpha_attribution() -> str:
+    """Per-alpha cumulative PnL + 24h delta from attribution-daemon.
+
+    Distinct from section_strategy_pnl (which sums shadow_fills by
+    strategy_id from the registry): this view comes from the
+    attribution-daemon writing per-alpha PnL via Brinson decomposition.
+    Both views should roughly agree at the system aggregate but the
+    per-name attribution is what the MAB actually rewards.
+    """
+    cum = prom_query("quant_v3_attribution_alpha_cumulative_pnl")
+    if not cum:
+        return "## Per-alpha attribution PnL\n\n_no attribution data available_\n"
+
+    # Try 24h delta first, fall back to 1h if attribution-daemon
+    # hasn't been running 24h yet.
+    delta_24h = prom_query(
+        "quant_v3_attribution_alpha_cumulative_pnl - "
+        "(quant_v3_attribution_alpha_cumulative_pnl offset 24h)"
+    )
+    delta_1h = prom_query(
+        "quant_v3_attribution_alpha_cumulative_pnl - "
+        "(quant_v3_attribution_alpha_cumulative_pnl offset 1h)"
+    )
+
+    delta_24h_map = {
+        r["metric"].get("alpha_name"): float(r["value"][1]) for r in delta_24h
+    }
+    delta_1h_map = {
+        r["metric"].get("alpha_name"): float(r["value"][1]) for r in delta_1h
+    }
+
+    out = ["## Per-alpha attribution PnL", ""]
+    delta_col = "24h Δ" if delta_24h_map else "1h Δ"
+    out.append(f"| Alpha | Cumulative | {delta_col} |")
+    out.append("|---|---:|---:|")
+
+    rows = sorted(
+        cum,
+        key=lambda r: -float(r["value"][1]),
+    )
+    total_cum = 0.0
+    total_delta = 0.0
+    for r in rows:
+        name = r["metric"].get("alpha_name", "?")
+        cum_v = float(r["value"][1])
+        delta_v = delta_24h_map.get(name) if delta_24h_map else delta_1h_map.get(name)
+        total_cum += cum_v
+        if delta_v is not None:
+            total_delta += delta_v
+        out.append(
+            f"| {name} | {_fmt_float(cum_v, 2)} | "
+            f"{_fmt_float(delta_v, 2) if delta_v is not None else '—'} |"
+        )
+    out.append(f"| **TOTAL** | **{_fmt_float(total_cum, 2)}** | "
+               f"**{_fmt_float(total_delta, 2)}** |")
+    out.append("")
+    if not delta_24h_map:
+        out.append("_(24h delta unavailable — attribution-daemon has <24h "
+                   "of history; showing 1h delta instead)_")
+        out.append("")
+    return "\n".join(out)
+
+
+# ──────────────────────────────────────────────────────────────────
 # Top-level composition
 # ──────────────────────────────────────────────────────────────────
 
@@ -208,6 +277,7 @@ def compose_report(hours: int = 24) -> str:
         f"_Window: last {hours}h_",
         "",
         section_capital(),
+        section_alpha_attribution(),
         section_strategy_pnl(hours=hours),
     ]
     return "\n".join(parts)
