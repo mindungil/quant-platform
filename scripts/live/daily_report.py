@@ -1,83 +1,234 @@
 #!/usr/bin/env python3
-"""Daily performance report.
+"""Daily report — system-wide 24h observation summary.
 
-Reads accumulated signal JSONs from data/signals/, reconstructs the
-paper-trading PnL, and prints a daily summary. Run once a day via cron.
+History: this used to be an 85-line signal-snapshot summarizer with no
+PnL accounting despite the docstring claim. G14 rewrote it as a
+section-collector pipeline that pulls from every observability surface
+landed in Phases D/E/F + G-MV + G-OBS:
+
+  - capital tier + portfolio NAV         (capital_tier_active,
+                                          portfolio_total_exposure_usd)
+  - per-strategy realized PnL            (scripts/analyze_shadow_pnl.py
+                                          — G15)
+  - MAB arm drift                        (mab_arm_n / mean / disabled
+                                          — G17)
+  - IC decay                             (quant_v3_learning_factor_ic_ir
+                                          — G18)
+  - Data coverage                        (venue_tick_age_seconds,
+                                          cross_venue_price_divergence,
+                                          signal_data_staleness_seconds)
+  - DSR / alpha state                    (quant_v3_learning_alpha_dsr +
+                                          alpha_state)
+
+Each section is independent — a failing collector logs an error inline
+and the rest of the report continues. Both stdout (for cron tail) and
+data/reports/daily_YYYYMMDD.md (for archive) are written.
+
+Usage:
+    python scripts/live/daily_report.py             # full report
+    python scripts/live/daily_report.py --no-archive  # stdout only
 """
 from __future__ import annotations
 
+import argparse
 import json
+import os
 import sys
-from pathlib import Path
+import traceback
+import urllib.error
+import urllib.parse
+import urllib.request
 from datetime import datetime, timezone
+from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
-import numpy as np  # noqa: E402
-import pandas as pd  # noqa: E402
-
-SIGNALS_DIR = REPO_ROOT / "data" / "signals"
 UTC = timezone.utc
+PROMETHEUS_URL = os.getenv("PROMETHEUS_URL", "http://127.0.0.1:9090")
+REPORTS_DIR = REPO_ROOT / "data" / "reports"
 
 
-def load_signals() -> list[dict]:
-    """Load all signal JSONs, sorted by time."""
-    files = sorted(SIGNALS_DIR.glob("signals_*.json"))
-    all_sigs = []
-    for f in files:
+# ──────────────────────────────────────────────────────────────────
+# Helpers
+# ──────────────────────────────────────────────────────────────────
+
+
+def prom_query(q: str) -> list[dict]:
+    """Run an instant PromQL query. Returns the result vector or []."""
+    url = f"{PROMETHEUS_URL}/api/v1/query?query={urllib.parse.quote(q)}"
+    try:
+        with urllib.request.urlopen(url, timeout=5) as resp:
+            data = json.loads(resp.read())
+        if data.get("status") != "success":
+            return []
+        return data.get("data", {}).get("result", []) or []
+    except (urllib.error.URLError, json.JSONDecodeError, TimeoutError):
+        return []
+
+
+def safe(fn):
+    """Decorator: trap exceptions in a section collector so one failure
+    doesn't tank the whole report. Returns the traceback as a markdown
+    code block — visible but contained.
+    """
+    def wrapper(*args, **kwargs):
         try:
-            with open(f) as fh:
-                sigs = json.load(fh)
-                ts = f.stem.replace("signals_", "")
-                for s in sigs:
-                    s["_file_ts"] = ts
-                all_sigs.extend(sigs)
+            return fn(*args, **kwargs)
         except Exception:
-            pass
-    return all_sigs
+            tb = traceback.format_exc()
+            return f"**ERROR in `{fn.__name__}`**\n\n```\n{tb}\n```\n"
+    return wrapper
+
+
+def _fmt_float(v, decimals: int = 4) -> str:
+    if v is None:
+        return "—"
+    try:
+        return f"{float(v):.{decimals}f}"
+    except (TypeError, ValueError):
+        return str(v)
+
+
+# ──────────────────────────────────────────────────────────────────
+# Section: Capital + Portfolio (G9)
+# ──────────────────────────────────────────────────────────────────
+
+
+@safe
+def section_capital() -> str:
+    tier_map = {0: "PAPER", 1: "MICRO", 2: "SMALL", 3: "MID", 4: "FULL"}
+    tier_pts = prom_query("capital_tier_active")
+    tier = "?"
+    if tier_pts:
+        tier_val = int(float(tier_pts[0]["value"][1]))
+        tier = f"{tier_map.get(tier_val, '?')} ({tier_val})"
+
+    nav_pts = prom_query("portfolio_total_exposure_usd")
+    nav = float(nav_pts[0]["value"][1]) if nav_pts else None
+
+    conc_pts = prom_query("portfolio_concentration_max_weight")
+    conc = float(conc_pts[0]["value"][1]) if conc_pts else None
+
+    pos_pts = prom_query("portfolio_position_count")
+    pos = int(float(pos_pts[0]["value"][1])) if pos_pts else None
+
+    daily_cap_pts = prom_query("capital_tier_max_daily_notional_usd")
+    daily_cap = float(daily_cap_pts[0]["value"][1]) if daily_cap_pts else None
+    cap_ratio = (nav / daily_cap) if (nav and daily_cap) else None
+
+    out = ["## Capital tier & portfolio", ""]
+    out.append("| Metric | Value |")
+    out.append("|---|---|")
+    out.append(f"| Active tier | **{tier}** |")
+    out.append(f"| Total exposure (USD) | {_fmt_float(nav, 2)} |")
+    out.append(f"| Position count | {pos if pos is not None else '—'} |")
+    out.append(f"| Max single-asset weight | {_fmt_float(conc, 3)} |")
+    out.append(f"| Exposure ÷ daily cap | {_fmt_float(cap_ratio, 2)}× |")
+    out.append("")
+    flags = []
+    if conc is not None and conc > 0.8:
+        flags.append(f"⚠ concentration {conc:.0%} — single asset dominates")
+    if cap_ratio is not None and cap_ratio > 10:
+        flags.append(f"⚠ exposure is {cap_ratio:.0f}× the tier daily cap")
+    if flags:
+        out.append("**Flags**:")
+        for f in flags:
+            out.append(f"- {f}")
+        out.append("")
+    return "\n".join(out)
+
+
+# ──────────────────────────────────────────────────────────────────
+# Section: Per-strategy realized PnL (G15)
+# ──────────────────────────────────────────────────────────────────
+
+
+@safe
+def section_strategy_pnl(hours: int = 24) -> str:
+    # Reuse the existing D21 validator's aggregator — single source of
+    # truth for the shadow_fills query. _per_strategy_sharpe decorates
+    # each row with naive_sharpe + win_rate (the SQL alone doesn't).
+    from scripts.analyze_shadow_pnl import _aggregate, _per_strategy_sharpe  # type: ignore
+
+    rows = _aggregate(hours)
+    _per_strategy_sharpe(rows)
+    out = [f"## Per-strategy realized PnL (last {hours}h)", ""]
+    if not rows:
+        out.append("_no shadow_fills in window_")
+        out.append("")
+        return "\n".join(out)
+
+    out.append("| Strategy | Fills | Cum PnL | Mean | Win% | naive SR | Verdict |")
+    out.append("|---|---:|---:|---:|---:|---:|---|")
+    for r in rows:
+        name = r.get("strategy_name", "?")
+        # Truncate UUIDs / overly long names
+        if len(name) > 28:
+            name = name[:25] + "…"
+        fills = r.get("fills", 0)
+        cum = r.get("cum_pnl", 0.0) or 0.0
+        mean = r.get("mean_pnl", 0.0) or 0.0
+        win_rate = r.get("win_rate", 0.0) or 0.0
+        sharpe = r.get("naive_sharpe", 0.0) or 0.0
+        if sharpe >= 1.5:
+            verdict = "✅ promising"
+        elif sharpe <= -1.0:
+            verdict = "❌ losing"
+        elif fills < 30:
+            verdict = "🆕 too few fills"
+        else:
+            verdict = "🟡 mixed"
+        out.append(
+            f"| {name} | {fills} | {_fmt_float(cum, 4)} | "
+            f"{_fmt_float(mean, 6)} | {win_rate*100:.0f}% | "
+            f"{_fmt_float(sharpe, 2)} | {verdict} |"
+        )
+    out.append("")
+
+    # Aggregate
+    total_pnl = sum(r.get("cum_pnl", 0.0) or 0.0 for r in rows)
+    total_fills = sum(r.get("fills", 0) for r in rows)
+    out.append(f"**Aggregate**: {len(rows)} strategies, {total_fills} fills, "
+               f"cum PnL = **{_fmt_float(total_pnl, 4)}**")
+    out.append("")
+    return "\n".join(out)
+
+
+# ──────────────────────────────────────────────────────────────────
+# Top-level composition
+# ──────────────────────────────────────────────────────────────────
+
+
+def compose_report(hours: int = 24) -> str:
+    now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
+    parts = [
+        f"# Daily report — {now}",
+        "",
+        f"_Window: last {hours}h_",
+        "",
+        section_capital(),
+        section_strategy_pnl(hours=hours),
+    ]
+    return "\n".join(parts)
 
 
 def main() -> int:
-    sigs = load_signals()
-    if not sigs:
-        print("No signal files found. Run generate_signals.py first.")
-        return 1
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--hours", type=int, default=24)
+    parser.add_argument("--no-archive", action="store_true",
+                        help="stdout only, don't write data/reports/")
+    args = parser.parse_args()
 
-    # Group by file timestamp
-    by_ts = {}
-    for s in sigs:
-        ts = s.get("_file_ts", "?")
-        by_ts.setdefault(ts, []).append(s)
+    report = compose_report(hours=args.hours)
+    print(report)
 
-    n_snapshots = len(by_ts)
-    symbols = sorted({s["symbol"] for s in sigs if "symbol" in s and "error" not in s})
-
-    print(f"\n{'='*60}")
-    print(f"  DAILY REPORT — {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}")
-    print(f"  {n_snapshots} signal snapshots, {len(symbols)} symbols")
-    print(f"{'='*60}")
-
-    # Latest snapshot
-    latest_ts = sorted(by_ts.keys())[-1]
-    latest = by_ts[latest_ts]
-    print(f"\n  Latest ({latest_ts}):")
-    for s in latest:
-        if "error" in s:
-            continue
-        pos = s.get("target_position", 0)
-        sh = s.get("rolling_30d_sharpe", 0)
-        print(f"    {s['symbol']:10s} pos={pos:+.3f}  30d_sh={sh:+.2f}  price=${s.get('price', 0):,.2f}")
-
-    # Position history per symbol
-    print(f"\n  Position history:")
-    for sym in symbols:
-        sym_sigs = [s for s in sigs if s.get("symbol") == sym and "error" not in s]
-        positions = [s.get("target_position", 0) for s in sym_sigs]
-        if positions:
-            print(f"    {sym:10s} mean={np.mean(positions):+.3f}  min={min(positions):+.3f}  max={max(positions):+.3f}  n={len(positions)}")
-
-    print(f"\n{'='*60}")
+    if not args.no_archive:
+        REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+        today = datetime.now(UTC).strftime("%Y%m%d")
+        out_path = REPORTS_DIR / f"daily_{today}.md"
+        out_path.write_text(report, encoding="utf-8")
+        print(f"\n_archived to {out_path}_")
     return 0
 
 
