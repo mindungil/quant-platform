@@ -23,6 +23,12 @@ def health() -> dict:
 
 @router.get("/metrics")
 def metrics() -> Response:
+    try:
+        from app.core.mab_metrics import refresh_mab_metrics
+        refresh_mab_metrics()
+    except Exception:
+        # Metrics scrape must never fail because of refresh issues.
+        pass
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
