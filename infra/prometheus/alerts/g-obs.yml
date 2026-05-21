@@ -1,0 +1,156 @@
+groups:
+  # ────────────────────────────────────────────────────────────────
+  # G-MV — data layer alerts
+  # ────────────────────────────────────────────────────────────────
+  - name: g_obs_data_coverage
+    interval: 60s
+    rules:
+      - alert: GMVVenueTickStalled
+        expr: max(venue_tick_age_seconds) > 300
+        for: 3m
+        labels:
+          severity: warning
+          area: market_data
+          phase: g-mv
+        annotations:
+          summary: "Some venue tick age >5 min (max={{ $value | printf \"%.0f\" }}s)"
+          description: "At least one venue/asset hasn't produced a new candle in >5 min. Check binance_collector / upbit_collector logs and venue API status."
+
+      - alert: GMVCrossVenueDivergenceHigh
+        expr: max(cross_venue_price_divergence) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          area: market_data
+          phase: g-mv
+        annotations:
+          summary: "Cross-venue divergence >5% sustained for 5 min ({{ $value | printf \"%.2f\" }})"
+          description: "USD-equivalent price spread between binance & upbit is abnormally large. Either one feed is stale, USDKRW reference is off, or a real arbitrage opportunity opened. Investigate before trusting signals."
+
+      - alert: GMVBinanceIngestStopped
+        expr: sum(rate(candle_ingest_total{status="success"}[5m])) == 0
+        for: 5m
+        labels:
+          severity: critical
+          area: market_data
+          phase: g-mv
+        annotations:
+          summary: "Binance candle ingest rate has been zero for 5 min"
+          description: "binance_collector REST poll has produced no successful ingests for 5 min. Check the api.binance.com reachability + market-pipeline logs."
+
+      - alert: GMVUpbitIngestStopped
+        expr: sum(rate(upbit_candle_ingest_total{status="success"}[5m])) == 0
+        for: 5m
+        labels:
+          severity: critical
+          area: market_data
+          phase: g-mv
+        annotations:
+          summary: "Upbit candle ingest rate has been zero for 5 min"
+          description: "upbit_collector has produced no successful ingests for 5 min. Check the upbit WS reachability + market-pipeline logs."
+
+      - alert: GMVSignalDataStale
+        expr: max(signal_data_staleness_seconds) > 300
+        for: 5m
+        labels:
+          severity: warning
+          area: signal
+          phase: g-mv
+        annotations:
+          summary: "Signal data >5 min stale for some asset (max={{ $value | printf \"%.0f\" }}s)"
+          description: "signal-service is being asked to score on candles >5 min old. SIGNAL_BLOCK_ON_STALE_DATA should be enabled before trusting these signals."
+
+  # ────────────────────────────────────────────────────────────────
+  # G7 — MAB arm health
+  # ────────────────────────────────────────────────────────────────
+  - name: g_obs_mab_health
+    interval: 60s
+    rules:
+      - alert: GOBSMABArmNoUpdate24h
+        expr: mab_arm_last_updated_seconds_ago > 86400 and mab_arm_disabled == 0
+        for: 30m
+        labels:
+          severity: warning
+          area: bandit
+          phase: g-obs
+        annotations:
+          summary: "MAB arm {{ $labels.arm }} hasn't been updated in 24h"
+          description: "Either the arm is never selected (silent-drop gotcha — name not in whitelist) or its reward stream is broken. Verify the arm name exists in FormulaMAB and check outcome_consumer."
+
+      - alert: GOBSMABNoActiveArms
+        expr: count(mab_arm_n > 0) < 2
+        for: 1h
+        labels:
+          severity: warning
+          area: bandit
+          phase: g-obs
+        annotations:
+          summary: "Fewer than 2 MAB arms have any observations ({{ $value }} active)"
+          description: "MAB exploration collapsed. Either rewards aren't flowing or all arms but one are disabled."
+
+  # ────────────────────────────────────────────────────────────────
+  # G8 — IC decay
+  # ────────────────────────────────────────────────────────────────
+  - name: g_obs_ic_decay
+    interval: 60s
+    rules:
+      - alert: GOBSICAtNoiseFloor
+        expr: count(abs(quant_v3_learning_factor_ic_ir) < 0.05) >= 4
+        for: 2h
+        labels:
+          severity: warning
+          area: ic
+          phase: g-obs
+        annotations:
+          summary: "{{ $value }} factors have |IC_IR| <0.05 (noise floor) for 2h"
+          description: "Most factors are statistically indistinguishable from noise. Consider re-running feature engineering or removing dead factors."
+
+      - alert: GOBSICDecaySpike
+        expr: (quant_v3_learning_factor_ic_ir - quant_v3_learning_factor_ic_ir offset 1d) < -0.2
+        for: 1h
+        labels:
+          severity: warning
+          area: ic
+          phase: g-obs
+        annotations:
+          summary: "Factor {{ $labels.factor_name }} IC_IR dropped >0.2 in 24h"
+          description: "Sudden IC decay — possible regime shift or input data corruption. Inspect crypto_decisions.components for the affected factor."
+
+  # ────────────────────────────────────────────────────────────────
+  # G9 — capital tier / portfolio
+  # ────────────────────────────────────────────────────────────────
+  - name: g_obs_capital_tier
+    interval: 60s
+    rules:
+      - alert: GOBSCapitalTierForcedToPaper
+        expr: capital_tier_active == 0 and capital_tier_active offset 1h > 0
+        for: 5m
+        labels:
+          severity: critical
+          area: capital
+          phase: g-obs
+        annotations:
+          summary: "Capital tier was demoted to PAPER (was tier {{ with query \"capital_tier_active offset 1h\" }}{{ . | first | value }}{{ end }})"
+          description: "A risk_monitor_hub HARD kill or manual override forced tier to PAPER. Live trading is halted. Verify the trigger and clear it before re-tiering."
+
+      - alert: GOBSPortfolioConcentrationHigh
+        expr: portfolio_concentration_max_weight > 0.8
+        for: 30m
+        labels:
+          severity: warning
+          area: portfolio
+          phase: g-obs
+        annotations:
+          summary: "Single asset is {{ $value | printf \"%.0f%%\" }} of portfolio exposure"
+          description: "One position dominates the book — either intentional (concentrated bet) or other positions decayed to dust. Re-balance if unintentional."
+
+      - alert: GOBSExposureExceedsDailyCap
+        expr: portfolio_total_exposure_usd > capital_tier_max_daily_notional_usd * 10
+        for: 10m
+        labels:
+          severity: warning
+          area: capital
+          phase: g-obs
+        annotations:
+          summary: "Exposure is {{ $value | printf \"%.1f\" }}× the tier's daily notional cap"
+          description: "Aggregate exposure has drifted far beyond the daily cap — risk-service may be using stale config or the cap is mis-set for this tier."
