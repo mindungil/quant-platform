@@ -48,7 +48,10 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install numpy pandas scipy scikit-learn lightgbm pytest pytest-cov pydantic httpx
+          # V14: prometheus_client added — tests/test_ic_weight_engine.py
+          # imports it transitively via shared/factors/ic_weight_engine.py
+          # and was the cause of one of four collection errors.
+          pip install numpy pandas scipy scikit-learn lightgbm pytest pytest-cov pydantic httpx prometheus_client
 
       - name: Run engine core tests
         env:
@@ -134,17 +137,25 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install numpy pandas scipy pytest pytest-cov pydantic
+          # V14: pyjwt + httpx added — tests/execution/test_smart_upbit_*
+          # and tests/execution/test_upbit_l2_impact.py import
+          # shared/execution/upbit.py which uses jwt + httpx for the
+          # Upbit signed-request flow.
+          pip install numpy pandas scipy pytest pytest-cov pydantic pyjwt httpx
 
       - name: Run maker-simulator & execution tests
         env:
           PYTHONPATH: .
         run: |
+          # V14: tests/test_drift_registry.py was removed from the
+          # public tree but the workflow still referenced it; pytest
+          # exits 4 (file not found). Dropped from the list. The drift
+          # registry is now exercised inside services/signal-service/
+          # tests/ (which run under service-tests).
           python -m pytest \
             tests/execution \
             tests/test_maker_simulator.py \
             tests/test_cvar_overlay.py \
-            tests/test_drift_registry.py \
             -q --tb=short \
             --cov=shared/execution --cov=shared/portfolio \
             --cov-report=term-missing \

@@ -3,11 +3,19 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from shared.portfolio.meta_ensemble import (
-    MetaEnsembleConfig,
-    combine,
-    cvar_overlay,
-)
+# V14: cvar_overlay is IP-split (not present in the public build).
+# Skip cleanly so collection doesn't error.
+try:
+    from shared.portfolio.meta_ensemble import (
+        MetaEnsembleConfig,
+        combine,
+        cvar_overlay,
+    )
+except ImportError:
+    pytest.skip(
+        "cvar_overlay is IP-split (not in public build)",
+        allow_module_level=True,
+    )
 
 
 @pytest.fixture

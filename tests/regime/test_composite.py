@@ -5,6 +5,15 @@ import numpy as np
 import pandas as pd
 import pytest
 
+# V14: build_regime_proba lazy-loads shared.portfolio.regime_ensemble,
+# which is in the IP split (not present in the public build). Skip the
+# whole module cleanly when the dependency isn't available rather than
+# bombing collection with ModuleNotFoundError.
+pytest.importorskip(
+    "shared.portfolio.regime_ensemble",
+    reason="regime_ensemble is IP-split (not in public build)",
+)
+
 from shared.backtest.synthetic import (
     generate_ranging_ohlcv,
     generate_synthetic_ohlcv,

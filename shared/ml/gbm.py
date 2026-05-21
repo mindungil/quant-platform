@@ -98,15 +98,24 @@ class GBMWrapper:
             )
             self._model = model
         else:
-            # Fallback to pure-numpy RF
+            # V14: Fallback to pure-numpy RF.
+            # Argument names were wrong here (n_trees, max_features_frac)
+            # — those don't exist on shared.ml.trees.RandomForestRegressor.
+            # Correct names: n_estimators, max_features (int).
+            # The fallback path is hit when lightgbm isn't installed
+            # (CI hits this when wheel build fails on ubuntu-latest), so
+            # 7 alpha tests were 100% failing whenever the fallback ran.
             n_trees = self.params.get("n_estimators", 100)
             max_depth = self.params.get("max_depth", 6)
+            colsample = float(self.params.get("colsample_bytree", 0.8))
+            # Convert fraction → int based on actual feature count.
+            max_features_int = max(1, int(self._n_features * colsample))
             self._is_lgb = False
             rf = RandomForestRegressor(
-                n_trees=n_trees,
+                n_estimators=n_trees,
                 max_depth=max_depth,
                 min_samples_leaf=self.params.get("min_child_samples", 30),
-                max_features_frac=self.params.get("colsample_bytree", 0.8),
+                max_features=max_features_int,
                 seed=42,
             )
             rf.fit(X, y)

@@ -255,6 +255,32 @@ class ICWeightEngine:
         with self._lock:
             return self._recompute_weights_locked()
 
+    @staticmethod
+    def _has_sufficient_diversity(state: FactorICState) -> bool:
+        """Return True iff the rolling window has enough distinct scores
+        AND distinct forward returns to make Spearman rank correlation
+        meaningful.
+
+        V14 restoration: commit 51b199a's message promised this guard in
+        ic_weight_engine.py but the diff only landed the scheduler dedupe
+        — the engine-side check that the test expects (and that
+        production needed; see 2026-05-04 stuck-factor incident) was
+        never actually committed. Restoring it now closes that gap.
+
+        Threshold: ≥10% of n_obs unique values on each axis, with an
+        absolute floor of 5. Anything below means the rank correlation
+        will collapse to ±1.0 from the few non-tied pairs and isn't a
+        real signal.
+        """
+        n = state.n_obs
+        if n <= 0:
+            return False
+        floor = max(5, n // 10)
+        return (
+            len(set(state.scores)) >= floor
+            and len(set(state.forward_returns)) >= floor
+        )
+
     def _recompute_state_ic(self, state: FactorICState) -> None:
         """Populate ic / ic_ir / inverted fields for one state in-place.
 
@@ -266,6 +292,14 @@ class ICWeightEngine:
             state.ic = 0.0
             state.ic_ir = 0.0
             state.weight = 0.0
+            return
+
+        # V14: stuck-factor guard. See _has_sufficient_diversity docstring.
+        if not self._has_sufficient_diversity(state):
+            state.ic = 0.0
+            state.ic_ir = 0.0
+            state.weight = 0.0
+            state.inverted = False
             return
 
         state.ic = _spearman_rank_corr(state.scores, state.forward_returns)
@@ -372,8 +406,15 @@ class ICWeightEngine:
         active = {k: v for k, v in raw_weights.items() if v > 0}
 
         if len(active) < MIN_ACTIVE_FACTORS:
-            # Fall back to equal weights across all factors with enough data
-            eligible = [s.name for s in self._states.values() if s.n_obs >= MIN_OBSERVATIONS]
+            # Fall back to equal weights across all factors with enough data.
+            # V14: also enforce diversity in the fallback path — without
+            # this, a single stuck factor would still get weight=1.0 in
+            # fallback mode (the test_stuck_factor_pathology_zeroed
+            # assertion that weight == 0.0 covers this).
+            eligible = [
+                s.name for s in self._states.values()
+                if s.n_obs >= MIN_OBSERVATIONS and self._has_sufficient_diversity(s)
+            ]
             if eligible:
                 eq_w = 1.0 / len(eligible)
                 self._weights = {f: eq_w for f in eligible}

@@ -52,7 +52,17 @@ class CrossSectionalMLAlpha(Alpha):
     def _generate(self, df_or_dict) -> pd.Series:
         """Requires dict input: {symbol: OHLCV DataFrame}."""
         if not isinstance(df_or_dict, dict):
-            raise TypeError("CrossSectionalMLAlpha requires dict of {symbol: df}")
+            # V14: safe-zero on single-asset input instead of raising.
+            # See stat_arb._generate for the same convention rationale.
+            import logging
+            logging.getLogger(__name__).warning(
+                "cross_sectional_ml_single_asset_input_returning_zero",
+                extra={"alpha": "cross_sectional_ml"},
+            )
+            try:
+                return pd.Series(0.0, index=df_or_dict.index)
+            except AttributeError:
+                return pd.Series(dtype=float)
         return self._generate_panel_aggregate(df_or_dict)
 
     def generate_per_asset(

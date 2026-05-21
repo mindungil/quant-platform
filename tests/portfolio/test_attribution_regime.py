@@ -5,6 +5,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
+# V14: attribution_regime is IP-split; skip cleanly in the public build.
+pytest.importorskip(
+    "shared.portfolio.attribution_regime",
+    reason="attribution_regime is IP-split (not in public build)",
+)
+
 from shared.alpha import get_alpha
 from shared.backtest.synthetic import generate_synthetic_ohlcv
 from shared.portfolio import EnsembleAllocator, EnsembleConfig

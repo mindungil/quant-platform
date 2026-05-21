@@ -5,6 +5,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
+# V14: alpha_tracker is IP-split; skip cleanly in the public build.
+pytest.importorskip(
+    "shared.portfolio.alpha_tracker",
+    reason="alpha_tracker is IP-split (not in public build)",
+)
+
 from shared.portfolio.alpha_tracker import (
     AlphaTracker,
     batch_rolling_diagnostics,

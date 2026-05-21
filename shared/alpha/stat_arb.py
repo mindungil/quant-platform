@@ -43,7 +43,22 @@ class StatArbAlpha(Alpha):
     def _generate(self, df_or_dict) -> pd.Series:
         p = self.config.params
         if not isinstance(df_or_dict, dict):
-            raise TypeError("StatArbAlpha requires a dict of {asset: DataFrame}")
+            # V14: safe-zero on single-asset input instead of raising.
+            # Earlier versions raised; current convention prefers
+            # silent-flat over catastrophic mis-trading when a
+            # cross-sectional alpha is called with a single-asset
+            # frame by mistake. Index aligns with the input so the
+            # caller's downstream pipelines still see a well-shaped
+            # Series.
+            import logging
+            logging.getLogger(__name__).warning(
+                "stat_arb_single_asset_input_returning_zero",
+                extra={"alpha": "stat_arb"},
+            )
+            try:
+                return pd.Series(0.0, index=df_or_dict.index)
+            except AttributeError:
+                return pd.Series(dtype=float)
 
         a_name = p["asset_a"]
         b_name = p["asset_b"]
