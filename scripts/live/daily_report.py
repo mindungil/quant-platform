@@ -196,6 +196,113 @@ def section_strategy_pnl(hours: int = 24) -> str:
 
 
 # ──────────────────────────────────────────────────────────────────
+# Section: MAB arm drift (G17)
+# ──────────────────────────────────────────────────────────────────
+
+
+@safe
+def section_mab_drift() -> str:
+    """Snapshot of every MAB arm's posterior state.
+
+    Surfaces three pathologies automatically:
+      - silent-drop arms: present in the registry but n=0 (the
+        `_arms.update()` whitelist gotcha noted in CLAUDE.md)
+      - 24h-no-update arms: getting selected/disabled by some
+        upstream rule that isn't visible in MAB_DISABLED_ARMS
+      - inverted-mean arms: mean reward < 0 for >100 observations
+    """
+    n_vec = prom_query("mab_arm_n")
+    if not n_vec:
+        return "## MAB arm drift\n\n_no mab_arm metrics scraped — check intelligence:8006_\n"
+
+    n_map = {r["metric"].get("arm"): float(r["value"][1]) for r in n_vec}
+    mean_map = {r["metric"].get("arm"): float(r["value"][1])
+                for r in prom_query("mab_arm_mean")}
+    std_map = {r["metric"].get("arm"): float(r["value"][1])
+               for r in prom_query("mab_arm_std")}
+    total_reward_map = {r["metric"].get("arm"): float(r["value"][1])
+                        for r in prom_query("mab_arm_total_reward")}
+    last_updated_map = {r["metric"].get("arm"): float(r["value"][1])
+                        for r in prom_query("mab_arm_last_updated_seconds_ago")}
+    disabled_map = {r["metric"].get("arm"): float(r["value"][1])
+                    for r in prom_query("mab_arm_disabled")}
+
+    silent_drops = [
+        a for a, n in n_map.items()
+        if n == 0 and disabled_map.get(a, 0.0) == 0.0
+    ]
+    no_update_24h = [
+        a for a, age in last_updated_map.items()
+        if age > 86400 and disabled_map.get(a, 0.0) == 0.0 and n_map.get(a, 0) > 0
+    ]
+    losing_arms = [
+        a for a, m in mean_map.items()
+        if m < 0 and n_map.get(a, 0) > 100
+    ]
+
+    out = ["## MAB arm drift", ""]
+    out.append("| Arm | n | Mean | Std | Total reward | Last update | Status |")
+    out.append("|---|---:|---:|---:|---:|---:|---|")
+    for arm in sorted(n_map.keys()):
+        n = n_map[arm]
+        mean = mean_map.get(arm, 0.0)
+        std = std_map.get(arm, 0.0)
+        tot = total_reward_map.get(arm, 0.0)
+        age = last_updated_map.get(arm)
+        disabled = disabled_map.get(arm, 0.0) > 0
+        if disabled:
+            status = "🚫 disabled"
+        elif n == 0:
+            status = "⚠ silent-drop?"
+        elif age and age > 86400:
+            status = "💤 no update 24h+"
+        elif mean < 0 and n > 100:
+            status = "❌ losing"
+        elif mean > 0 and n > 30:
+            status = "✅ contributing"
+        else:
+            status = "🟡 building"
+        if age is None or age != age:  # NaN
+            age_disp = "—"
+        elif age > 86400:
+            age_disp = f"{age/86400:.1f}d"
+        elif age > 3600:
+            age_disp = f"{age/3600:.1f}h"
+        else:
+            age_disp = f"{age:.0f}s"
+        out.append(
+            f"| {arm} | {int(n)} | {_fmt_float(mean, 5)} | "
+            f"{_fmt_float(std, 5)} | {_fmt_float(tot, 4)} | "
+            f"{age_disp} | {status} |"
+        )
+    out.append("")
+
+    flags: list[str] = []
+    if silent_drops:
+        flags.append(
+            f"⚠ {len(silent_drops)} arms with n=0 but not disabled — "
+            f"possible silent-drop bug (CLAUDE.md gotcha): "
+            f"`{', '.join(silent_drops)}`"
+        )
+    if no_update_24h:
+        flags.append(
+            f"💤 {len(no_update_24h)} arms haven't been updated in 24h "
+            f"despite being active: `{', '.join(no_update_24h)}`"
+        )
+    if losing_arms:
+        flags.append(
+            f"❌ {len(losing_arms)} arms with negative mean reward "
+            f"over >100 observations: `{', '.join(losing_arms)}`"
+        )
+    if flags:
+        out.append("**Flags**:")
+        for f in flags:
+            out.append(f"- {f}")
+        out.append("")
+    return "\n".join(out)
+
+
+# ──────────────────────────────────────────────────────────────────
 # Section: Per-alpha attribution PnL (G16)
 # ──────────────────────────────────────────────────────────────────
 
@@ -279,6 +386,7 @@ def compose_report(hours: int = 24) -> str:
         section_capital(),
         section_alpha_attribution(),
         section_strategy_pnl(hours=hours),
+        section_mab_drift(),
     ]
     return "\n".join(parts)
 
