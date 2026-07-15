@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "quant-platform-core"
+version = "0.1.0"
+description = "Deterministic open-core contracts for quantitative research, backtesting, risk controls, and paper-trading orchestration."
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "Apache-2.0"}
+authors = [{name = "mindungil"}]
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.2",
+  "ruff>=0.6",
+  "mypy>=1.11",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/quant_platform"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+packages = ["quant_platform"]
+mypy_path = "src"

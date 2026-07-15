@@ -1,0 +1,72 @@
+"""Stable, implementation-agnostic contracts shared by public and private plugins."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Protocol, Sequence, runtime_checkable
+
+
+@dataclass(frozen=True, slots=True)
+class MarketBar:
+    symbol: str
+    timestamp: datetime
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float
+
+
+@dataclass(frozen=True, slots=True)
+class Signal:
+    symbol: str
+    score: float
+    generated_at: datetime
+    source: str
+
+    def __post_init__(self) -> None:
+        if not -1.0 <= self.score <= 1.0:
+            raise ValueError("signal score must be between -1 and 1")
+
+
+@dataclass(frozen=True, slots=True)
+class PositionTarget:
+    symbol: str
+    weight: float
+
+
+@dataclass(frozen=True, slots=True)
+class RiskDecision:
+    allowed: bool
+    size_multiplier: float = 1.0
+    reason: str = ""
+
+    def __post_init__(self) -> None:
+        if not 0.0 <= self.size_multiplier <= 1.0:
+            raise ValueError("size_multiplier must be between 0 and 1")
+
+
+@dataclass(frozen=True, slots=True)
+class OrderIntent:
+    symbol: str
+    side: str
+    quantity: float
+    order_type: str = "MARKET"
+
+    def __post_init__(self) -> None:
+        if self.side not in {"BUY", "SELL"}:
+            raise ValueError("side must be BUY or SELL")
+        if self.quantity <= 0:
+            raise ValueError("quantity must be positive")
+
+
+@runtime_checkable
+class AlphaPlugin(Protocol):
+    """Contract implemented by public examples and private strategy packages."""
+
+    name: str
+
+    def generate(self, bars: Sequence[MarketBar]) -> Signal:
+        """Generate one deterministic signal from the supplied market bars."""
+        ...
