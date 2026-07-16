@@ -21,6 +21,13 @@ class MarketBar:
 
 @dataclass(frozen=True, slots=True)
 class Signal:
+    """A target for the next executable decision after supplied completed bars.
+
+    ``generated_at`` identifies the newest completed market observation used to
+    create the target. It does not mean the target was already active during
+    that bar. The execution layer decides the earliest tradable timestamp.
+    """
+
     symbol: str
     score: float
     generated_at: datetime
@@ -69,7 +76,11 @@ class AlphaPlugin(Protocol):
     name: str
 
     def generate(self, bars: Sequence[MarketBar]) -> Signal:
-        """Generate one deterministic signal from the supplied market bars."""
+        """Generate the next target after the supplied completed market bars.
+
+        The returned score is intended for the next executable decision. It is
+        not the position that was active from the final supplied bar's open.
+        """
         ...
 
 
@@ -85,5 +96,5 @@ class BatchAlphaPlugin(Protocol):
     name: str
 
     def generate_positions(self, bars: Sequence[MarketBar]) -> Sequence[float]:
-        """Return one bounded target position for every input market bar."""
+        """Return one bounded active position for every input market bar."""
         ...
