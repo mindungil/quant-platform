@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from math import isfinite, sqrt
 from statistics import fmean, stdev
-from typing import Sequence
 
 from .contracts import BatchAlphaPlugin, MarketBar
 
