@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -14,7 +14,7 @@ class StubAlpha:
 
 def test_signal_bounds() -> None:
     with pytest.raises(ValueError):
-        Signal("BTC", 1.1, datetime.now(timezone.utc), "test")
+        Signal("BTC", 1.1, datetime.now(UTC), "test")
 
 
 def test_order_validation() -> None:
@@ -27,5 +27,5 @@ def test_registry_is_explicit() -> None:
     plugin = StubAlpha()
     registry.register_alpha(plugin)
     assert registry.alpha_names() == ("stub",)
-    bar = MarketBar("BTC", datetime.now(timezone.utc), 1, 1, 1, 1, 1)
+    bar = MarketBar("BTC", datetime.now(UTC), 1, 1, 1, 1, 1)
     assert registry.get_alpha("stub").generate([bar]).score == 0.25
