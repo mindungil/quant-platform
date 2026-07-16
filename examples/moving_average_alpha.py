@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import timezone
+from collections.abc import Sequence
+from datetime import UTC
 from statistics import fmean
-from typing import Sequence
 
 from quant_platform import MarketBar, Signal
 
@@ -26,5 +26,5 @@ class MovingAverageExample:
         score = 0.0 if long == 0 else max(-1.0, min(1.0, (short / long - 1.0) * 20.0))
         timestamp = bars[-1].timestamp
         if timestamp.tzinfo is None:
-            timestamp = timestamp.replace(tzinfo=timezone.utc)
+            timestamp = timestamp.replace(tzinfo=UTC)
         return Signal(bars[-1].symbol, score, timestamp, self.name)
