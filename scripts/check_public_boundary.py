@@ -5,7 +5,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+SCANNER = Path(__file__).resolve()
+ROOT = SCANNER.parents[1]
 SKIP = {".git", ".venv", "dist", "build"}
 DENIED_PATHS = {
     "CLAUDE.md",
@@ -27,6 +28,8 @@ ALLOWED_IPV4 = {"0.0.0.0", "127.0.0.1"}
 def main() -> int:
     failures: list[str] = []
     for path in ROOT.rglob("*"):
+        if path.resolve() == SCANNER:
+            continue
         if not path.is_file() or any(part in SKIP for part in path.parts):
             continue
         rel = path.relative_to(ROOT)
