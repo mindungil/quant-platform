@@ -63,10 +63,26 @@ class OrderIntent:
 
 @runtime_checkable
 class AlphaPlugin(Protocol):
-    """Contract implemented by public examples and private strategy packages."""
+    """Contract implemented by point-in-time public and private strategies."""
 
     name: str
 
     def generate(self, bars: Sequence[MarketBar]) -> Signal:
         """Generate one deterministic signal from the supplied market bars."""
+        ...
+
+
+@runtime_checkable
+class BatchAlphaPlugin(Protocol):
+    """Contract for computing a complete target-position series once.
+
+    ``positions[i]`` is the target fraction active from ``bars[i].open`` until
+    ``bars[i + 1].open``. The final position is retained for inspection but
+    cannot be scored until another market bar arrives.
+    """
+
+    name: str
+
+    def generate_positions(self, bars: Sequence[MarketBar]) -> Sequence[float]:
+        """Return one bounded target position for every input market bar."""
         ...
