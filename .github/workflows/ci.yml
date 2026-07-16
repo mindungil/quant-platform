@@ -27,20 +27,6 @@ jobs:
           python-version: "3.11"
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e ".[dev]"
-      - name: Capture Ruff diagnostics
-        run: |
-          set +e
-          ruff check . --output-format=concise > ruff-diagnostics.txt 2>&1
-          echo $? > ruff-exit-code.txt
-          cat ruff-diagnostics.txt
-          exit 0
-      - uses: actions/upload-artifact@v4
-        with:
-          name: public-ruff-diagnostics
-          path: |
-            ruff-diagnostics.txt
-            ruff-exit-code.txt
-      - name: Enforce Ruff result
-        run: test "$(cat ruff-exit-code.txt)" = "0"
+      - run: ruff check .
       - run: mypy
       - run: pytest
