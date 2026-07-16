@@ -16,23 +16,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Capture public-boundary diagnostics
-        run: |
-          set +e
-          python scripts/check_public_boundary.py > boundary-diagnostics.txt 2>&1
-          echo $? > boundary-exit-code.txt
-          cat boundary-diagnostics.txt
-          exit 0
-      - uses: actions/upload-artifact@v4
-        with:
-          name: public-boundary-diagnostics
-          path: |
-            boundary-diagnostics.txt
-            boundary-exit-code.txt
-      - name: Enforce public boundary
-        run: test "$(cat boundary-exit-code.txt)" = "0"
+      - run: python scripts/check_public_boundary.py
 
-  test:
+  validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -41,6 +27,20 @@ jobs:
           python-version: "3.11"
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e ".[dev]"
-      - run: ruff check .
+      - name: Capture Ruff diagnostics
+        run: |
+          set +e
+          ruff check . --output-format=concise > ruff-diagnostics.txt 2>&1
+          echo $? > ruff-exit-code.txt
+          cat ruff-diagnostics.txt
+          exit 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: public-ruff-diagnostics
+          path: |
+            ruff-diagnostics.txt
+            ruff-exit-code.txt
+      - name: Enforce Ruff result
+        run: test "$(cat ruff-exit-code.txt)" = "0"
       - run: mypy
       - run: pytest
