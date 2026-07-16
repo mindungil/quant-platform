@@ -9,6 +9,29 @@ permissions:
   contents: read
 
 jobs:
+  boundary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Capture public-boundary diagnostics
+        run: |
+          set +e
+          python scripts/check_public_boundary.py > boundary-diagnostics.txt 2>&1
+          echo $? > boundary-exit-code.txt
+          cat boundary-diagnostics.txt
+          exit 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: public-boundary-diagnostics
+          path: |
+            boundary-diagnostics.txt
+            boundary-exit-code.txt
+      - name: Enforce public boundary
+        run: test "$(cat boundary-exit-code.txt)" = "0"
+
   test:
     runs-on: ubuntu-latest
     steps:
@@ -16,7 +39,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: python scripts/check_public_boundary.py
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e ".[dev]"
       - run: ruff check .
