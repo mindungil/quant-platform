@@ -16,7 +16,7 @@ Concrete venue schedules, account credentials, private strategy parameters, coun
 ## Calculation boundary
 
 ```text
-Gross realized PnL
+Gross PnL
   + execution adjustments
   + financing adjustments
   = Economic Net PnL
@@ -27,6 +27,20 @@ Economic Net PnL
 ```
 
 Execution adjustments include commission, rebate, spread, slippage, market impact, transaction taxes, and FX costs. Financing adjustments include funding, borrow interest, and margin interest. Deposits and withdrawals are external cash movements and do not count as strategy PnL. Annual income-tax estimates are not represented as execution costs or basis points.
+
+## Accounting modes
+
+The ledger requires one explicit accounting mode so execution-price effects cannot be charged twice.
+
+### `REFERENCE_PRICE_ATTRIBUTION`
+
+Use this mode for research and backtesting when Gross PnL is calculated from a reference price. The ledger uses `GROSS_MARKET_PNL` and may record spread, slippage, and market impact as separate signed adjustments.
+
+### `FILL_PRICE_RECONCILIATION`
+
+Use this mode for Paper and Live reconciliation when `REALIZED_PNL` is calculated from actual fill prices. Spread, slippage, and market impact are already embedded in the fill-price PnL, so the ledger rejects separate entries for those effects. Commission, rebate, funding, interest, transaction tax, and FX cost remain explicit.
+
+A single ledger cannot mix `GROSS_MARKET_PNL` and fill-price accounting.
 
 ## Signed amount convention
 
@@ -51,13 +65,14 @@ The ledger never performs implicit FX conversion. A summary requires an explicit
 - limit orders require a limit price; market orders reject one
 - taxable amount equals gross amount minus deductible amount
 - tax rules carry a version, source reference, effective period, and confidence
+- reference-price and fill-price attribution cannot be mixed
 
 ## Hand-calculated example
 
-For one account in USD:
+For one reference-price research ledger in USD:
 
 ```text
-Realized PnL          +100.0
+Gross market PnL      +100.0
 Commission              -2.0
 Slippage                -1.0
 Funding                 +3.0
@@ -71,4 +86,4 @@ A separate estimated annual tax of 20.0 produces an Estimated After-tax PnL of 7
 
 ## Backtest compatibility
 
-`BacktestConfig.fee_bps` and `slippage_bps` remain a transitional minimal interface. A later adapter may emit ledger entries from those assumptions, but the current backtester is not silently changed by this contract. Venue profiles and tax rules will be integrated in separate work units with explicit regression tests.
+`BacktestConfig.fee_bps` and `slippage_bps` remain a transitional minimal interface. A later adapter may emit a reference-price ledger from those assumptions, but the current backtester is not silently changed by this contract. Venue profiles and tax rules will be integrated in separate work units with explicit regression tests.
