@@ -56,6 +56,18 @@ from .finance import (
     summarize_financial_ledger,
 )
 from .registry import PluginRegistry
+from .tax_rules import (
+    TaxAccountType,
+    TaxAssetClassification,
+    TaxComputationRule,
+    TaxRule,
+    TaxRuleKey,
+    TaxRuleRegistry,
+    TaxRuleResolution,
+    TaxRuleResolutionStatus,
+    TaxRuleSource,
+    build_kr_individual_tax_registry_v0,
+)
 
 __all__ = [
     "AfterTaxSummary",
@@ -92,13 +104,23 @@ __all__ = [
     "PositionTarget",
     "RiskDecision",
     "Signal",
+    "TaxAccountType",
+    "TaxAssetClassification",
+    "TaxComputationRule",
     "TaxConfidence",
     "TaxEstimate",
     "TaxLot",
     "TaxProfile",
+    "TaxRule",
+    "TaxRuleKey",
+    "TaxRuleRegistry",
+    "TaxRuleResolution",
+    "TaxRuleResolutionStatus",
+    "TaxRuleSource",
     "TaxableEvent",
     "TaxableEventKind",
     "apply_tax_estimate",
+    "build_kr_individual_tax_registry_v0",
     "check_order_constraints",
     "fill_notional",
     "floor_to_increment",
