@@ -12,11 +12,11 @@ from quant_platform.finance import (
     FinancialLedgerEntry,
     LedgerEntryKind,
     OrderSide,
+    TaxableEvent,
+    TaxableEventKind,
     TaxConfidence,
     TaxEstimate,
     TaxProfile,
-    TaxableEvent,
-    TaxableEventKind,
     apply_tax_estimate,
 )
 
