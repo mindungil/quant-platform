@@ -1,5 +1,5 @@
 from dataclasses import replace
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import pytest
@@ -165,7 +165,7 @@ def test_transaction_levy_becomes_negative_ledger_entry() -> None:
     entry = transaction_levy_ledger_entry(
         estimate,
         entry_id="tax-entry-1",
-        occurred_at=datetime(2026, 1, 1, 9, 0, tzinfo=timezone.utc),
+        occurred_at=datetime(2026, 1, 1, 9, 0, tzinfo=UTC),
         account_id="account-1",
         symbol="005930",
     )
