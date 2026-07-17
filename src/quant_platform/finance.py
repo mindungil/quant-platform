@@ -36,6 +36,11 @@ class LiquidityRole(StrEnum):
     UNKNOWN = "UNKNOWN"
 
 
+class LedgerAccountingMode(StrEnum):
+    REFERENCE_PRICE_ATTRIBUTION = "REFERENCE_PRICE_ATTRIBUTION"
+    FILL_PRICE_RECONCILIATION = "FILL_PRICE_RECONCILIATION"
+
+
 class LedgerEntryKind(StrEnum):
     """Signed account-value components.
 
@@ -43,6 +48,7 @@ class LedgerEntryKind(StrEnum):
     Annual income-tax estimates are intentionally not ledger entries.
     """
 
+    GROSS_MARKET_PNL = "GROSS_MARKET_PNL"
     REALIZED_PNL = "REALIZED_PNL"
     COMMISSION = "COMMISSION"
     REBATE = "REBATE"
@@ -274,7 +280,7 @@ class FinancialLedgerEntry:
 class FinancialLedgerSummary:
     account_id: str | None
     currency: str
-    gross_realized_pnl: Decimal
+    gross_pnl: Decimal
     execution_adjustment: Decimal
     financing_adjustment: Decimal
     economic_net_pnl: Decimal
@@ -293,6 +299,7 @@ class FinancialLedger:
     """
 
     entries: tuple[FinancialLedgerEntry, ...] = ()
+    accounting_mode: LedgerAccountingMode = LedgerAccountingMode.REFERENCE_PRICE_ATTRIBUTION
 
     def __post_init__(self) -> None:
         identifiers = [entry.entry_id for entry in self.entries]
@@ -301,6 +308,26 @@ class FinancialLedger:
         timestamps = [entry.occurred_at for entry in self.entries]
         if timestamps != sorted(timestamps):
             raise ValueError("financial ledger entries must be chronological")
+
+        kinds = {entry.kind for entry in self.entries}
+        if self.accounting_mode is LedgerAccountingMode.REFERENCE_PRICE_ATTRIBUTION:
+            if LedgerEntryKind.REALIZED_PNL in kinds:
+                raise ValueError(
+                    "reference-price ledgers must use GROSS_MARKET_PNL, not REALIZED_PNL"
+                )
+        else:
+            forbidden = {
+                LedgerEntryKind.GROSS_MARKET_PNL,
+                LedgerEntryKind.SPREAD,
+                LedgerEntryKind.SLIPPAGE,
+                LedgerEntryKind.MARKET_IMPACT,
+            }
+            overlap = kinds & forbidden
+            if overlap:
+                labels = ", ".join(sorted(kind.value for kind in overlap))
+                raise ValueError(
+                    "fill-price ledgers already embed price effects and forbid: " + labels
+                )
 
     def summarize(
         self,
@@ -467,7 +494,12 @@ def summarize_financial_ledger(
         and (account_id is None or entry.account_id == account_id)
     )
     gross = sum(
-        (entry.amount for entry in selected if entry.kind is LedgerEntryKind.REALIZED_PNL),
+        (
+            entry.amount
+            for entry in selected
+            if entry.kind
+            in {LedgerEntryKind.GROSS_MARKET_PNL, LedgerEntryKind.REALIZED_PNL}
+        ),
         start=ZERO,
     )
     execution = sum(
@@ -494,7 +526,7 @@ def summarize_financial_ledger(
     return FinancialLedgerSummary(
         account_id=account_id,
         currency=currency,
-        gross_realized_pnl=gross,
+        gross_pnl=gross,
         execution_adjustment=execution,
         financing_adjustment=financing,
         economic_net_pnl=economic_net,
