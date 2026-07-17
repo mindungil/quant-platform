@@ -6,22 +6,22 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
-from enum import Enum
+from enum import StrEnum
 
 ZERO = Decimal("0")
 
 
-class OrderSide(str, Enum):
+class OrderSide(StrEnum):
     BUY = "BUY"
     SELL = "SELL"
 
 
-class ExecutionOrderType(str, Enum):
+class ExecutionOrderType(StrEnum):
     MARKET = "MARKET"
     LIMIT = "LIMIT"
 
 
-class OrderState(str, Enum):
+class OrderState(StrEnum):
     CREATED = "CREATED"
     SUBMITTED = "SUBMITTED"
     PARTIALLY_FILLED = "PARTIALLY_FILLED"
@@ -30,13 +30,13 @@ class OrderState(str, Enum):
     REJECTED = "REJECTED"
 
 
-class LiquidityRole(str, Enum):
+class LiquidityRole(StrEnum):
     MAKER = "MAKER"
     TAKER = "TAKER"
     UNKNOWN = "UNKNOWN"
 
 
-class LedgerEntryKind(str, Enum):
+class LedgerEntryKind(StrEnum):
     """Signed account-value components.
 
     Positive amounts increase account value and negative amounts decrease it.
@@ -59,13 +59,13 @@ class LedgerEntryKind(str, Enum):
     TAX_PAYMENT = "TAX_PAYMENT"
 
 
-class TaxConfidence(str, Enum):
+class TaxConfidence(StrEnum):
     CONFIRMED = "confirmed"
     ASSUMED = "assumed"
     REVIEW_REQUIRED = "review_required"
 
 
-class CostBasisMethod(str, Enum):
+class CostBasisMethod(StrEnum):
     FIFO = "FIFO"
     MOVING_AVERAGE = "MOVING_AVERAGE"
     SPECIFIC_IDENTIFICATION = "SPECIFIC_IDENTIFICATION"
@@ -73,7 +73,7 @@ class CostBasisMethod(str, Enum):
     UNSPECIFIED = "UNSPECIFIED"
 
 
-class TaxableEventKind(str, Enum):
+class TaxableEventKind(StrEnum):
     DISPOSAL = "DISPOSAL"
     INCOME = "INCOME"
     EXPENSE = "EXPENSE"
