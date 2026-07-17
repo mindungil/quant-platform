@@ -10,6 +10,7 @@ from quant_platform.finance import (
     ExecutionRealityProfile,
     FinancialLedger,
     FinancialLedgerEntry,
+    LedgerAccountingMode,
     LedgerEntryKind,
     OrderSide,
     TaxableEvent,
@@ -40,7 +41,7 @@ def test_ledger_summary_matches_hand_calculation() -> None:
     ledger = FinancialLedger(
         entries=(
             _entry(1, LedgerEntryKind.CASH_MOVEMENT, "1000"),
-            _entry(2, LedgerEntryKind.REALIZED_PNL, "100"),
+            _entry(2, LedgerEntryKind.GROSS_MARKET_PNL, "100"),
             _entry(3, LedgerEntryKind.COMMISSION, "-2"),
             _entry(4, LedgerEntryKind.SLIPPAGE, "-1"),
             _entry(5, LedgerEntryKind.FUNDING, "3"),
@@ -52,7 +53,7 @@ def test_ledger_summary_matches_hand_calculation() -> None:
 
     summary = ledger.summarize(currency="USD", account_id="paper-main")
 
-    assert summary.gross_realized_pnl == D("100")
+    assert summary.gross_pnl == D("100")
     assert summary.execution_adjustment == D("-3.2")
     assert summary.financing_adjustment == D("2.5")
     assert summary.economic_net_pnl == D("99.3")
@@ -64,7 +65,7 @@ def test_ledger_summary_matches_hand_calculation() -> None:
 def test_annual_tax_estimate_is_not_folded_into_execution_costs() -> None:
     summary = FinancialLedger(
         entries=(
-            _entry(1, LedgerEntryKind.REALIZED_PNL, "100"),
+            _entry(1, LedgerEntryKind.GROSS_MARKET_PNL, "100"),
             _entry(2, LedgerEntryKind.COMMISSION, "-2"),
         )
     ).summarize(currency="USD")
@@ -108,7 +109,7 @@ def test_taxable_event_requires_exact_taxable_amount_identity() -> None:
 
 
 def test_ledger_rejects_duplicate_ids_and_non_chronological_entries() -> None:
-    first = _entry(1, LedgerEntryKind.REALIZED_PNL, "1")
+    first = _entry(1, LedgerEntryKind.GROSS_MARKET_PNL, "1")
     duplicate = FinancialLedgerEntry(
         entry_id=first.entry_id,
         occurred_at=NOW + timedelta(seconds=2),
@@ -121,7 +122,7 @@ def test_ledger_rejects_duplicate_ids_and_non_chronological_entries() -> None:
     with pytest.raises(ValueError, match="unique"):
         FinancialLedger(entries=(first, duplicate))
     with pytest.raises(ValueError, match="chronological"):
-        FinancialLedger(entries=(_entry(2, LedgerEntryKind.REALIZED_PNL, "1"), first))
+        FinancialLedger(entries=(_entry(2, LedgerEntryKind.GROSS_MARKET_PNL, "1"), first))
 
 
 def test_cost_entries_use_signed_account_perspective() -> None:
@@ -196,3 +197,23 @@ def test_market_order_does_not_accept_limit_price() -> None:
             created_at=NOW,
             limit_price=D("100"),
         )
+
+
+def test_fill_price_mode_prevents_double_counting_price_effects() -> None:
+    with pytest.raises(ValueError, match="already embed price effects"):
+        FinancialLedger(
+            entries=(
+                _entry(1, LedgerEntryKind.REALIZED_PNL, "10"),
+                _entry(2, LedgerEntryKind.SLIPPAGE, "-1"),
+            ),
+            accounting_mode=LedgerAccountingMode.FILL_PRICE_RECONCILIATION,
+        )
+
+    ledger = FinancialLedger(
+        entries=(
+            _entry(1, LedgerEntryKind.REALIZED_PNL, "10"),
+            _entry(2, LedgerEntryKind.COMMISSION, "-1"),
+        ),
+        accounting_mode=LedgerAccountingMode.FILL_PRICE_RECONCILIATION,
+    )
+    assert ledger.summarize(currency="USD").economic_net_pnl == D("9")
