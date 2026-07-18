@@ -69,15 +69,39 @@ This is a narrow reference model. Venue-specific margin reservation, variation m
 
 Deposits, withdrawals, commissions, funding, interest, taxes, and other signed adjustments are recorded as append-only cash events. Balances are keyed by account and currency; no implicit FX conversion occurs.
 
+## Reference strategy adapter
+
+`ReferenceExecutionAdapter` evaluates one `BatchAlphaPlugin` through both the vectorized and event-driven paths.
+
+The strategy is invoked once. Its complete target-position sequence is frozen as one artifact and then supplied unchanged to:
+
+1. `BacktestRunner`, through an internal immutable batch plugin; and
+2. `EventSourcedExecutionEngine`, through deterministic target-to-order conversion.
+
+This prevents a stateful or non-deterministic strategy implementation from returning different targets to the two paths during one comparison.
+
+For each interval, the event path:
+
+- reads the target active from the current bar open,
+- calculates desired quantity from current account equity and current open price,
+- creates a market order for the position delta,
+- records submit, accept, and fill events,
+- applies explicit fee and directional slippage assumptions,
+- marks the open position at the next bar open.
+
+With zero fees and zero slippage, the constant-position reference scenario matches the vectorized ending equity, apart from normal binary-float representation tolerance. With costs enabled, the event path retains the concrete order, fill price, fee, cash, position, and replay evidence behind the result.
+
+The comparison is intentionally a reference invariant, not a claim that the two engines must remain numerically identical under every cost model. The vectorized runner charges an abstract turnover fraction, while the event path rebalances quantities at explicit fill prices against current equity.
+
 ## Deliberate limitations
 
-This core does not yet implement:
+This core and reference adapter do not yet implement:
 
 - venue order matching,
+- partial fill generation by market liquidity,
 - latency or stale-quote behavior,
 - margin reservation and liquidation,
 - tick, lot, and minimum-notional enforcement,
-- strategy target conversion into orders,
 - reconciliation against a broker or exchange.
 
 Those behaviors should consume this state machine rather than mutate its history.
