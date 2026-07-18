@@ -45,6 +45,7 @@ Use `quant-ops` only to assemble pinned public and private releases, deployment 
 - immutable market, signal, risk, and order contracts
 - an append-only event-sourced order, fill, position, and multi-currency cash engine
 - deterministic order lifecycle, spot and derivative settlement, PnL, marks, and replay
+- a reference adapter that freezes one strategy target artifact and runs it through vectorized and event-driven execution
 - execution-reality, signed financial-ledger, tax-lot, and taxable-event contracts
 - immutable Strategy Decision Packages, lifecycle promotion gates, and Holdout seals
 - deterministic Dataset Registries, Experiment Manifests, and Research Workbench contracts
@@ -52,7 +53,7 @@ Use `quant-ops` only to assemble pinned public and private releases, deployment 
 - a deliberately simple non-production alpha example
 - strict CI for tests, typing, linting, and public/private boundary checks
 
-The execution state-machine semantics and deliberate venue-model limitations are documented in [`docs/event-sourced-execution.md`](docs/event-sourced-execution.md).
+The execution state-machine, reference comparison semantics, and deliberate venue-model limitations are documented in [`docs/event-sourced-execution.md`](docs/event-sourced-execution.md).
 
 ## Development setup
 
