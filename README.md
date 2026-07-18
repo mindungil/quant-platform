@@ -43,11 +43,16 @@ Use `quant-ops` only to assemble pinned public and private releases, deployment 
 ## Current public surface
 
 - immutable market, signal, risk, and order contracts
+- an append-only event-sourced order, fill, position, and multi-currency cash engine
+- deterministic order lifecycle, spot and derivative settlement, PnL, marks, and replay
 - execution-reality, signed financial-ledger, tax-lot, and taxable-event contracts
 - immutable Strategy Decision Packages, lifecycle promotion gates, and Holdout seals
+- deterministic Dataset Registries, Experiment Manifests, and Research Workbench contracts
 - an explicit plugin registry
 - a deliberately simple non-production alpha example
 - strict CI for tests, typing, linting, and public/private boundary checks
+
+The execution state-machine semantics and deliberate venue-model limitations are documented in [`docs/event-sourced-execution.md`](docs/event-sourced-execution.md).
 
 ## Development setup
 
