@@ -44,6 +44,7 @@ Use `quant-ops` only to assemble pinned public and private releases, deployment 
 
 - immutable market, signal, risk, and order contracts
 - execution-reality, signed financial-ledger, tax-lot, and taxable-event contracts
+- immutable Strategy Decision Packages, lifecycle promotion gates, and Holdout seals
 - an explicit plugin registry
 - a deliberately simple non-production alpha example
 - strict CI for tests, typing, linting, and public/private boundary checks
