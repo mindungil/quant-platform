@@ -16,6 +16,13 @@ from .contracts import (
     RiskDecision,
     Signal,
 )
+from .execution_adapter import (
+    EventDrivenBacktestPoint,
+    EventDrivenBacktestResult,
+    ReferenceExecutionAdapter,
+    ReferenceExecutionComparison,
+    ReferenceExecutionConfig,
+)
 from .execution_engine import (
     CashBalance,
     CashFlowKind,
@@ -167,6 +174,8 @@ __all__ = [
     "DecisionReasonSeverity",
     "DigestAlgorithm",
     "EngineOrderState",
+    "EventDrivenBacktestPoint",
+    "EventDrivenBacktestResult",
     "EventOrder",
     "EventSourcedExecutionEngine",
     "ExecutionEvent",
@@ -213,6 +222,9 @@ __all__ = [
     "PositionState",
     "PositionTarget",
     "PromotionGate",
+    "ReferenceExecutionAdapter",
+    "ReferenceExecutionComparison",
+    "ReferenceExecutionConfig",
     "ReproducibilityMode",
     "ReproducibilityPolicy",
     "RevisionEvidence",
