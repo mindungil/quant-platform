@@ -89,7 +89,7 @@ class ReferenceExecutionComparison:
     event_driven: EventDrivenBacktestResult
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class _FrozenPositionPlugin:
     name: str
     positions: tuple[float, ...]
@@ -155,11 +155,7 @@ class ReferenceExecutionAdapter:
             following = market_bars[index + 1]
             current_price = Decimal(str(current.open))
             next_price = Decimal(str(following.open))
-            current_position = _position_quantity(
-                engine.state,
-                self.config.account_id,
-                current.symbol,
-            )
+            current_position = _position_quantity(engine.state, self.config.account_id, current.symbol)
             current_equity = _equity(
                 engine.state,
                 account_id=self.config.account_id,
