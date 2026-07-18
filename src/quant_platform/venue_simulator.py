@@ -1,10 +1,12 @@
 """Deterministic venue matching on top of the event-sourced execution engine."""
 
 from __future__ import annotations
+
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
+
 from .execution_engine import (
     CashFlowKind,
     CashSettlementMode,
