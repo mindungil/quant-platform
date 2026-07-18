@@ -147,6 +147,16 @@ from .tax_rules import (
     build_kr_individual_tax_registry_v0,
     transaction_levy_ledger_entry,
 )
+from .venue_simulator import (
+    DeterministicVenueSimulator,
+    VenueFillEvidence,
+    VenueMatchResult,
+    VenueOrderRecord,
+    VenueOrderRequest,
+    VenueOrderStatus,
+    VenueQuote,
+    VenueSimulationConfig,
+)
 
 __all__ = [
     "AfterTaxSummary",
@@ -172,6 +182,7 @@ __all__ = [
     "DecisionReason",
     "DecisionReasonCode",
     "DecisionReasonSeverity",
+    "DeterministicVenueSimulator",
     "DigestAlgorithm",
     "EngineOrderState",
     "EventDrivenBacktestPoint",
@@ -264,6 +275,13 @@ __all__ = [
     "TransactionLevyEstimate",
     "ValidationPlan",
     "ValidationResult",
+    "VenueFillEvidence",
+    "VenueMatchResult",
+    "VenueOrderRecord",
+    "VenueOrderRequest",
+    "VenueOrderStatus",
+    "VenueQuote",
+    "VenueSimulationConfig",
     "allowed_target_states",
     "apply_tax_estimate",
     "build_kr_individual_tax_registry_v0",
