@@ -264,9 +264,14 @@ def test_hand_calculated_liquidation_closes_position_and_replays() -> None:
     assert result.after.cash_balance == Decimal("-1.89")
 
     replayed = EventSourcedExecutionEngine.replay(engine.events)
+    replayed_after = IsolatedMarginSimulator(_venue_profile(), replayed).evaluate(
+        account_id="account-1",
+        observed_at=T0 + timedelta(hours=1),
+        mark_price=Decimal("89"),
+    )
     assert replayed.events_json() == engine.events_json()
     assert replayed.state.to_json() == engine.state.to_json()
-    assert result.to_json() == result.to_json()
+    assert replayed_after.to_json() == result.after.to_json()
 
 
 def test_healthy_account_is_not_mutated_by_liquidation_attempt() -> None:
@@ -289,6 +294,7 @@ def test_healthy_account_is_not_mutated_by_liquidation_attempt() -> None:
 
 def test_one_versioned_profile_is_reused_by_matching_and_margin_layers() -> None:
     profile = _venue_profile()
+    independent = _venue_profile()
     matching = DeterministicVenueSimulator(profile)
     margin = IsolatedMarginSimulator(profile, matching.engine)
 
@@ -296,7 +302,7 @@ def test_one_versioned_profile_is_reused_by_matching_and_margin_layers() -> None
     assert matching.snapshot.execution is profile.execution
     assert margin.profile is profile
     assert profile.profile_key == "execution-snapshot-v1:isolated-margin-v1"
-    assert profile.to_json() == profile.to_json()
+    assert profile.to_json() == independent.to_json()
 
 
 def test_profile_rejects_mismatch_and_non_unit_contracts() -> None:
