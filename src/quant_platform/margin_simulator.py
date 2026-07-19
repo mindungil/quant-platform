@@ -14,8 +14,8 @@ from .execution_engine import (
     EventSourcedExecutionEngine,
     PositionState,
 )
-from .execution_profiles import ExecutionProfileSnapshot
-from .finance import ExecutionOrderType, OrderSide
+from .execution_profiles import ExecutionProfileSnapshot, InstrumentExecutionRules
+from .finance import ExecutionOrderType, ExecutionRealityProfile, OrderSide
 
 ZERO = Decimal("0")
 ONE = Decimal("1")
@@ -91,6 +91,26 @@ class VersionedVenueProfile:
             raise ValueError(
                 "reference isolated-margin model requires a unit contract multiplier"
             )
+
+    @property
+    def snapshot_id(self) -> str:
+        return self.execution.snapshot_id
+
+    @property
+    def profile(self) -> ExecutionRealityProfile:
+        return self.execution.profile
+
+    @property
+    def rules(self) -> InstrumentExecutionRules:
+        return self.execution.rules
+
+    @property
+    def effective_from(self) -> datetime:
+        return self.execution.effective_from
+
+    @property
+    def effective_to(self) -> datetime | None:
+        return self.execution.effective_to
 
     @property
     def profile_key(self) -> str:
