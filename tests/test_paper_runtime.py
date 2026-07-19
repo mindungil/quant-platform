@@ -1,10 +1,9 @@
+import sqlite3
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
-import sqlite3
 
 import pytest
-
 from quant_platform.contracts import MarketBar, Signal
 from quant_platform.execution_profiles import (
     ExecutionProfileConfidence,

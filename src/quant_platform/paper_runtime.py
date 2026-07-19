@@ -6,13 +6,13 @@ import hashlib
 import json
 import sqlite3
 from collections import Counter
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import fields, is_dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from enum import Enum
 from pathlib import Path
-from typing import Iterator, Mapping
 
 from .contracts import AlphaPlugin, MarketBar
 from .execution_profiles import ExecutionProfileSnapshot
@@ -630,7 +630,12 @@ class DurablePaperRuntime:
                     now.isoformat(),
                 ),
             )
-            sequence = int(cursor.lastrowid)
+            lastrowid = cursor.lastrowid
+            if lastrowid is None:
+                raise PaperRecoveryIntegrityError(
+                    "SQLite did not return an operation sequence"
+                )
+            sequence = lastrowid
             self._append_journal(
                 connection,
                 event_id=f"operation-{operation_id}-staged-{sequence}",
@@ -1108,6 +1113,10 @@ class DurablePaperRuntime:
         ).fetchone()
         if row is None:
             raise KeyError(operation_id)
+        if not isinstance(row, sqlite3.Row):
+            raise PaperRecoveryIntegrityError(
+                "SQLite row factory returned an invalid row"
+            )
         return row
 
     def _metadata_value(self, key: str) -> str | None:

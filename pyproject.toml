@@ -34,16 +34,8 @@ line-length = 100
 select = ["E", "F", "I", "UP", "B"]
 ignore = ["E501"]
 
-[tool.ruff.lint.per-file-ignores]
-"src/quant_platform/paper_runtime.py" = ["UP035"]
-"tests/test_paper_runtime.py" = ["I001"]
-
 [tool.mypy]
 python_version = "3.11"
 strict = true
 packages = ["quant_platform"]
 mypy_path = "src"
-
-[[tool.mypy.overrides]]
-module = "quant_platform.paper_runtime"
-disable_error_code = ["arg-type", "no-any-return"]
