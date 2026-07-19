@@ -49,6 +49,7 @@ Use `quant-ops` only to assemble pinned public and private releases, deployment 
 - versioned venue constraints, maker/taker matching, latency, volume participation, partial fills, and cancel/replace
 - versioned funding schedules, explicit borrow and margin interest, isolated-margin state, and forced liquidation evidence
 - deterministic single-strategy gates, kill-switch audit, stream health, and external reconciliation
+- PAPER-state launch authorization and deterministic single-strategy cycles connecting signals, risk, venue matching, checkpoints, and external reconciliation
 - deterministic three-hypothesis comparison reports with cost waterfalls, tax evidence, implementation limits, and Validation binding
 - execution-reality, signed financial-ledger, tax-lot, and taxable-event contracts
 - immutable Strategy Decision Packages, lifecycle promotion gates, and Holdout seals
@@ -57,7 +58,7 @@ Use `quant-ops` only to assemble pinned public and private releases, deployment 
 - a deliberately simple non-production alpha example
 - strict CI for tests, typing, linting, and public/private boundary checks
 
-Execution state and strategy comparison semantics are documented in [`docs/event-sourced-execution.md`](docs/event-sourced-execution.md). Venue matching assumptions are documented in [`docs/venue-simulator.md`](docs/venue-simulator.md). Isolated-margin, funding, interest, and liquidation assumptions are documented in [`docs/margin-funding-liquidation.md`](docs/margin-funding-liquidation.md). Single-strategy controls and recovery steps are documented in [`docs/single-strategy-risk.md`](docs/single-strategy-risk.md). Comparison-report semantics are documented in [`docs/strategy-comparison-report.md`](docs/strategy-comparison-report.md).
+Execution state and strategy comparison semantics are documented in [`docs/event-sourced-execution.md`](docs/event-sourced-execution.md). Venue matching assumptions are documented in [`docs/venue-simulator.md`](docs/venue-simulator.md). Isolated-margin, funding, interest, and liquidation assumptions are documented in [`docs/margin-funding-liquidation.md`](docs/margin-funding-liquidation.md). Single-strategy controls and recovery steps are documented in [`docs/single-strategy-risk.md`](docs/single-strategy-risk.md). Paper-session authorization, deterministic cycle behavior, reconciliation, and recovery boundaries are documented in [`docs/paper-trading-orchestrator.md`](docs/paper-trading-orchestrator.md). Comparison-report semantics are documented in [`docs/strategy-comparison-report.md`](docs/strategy-comparison-report.md).
 
 ## Development setup
 
