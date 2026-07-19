@@ -18,9 +18,11 @@ jobs:
           python-version: "3.11"
       - run: python -m pip install -q -e . mypy
       - name: Capture mypy diagnostics
+        env:
+          MYPYPATH: src
         run: |
           set +e
-          mypy --strict --python-version 3.11 --mypy-path src src/quant_platform/paper_runtime.py src/quant_platform/paper_runtime_contracts.py > mypy-diagnostics.txt 2>&1
+          mypy --strict --python-version 3.11 src/quant_platform/paper_runtime.py src/quant_platform/paper_runtime_contracts.py > mypy-diagnostics.txt 2>&1
           echo $? > mypy-exit-code.txt
           exit 0
       - uses: actions/upload-artifact@v4
