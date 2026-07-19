@@ -292,8 +292,8 @@ def test_one_versioned_profile_is_reused_by_matching_and_margin_layers() -> None
     matching = DeterministicVenueSimulator(profile)
     margin = IsolatedMarginSimulator(profile, matching.engine)
 
-    assert matching.snapshot is profile.execution
-    assert matching.venue_profile is profile
+    assert matching.snapshot is profile
+    assert matching.snapshot.execution is profile.execution
     assert margin.profile is profile
     assert profile.profile_key == "execution-snapshot-v1:isolated-margin-v1"
     assert profile.to_json() == profile.to_json()
