@@ -4,6 +4,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
+
 from quant_platform.contracts import MarketBar, Signal
 from quant_platform.execution_profiles import (
     ExecutionProfileConfidence,
