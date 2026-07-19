@@ -15,17 +15,8 @@ from quant_platform.paper import (
 )
 
 
-def test_durable_runtime_public_surface_and_report_serialization() -> None:
-    assert DurablePaperRuntime.__name__ == "DurablePaperRuntime"
-    assert issubclass(PaperLeaseConflictError, PaperRuntimeError)
-    assert issubclass(PaperIdempotencyConflictError, PaperRuntimeError)
-    assert issubclass(PaperRecoveryIntegrityError, PaperRuntimeError)
-    assert PaperOperationKind.CYCLE.value == "CYCLE"
-    assert PaperOperationStatus.PENDING.value == "PENDING"
-    assert PaperRuntimeLease.__name__ == "PaperRuntimeLease"
-    assert PaperRuntimeSnapshot.__name__ == "PaperRuntimeSnapshot"
-
-    report = DailyPaperSmokeReport(
+def _report() -> DailyPaperSmokeReport:
+    return DailyPaperSmokeReport(
         report_id="paper-session:2026-01-01:op-0",
         session_id="paper-session",
         report_date=date(2026, 1, 1),
@@ -46,6 +37,22 @@ def test_durable_runtime_public_surface_and_report_serialization() -> None:
         findings=(),
     )
 
-    assert report.to_json() == report.to_json()
-    assert "Healthy: **YES**" in report.to_markdown()
-    assert len(report.content_sha256()) == 64
+
+def test_durable_runtime_public_surface_and_report_serialization() -> None:
+    assert DurablePaperRuntime.__name__ == "DurablePaperRuntime"
+    assert issubclass(PaperLeaseConflictError, PaperRuntimeError)
+    assert issubclass(PaperIdempotencyConflictError, PaperRuntimeError)
+    assert issubclass(PaperRecoveryIntegrityError, PaperRuntimeError)
+    assert PaperOperationKind.CYCLE.value == "CYCLE"
+    assert PaperOperationStatus.PENDING.value == "PENDING"
+    assert PaperRuntimeLease.__name__ == "PaperRuntimeLease"
+    assert PaperRuntimeSnapshot.__name__ == "PaperRuntimeSnapshot"
+
+    first = _report()
+    second = _report()
+
+    assert first.to_json() == second.to_json()
+    assert first.to_markdown() == second.to_markdown()
+    assert first.content_sha256() == second.content_sha256()
+    assert "Healthy: **YES**" in first.to_markdown()
+    assert len(first.content_sha256()) == 64
