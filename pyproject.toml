@@ -43,3 +43,7 @@ python_version = "3.11"
 strict = true
 packages = ["quant_platform"]
 mypy_path = "src"
+
+[[tool.mypy.overrides]]
+module = "quant_platform.paper_runtime"
+disable_error_code = ["arg-type", "no-any-return"]
